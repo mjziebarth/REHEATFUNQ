@@ -24,8 +24,8 @@
 
 #include <vector>
 #include <array>
-#include <matrix.hpp>
 #include <memory>
+#include <eigenwrap.hpp>
 #include <ll_cache.hpp>
 
 namespace pdtoolbox {
@@ -33,6 +33,8 @@ namespace pdtoolbox {
 class GammaConjugatePriorLogLikelihood
 {
 	public:
+		typedef std::integral_constant<uint_fast8_t,4> nparams;
+
 		struct ab_t {
 			double a;
 			double b;
@@ -43,15 +45,12 @@ class GammaConjugatePriorLogLikelihood
 		GammaConjugatePriorLogLikelihood(double p, double s, double n,
 		                                 double v, const double* a,
 		                                 const double* b, size_t Nab,
-		                                 const double* w, size_t Nw,
 		                                 double nv_surplus_min=1e-3,
 		                                 double vmin = 0.1, double epsabs=0,
 		                                 double epsrel=1e-10);
 
 		GammaConjugatePriorLogLikelihood(double p, double s, double n,
 		                                 double v, const std::vector<ab_t>& ab,
-		                                 const std::vector<double>& w
-		                                       = std::vector<double>(),
 		                                 double nv_surplus_min=1e-3,
 		                                 double vmin = 0.1, double epsabs=0,
 		                                 double epsrel=1e-10);
@@ -60,7 +59,6 @@ class GammaConjugatePriorLogLikelihood
 		static std::unique_ptr<GammaConjugatePriorLogLikelihood>
 		    make_unique(double p, double s, double n, double v,
 			            const double* a, const double* b, size_t Nab,
-			            const double* w, size_t Nw,
 			            double nv_surplus_min=1e-3, double vmin = 0.1,
 			            double epsabs=0, double epsrel = 1e-10);
 
@@ -69,22 +67,20 @@ class GammaConjugatePriorLogLikelihood
 		 */
 		double operator()() const;
 
-		Vector<D4> gradient() const;
-
-		ColumnSpecifiedMatrix<D4> jacobian() const;
+		ColumnVector gradient() const;
 
 		constexpr static bool use_hessian = true;
 		constexpr static bool boundary_traversal = true;
 
-		SquareMatrix<D4> hessian() const;
+		SquareMatrix hessian() const;
 
-		Vector<D4> parameters() const;
+		ColumnVector parameters() const;
 
-		Vector<D4> lower_bound() const;
+		ColumnVector lower_bound() const;
 
-		Vector<D4> upper_bound() const;
+		ColumnVector upper_bound() const;
 
-		void update(const Vector<D4>&);
+		void update(const ColumnVector&);
 
 		void optimize();
 
@@ -93,6 +89,7 @@ class GammaConjugatePriorLogLikelihood
 		/*
 		 * (3) Named arameter access:
 		 */
+		double lp() const;
 		double p() const;
 		double s() const;
 		double n() const;
@@ -102,19 +99,17 @@ class GammaConjugatePriorLogLikelihood
 		 * (4) Static methods:
 		 */
 		static double ln_Phi(double lp, double ls, double n, double v,
-		                     double epsabs, double epsrel=1e-10,
-		                     size_t workspace_size=200);
+		                     double epsabs, double epsrel=1e-10);
 
 	private:
 		constexpr static double delta = 1e-5;
 		const double nv_surplus_min;
 		const double vmin;
 		const double epsrel, epsabs;
-		double lp, p_, ls, s_, v_, nv, n_;
+		double lp_, p_, ls, s_, v_, nv, n_;
 		double lPhi, albsum, lbsum, asum, bsum, lgasum;
 		double forward[4], backward[4];
 		double fw_lp_ls, fw_lp_nv, fw_lp_v, fw_ls_nv, fw_ls_v, fw_nv_v;
-		const std::vector<double> w;
 		const std::vector<ab_t> ab;
 		const double W;
 
@@ -133,7 +128,7 @@ class GammaConjugatePriorLogLikelihood
 		integrals_t integrals() const;
 
 		integrals_t _ints;
-		LinearCache<D4, integrals_t, 3> integrals_cache;
+		LinearCache<integrals_t, 3> integrals_cache;
 
 };
 

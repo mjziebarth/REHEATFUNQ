@@ -23,12 +23,13 @@
 #include <numeric>
 #include <stdexcept>
 #include <ll_gamma_conjugate_prior.hpp>
+#include <boost/math/special_functions/digamma.hpp>
+#include <boost/math/tools/roots.hpp>
+#include <boost/math/quadrature/gauss_kronrod.hpp>
+#include <boost/math/quadrature/gauss_kronrod.hpp>
+#include <boost/math/quadrature/tanh_sinh.hpp>
+#include <boost/math/quadrature/exp_sinh.hpp>
 #include <optimize.hpp>
-#include <gsl/gsl_integration.h>
-#include <gsl/gsl_sf_psi.h>
-#include <gsl_workspace.hpp>
-#include <gsl_rootfinder.hpp>
-#include <gsl/gsl_errno.h>
 
 #include <iostream>
 #include <iomanip>
@@ -37,6 +38,15 @@
 /* Namespae: */
 using namespace pdtoolbox;
 using std::abs, std::max, std::min, std::log, std::exp, std::sqrt;
+using boost::math::digamma, boost::math::trigamma, boost::math::polygamma;
+// Root finding:
+using boost::math::tools::bracket_and_solve_root,
+      boost::math::tools::toms748_solve,
+      boost::math::tools::eps_tolerance;
+// Integration:
+using boost::math::quadrature::tanh_sinh,
+      boost::math::quadrature::exp_sinh,
+      boost::math::quadrature::gauss_kronrod;
 
 
 
@@ -58,22 +68,14 @@ static double ln_F(double a, double lp, double ls, double n, double v)
 	       - v * a * ls;
 }
 
-static double F(double a, void* parameters)
-{
-	const params0_t& params = *static_cast<params0_t*>(parameters);
-	double lF = ln_F(a, params.lp, params.ls, params.n, params.v);
-	return std::exp(lF - params.lFmax);
-}
-
-
 
 /* Compute the maximum of the integrand. */
 static double amax_f0(double a, double v, double n)
 {
 	if (a > 0.1)
-		return v*gsl_sf_psi(v*a) - n*gsl_sf_psi(a);
+		return v*digamma(v*a) - n*digamma(a);
 	/* For small values of a, use recurrence formula: */
-	return v*gsl_sf_psi(v*a + 1) - n*gsl_sf_psi(a+1) + (n-1)/a;
+	return v*digamma(v*a + 1) - n*digamma(a+1) + (n-1)/a;
 }
 
 
@@ -84,18 +86,13 @@ static double amax_f1(double a, double v, double n)
 		const double ia = 1/a;
 		return (v-n)*ia + 0.5*(1-n)*ia*ia;
 	}
-	return v*v*gsl_sf_psi_1(v*a) - n*gsl_sf_psi_1(a);
+	return v*v*trigamma(v*a) - n*trigamma(a);
 }
 
 
 static double amax_f2(double a, double v, double n)
 {
-//	if (a > 1e8){
-//		/* Stirling's formula is accurate. */
-//		const double ia = 1/a;
-//		return (v-n)*ia + 0.5*(1-n)*ia*ia;
-//	}
-	return v*v*v*gsl_sf_psi_n(2,v*a) - n*gsl_sf_psi_n(2,a);
+	return v*v*v*polygamma(2,v*a) - n*polygamma(2,a);
 }
 
 
@@ -129,47 +126,6 @@ static double compute_amax(const params0_t& P, const double amin=1e-12)
 }
 
 
-/* Compute the transition point where the integrand is dampened by 1e-20
- * compared to its maximum: */
-static double alr_root_backend(double a, void* parameters)
-{
-	const params0_t& params = *static_cast<params0_t*>(parameters);
-	const double leps = std::log(params.epsrel);
-	double lF = ln_F(a, params.lp, params.ls, params.n, params.v);
-	return lF - params.lFmax - leps;
-}
-
-static double alr_root(double al, double ar, void* params, double epsabs)
-{
-	/* Root finding: */
-	RootFSolver solver(gsl_root_fsolver_brent);
-	gsl_root_fsolver* fsolve = solver.get();
-	if (!fsolve){
-		throw std::runtime_error("Could not construct gsl_root_fsolver.\n");
-	}
-	gsl_function rootfun;
-	rootfun.params = params;
-	rootfun.function = &alr_root_backend;
-	gsl_root_fsolver_set(fsolve, &rootfun, al, ar);
-
-	double a;
-	int status;
-	for (int i=0; i<100; ++i){
-		gsl_root_fsolver_iterate(fsolve);
-		a = gsl_root_fsolver_root(fsolve);
-		al = gsl_root_fsolver_x_lower(fsolve);
-		ar = gsl_root_fsolver_x_upper(fsolve);
-		status = gsl_root_test_interval(al, ar, epsabs, 1e-3);
-		if (status == GSL_SUCCESS)
-			break;
-	}
-	if (status != GSL_SUCCESS){
-		throw std::runtime_error("Could not determine root.");
-	}
-	return a;
-}
-
-
 /*
  * This method computes the maximum of the derivative of the integrand.
  */
@@ -198,6 +154,10 @@ struct bounds_t {
 	double r;
 };
 
+/*
+ * This function computes integration bounds within which the integrand's
+ * mass is located primarily.
+ */
 static bounds_t
 peak_integration_bounds(const double amax, const double epsrel,
                         const double epsabs, const double f2_amax, params0_t& P)
@@ -205,18 +165,53 @@ peak_integration_bounds(const double amax, const double epsrel,
 	const double nleps0 = -log(epsrel) + log(1e4);
 	const double leps = log(epsrel);
 	const double da = sqrt(2/f2_amax * nleps0);
-	double ar = amax + da;
-	while (ln_F(ar, P.lp, P.ls, P.n, P.v) - P.lFmax >= leps)
-	   ar *= 1.5;
+	const double lFmax = ln_F(amax, P.lp, P.ls, P.n, P.v);
 
+	/* Left boundary: */
+	std::uintmax_t iterations = 100;
 	double al = max(amax-da, 0.0);
-	if (ln_F(0, P.lp, P.ls, P.n, P.v) - P.lFmax < leps){
-		if (ln_F(al, P.lp, P.ls, P.n, P.v) - P.lFmax >= leps)
-			al = alr_root(0, al, &P, epsabs);
-		else
-			al = alr_root(al, amax, &P, epsabs);
+	{
+		auto rootfun = [&](double a) -> double {
+			return (ln_F(a, P.lp, P.ls, P.n, P.v) - lFmax) - leps;
+		};
+		if (rootfun(0.0) < 0.0){
+			if (al > 0.0 && rootfun(al) >= 0.0){
+				std::pair<double,double> left
+				   = toms748_solve(rootfun, 0.0, al,
+				                   eps_tolerance<double>(3), iterations);
+				al = 0.5 * (left.first + left.second);
+			} else {
+				std::pair<double,double> left
+				   = toms748_solve(rootfun, al, amax,
+				                   eps_tolerance<double>(3), iterations);
+				al = 0.5 * (left.first + left.second);
+			}
+		} else {
+			al = 0.0;
+		}
 	}
-	ar = alr_root(amax, ar, &P, epsabs);
+
+	/* Right boundary: */
+	double ar;
+	iterations = 100;
+	{
+		auto rootfun = [&](double a) -> double {
+			return (ln_F(a+amax, P.lp, P.ls, P.n, P.v) - lFmax) - leps;
+		};
+
+		try {
+			std::pair<double,double> right
+			   = bracket_and_solve_root(rootfun, da, 2.0, false,
+			                            eps_tolerance<double>(3), iterations);
+
+			ar = amax + 0.5*(right.first + right.second);
+		} catch (const std::runtime_error&){
+			/* Set to infinity: */
+			ar = std::numeric_limits<double>::infinity();
+		}
+
+	}
+
 	return {.l=al, .r=ar};
 }
 
@@ -233,14 +228,40 @@ static double add_logs(double la, double lb)
 }
 
 
-
-
-/* Compute the natural logarithm of the integration constant: */
-static double ln_Phi_backend(double lp, double ls, double n, double v,
-                             double epsabs, double epsrel, size_t workspace_N,
-                             gsl_integration_workspace* workspace)
+static void condition_warn(double S, double err, double L1)
 {
-	/* Get a paramter structure: */
+	const double condition_number = L1 / std::abs(S);
+	if (condition_number > 3){
+		std::cerr << "WARNING: Large condition number in gamma conjugate prior "
+		             "quadrature.\n" << std::flush;
+	}
+	if (err > 1e-3 * std::abs(S)){
+		std::cerr << "WARNING: Large relative error (" << err / std::abs(S)
+		          << ") in gamma conjugate prior quadrature.\n" << std::flush;
+	}
+}
+
+
+/*
+ * Compute the natural logarithm of the integration constant:
+ */
+//#define GAMMA_CONJUGATE_PRIOR_OLD_LN_PHI
+#ifdef GAMMA_CONJUGATE_PRIOR_OLD_LN_PHI
+
+static double ln_Phi_backend(double lp, double ls, double n, double v,
+                             double epsabs, double epsrel)
+{
+	/* Shortcut for the case that p=0, in which case the
+	 * integral is zero. This case is not particularly useful
+	 * for the conjugate prior itself since then there is a zero
+	 * in the denominator, but it can appear when evaluating
+	 * the posterior predictive for q=0 (although that is not
+	 * strictly allowed).
+	 */
+	if (std::isinf(lp) && lp < 0)
+		return -std::numeric_limits<double>::infinity();
+
+	/* Get a parameter structure: */
 	params0_t P = {.lp=lp, .ls=ls, .n=n, .v=v, .lFmax=0.0, .epsrel=epsrel};
 
 	/* Determine the extremal structure of the integrand, one of three cases:
@@ -293,11 +314,15 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 
 	/* Now depending on the extremal structure, we have to choose different
 	 * integration techniques: */
-	double S=0, Stmp, abserr;
-	gsl_function integrand;
-	integrand.params = &P;
-	integrand.function = &F;
+	double S=0, err, L1;
 	double res = 0.0 ;
+	constexpr double term = std::sqrt(std::numeric_limits<double>::epsilon());
+
+	auto integrand = [&](double a) -> double {
+		double lF = ln_F(a, P.lp, P.ls, P.n, P.v);
+		return std::exp(lF - P.lFmax);
+	};
+
 	if (n_extrema >= 1 && amax > 0){
 		/* Compute the maximum value of the logarithm of the integrand: */
 		if (std::isinf(amax))
@@ -328,10 +353,36 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 				 bounds.l = min(1.0, 0.5 * amax);
 
 			/* Now integrate the divergent integrand: */
-			double interval[2] = {0, bounds.l};
-			gsl_integration_qagp(&integrand, interval, 2, epsabs, epsrel,
-			                     workspace_N, workspace, &Stmp, &abserr);
-			S += Stmp;
+			tanh_sinh<double> ts;
+			const double I = ts.integrate(integrand, 0.0, bounds.l, term,
+			                              &err, &L1);
+			S += I;
+			condition_warn(I, err, L1);
+		}
+
+		/* Check if the bounds are finite: */
+		if (std::isinf(bounds.r)){
+			/* In case of infinite bounds, use exp-sinh quadrature to
+			 * integrate from the left boundary:
+			 */
+			auto integrand2 = [&](double a) -> double {
+				double lF = ln_F(a+bounds.l, P.lp, P.ls, P.n, P.v);
+				double itg = std::exp(lF - P.lFmax);
+				if (std::isnan(itg))
+					std::cerr << "NaN integrand:\n"
+					             "   a = " << a << "\n"
+					             "   lp= " << lp << "\n"
+					             "   ls= " << ls << "\n"
+					             "   n = " << n << "\n"
+					             "   v = " << v << "\n";
+				return itg;
+			};
+			exp_sinh<double> es;
+			const double I = es.integrate(integrand2, term, &err, &L1);
+			S += I;
+			condition_warn(I, err, L1);
+			res += std::log(S);
+			return res;
 		}
 
 		/* A shortcut to Laplace approximation for very large amax: */
@@ -341,7 +392,6 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 			 * term of the Taylor expansion of the log-integrand (the cubic
 			 * term) is less than 4.61 (=log(1e2)) at the location of the
 			 * cutoff: */
-			//  f3 = v*v*v*gsl_sf_psi_n(2,v*amax) - n*gsl_sf_psi_n(2,amax);
 			const double lf3 = -2 * log(amax) + log(abs(n*(1+1/amax)
 			                                            - v*(1+1/(v*amax))));
 
@@ -377,24 +427,19 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 		}
 
 		/* Otherwise numerically evaluate the integral: */
-		gsl_integration_qag(&integrand, bounds.l, bounds.r, epsabs, epsrel,
-		                    workspace_N, GSL_INTEG_GAUSS51, workspace, &Stmp,
-		                    &abserr);
-		S += Stmp;
+		S += gauss_kronrod<double, 15>::integrate(integrand, bounds.l, bounds.r,
+		                                          5, 1e-14, &err);
 		res += std::log(S);
 	} else {
 		/* Integrate the singularity at a=0 and for the rest, integrate to
 		 * infinity: */
 		P.lFmax = ln_F(1.0, lp, ls, n, v);
 		res = P.lFmax;
-		double interval[2] = {0, 1.0};
-		gsl_integration_qagp(&integrand, interval, 2, epsabs, epsrel,
-		                     workspace_N, workspace, &Stmp, &abserr);
-		S += Stmp;
 
-		gsl_integration_qagiu(&integrand, 1.0, epsabs, epsrel, workspace_N,
-		                      workspace, &Stmp, &abserr);
-		S += Stmp;
+		exp_sinh<double> es;
+		const double I = es.integrate(integrand, term, &err, &L1);
+		S += I;
+		condition_warn(I, err, L1);
 		res += std::log(S);
 	}
 
@@ -402,27 +447,191 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 	return res;
 }
 
+#else
+
+/* Compute the natural logarithm of the integration constant: */
+static double ln_Phi_backend(double lp, double ls, double n, double v,
+                             double epsabs, double epsrel)
+{
+	/* Shortcut for the case that p=0, in which case the
+	 * integral is zero. This case is not particularly useful
+	 * for the conjugate prior itself since then there is a zero
+	 * in the denominator, but it can appear when evaluating
+	 * the posterior predictive for q=0 (although that is not
+	 * strictly allowed).
+	 */
+	if (std::isinf(lp) && lp < 0)
+		return -std::numeric_limits<double>::infinity();
+
+	/* Get a parameter structure: */
+	params0_t P = {.lp=lp, .ls=ls, .n=n, .v=v, .lFmax=0.0, .epsrel=epsrel};
+
+	/* Determine the extremal structure of the integrand, one of three cases:
+	 * 1) n > 1:
+	 *    The derivative of the integrand is monotonously decreasing from
+	 *    positive infinity at a=0. Hence, it has exactly one root.
+	 *
+	 * 2) n == 1:
+	 *    The derivative of the integrand is finite at a=0 and monotonously
+	 *    decreasing from there on. Hence, it has one root if the limit for
+	 *    a --> 0 is positive or none if it is negative.
+	 *
+	 * 3) n < 1:
+	 *    The derivative of the integrand has one maximum and goes to
+	 *    negative infinity for a --> 0 and a --> inf.
+	 *    Hence, the integrand has either no local extremum, a saddlepoint, or
+	 *    a local minimum and a local maximum depending on whether the
+	 *    integrand's derivative is negative, zero, or positive at its maximum.
+	 */
+	uint8_t n_extrema;
+	double amax = 0;
+
+	if (n > 1){
+		/* Case 1, guaranteed extremum: */
+		n_extrema = 1;
+		amax = compute_amax(P);
+	} else if (n == 1) {
+		/* Case 2, have to check derivative at a=0: */
+		constexpr double euler_mascheroni = 0.577215664901532860606512090082;
+		if (lp - v*ls + (1-v)*euler_mascheroni > 0){
+			n_extrema = 1;
+			amax = compute_amax(P);
+		} else {
+			n_extrema = 0;
+		}
+	} else {
+		/* Case 3 */
+		const double amax_deriv = derivative_amax(v, n);
+		if (amax_f0(amax_deriv, v, n) + lp - v*ls > 0){
+			/* We have a second maximum (local extremum), which is right of the
+			 * maximum of the derivative: */
+			n_extrema = 2;
+			amax = compute_amax(P, amax_deriv);
+		} else {
+			/* Either no extremum or a saddle point - both can be handled
+			 * the same way. */
+			n_extrema = 0;
+		}
+	}
+
+	/* Now depending on the extremal structure, we have to choose different
+	 * integration techniques: */
+	double err, L1;
+	double res = 0.0 ;
+	constexpr double term = std::sqrt(std::numeric_limits<double>::epsilon());
+
+	auto integrand1 = [&](double a) -> double {
+		double lF = ln_F(a, P.lp, P.ls, P.n, P.v);
+		if (std::isinf(std::exp(lF - P.lFmax)))
+			std::cerr << "Found inf result in integrand for amax = "
+			          << amax << ", a = " << a << ".\n";
+		return std::exp(lF - P.lFmax);
+	};
+
+	if (n_extrema >= 1 && amax > 0){
+		/* Compute the maximum value of the logarithm of the integrand: */
+		if (std::isinf(amax))
+			throw std::runtime_error("Cannot normalize the integration constant"
+			                         " since its maximum `amax` cannot be "
+			                         "expressed in double precision.");
+		P.lFmax = ln_F(amax, lp, ls, n, v);
+
+
+		/*
+		 * A Laplace approximation for very large amax:
+		 */
+		if (amax > 1e10){
+			/* Second derivative of the logarithm of the integrand at the maximum,
+			 * i.e. the value used for a Laplace approximation of the integral:
+			 */
+			const double f2_amax = std::fabs(amax_f1(amax, v, n));
+
+			/* Compute the upper and lower boundary of integration, i.e. the points
+			 * where the integrand diminishes to machine precision:
+			 */
+			bounds_t bounds = peak_integration_bounds(amax, epsrel, epsabs,
+			                                          f2_amax, P);
+
+			const double da_l = amax - bounds.l, da_r = bounds.r - amax;
+			/* For consistency checking, make sure that the first non-quadratic
+			 * term of the Taylor expansion of the log-integrand (the cubic
+			 * term) is less than 4.61 (=log(1e2)) at the location of the
+			 * cutoff: */
+			const double lf3 = -2 * log(amax) + log(abs(n*(1+1/amax)
+			                                            - v*(1+1/(v*amax))));
+
+			if (exp(lf3 - 3*log(max(bounds.l, bounds.r))) > 6.0 * 4.61)
+				throw std::runtime_error("Potential roundoff error detected in "
+				                         "Laplace approximation for "
+				                         "a_max > 1e10.");
+
+			return 0.5 * log(2*M_PI) - 0.5 * log(f2_amax) + P.lFmax;
+			//return add_logs(0.5 * log(2*M_PI) - 0.5 * log(f2_amax),
+			//                log(S)) + P.lFmax;
+		}
+
+		/* Split the integral into two parts:
+		 * (   0, amax) -> use tanh-sinh quadrature
+		 * (amax,  inf) -> use exp-sinh quadrature
+		 *
+		 * (1) From 0 to amax:
+		 */
+		double S = 0.0;
+		{
+			tanh_sinh<double> ts;
+			const double I = ts.integrate(integrand1, 0.0, amax, term,
+			                              &err, &L1);
+			S += I;
+			condition_warn(I, err, L1);
+		}
+
+		/* (2) From amax to inf: */
+		{
+			auto integrand2 = [&](double a) -> double {
+				res = std::exp(ln_F(a+amax, P.lp, P.ls, P.n, P.v)
+				                - P.lFmax);
+				if (std::isinf(res)){
+					std::cerr << "Found inf result in integrand2 for amax = "
+					          << amax << ", a = " << a << ".\n";
+					std::cerr << "P.lFmax         = " << P.lFmax << "\n";
+					std::cerr << "ln_F(a)         = " << ln_F(a+amax, P.lp, P.ls, P.n, P.v) << "\n";
+					std::cerr << "ln_F(a) - lFmax = " << ln_F(a+amax, P.lp, P.ls, P.n, P.v) << "\n";
+				}
+				return std::exp(ln_F(a+amax, P.lp, P.ls, P.n, P.v)
+				                - P.lFmax);
+			};
+			exp_sinh<double> es;
+			const double I = es.integrate(integrand2, term, &err, &L1);
+			S += I;
+			condition_warn(I, err, L1);
+		}
+		return P.lFmax + std::log(S);
+	} else {
+		/* Integrate the singularity at a=0 and for the rest, integrate to
+		 * infinity: */
+		P.lFmax = ln_F(1.0, lp, ls, n, v);
+		res = P.lFmax;
+
+		exp_sinh<double> es;
+		const double I = es.integrate(integrand1, term, &err, &L1);
+		condition_warn(I, err, L1);
+		res += std::log(I);
+	}
+
+	/* Result: */
+	return res;
+}
+
+#endif
+
+
 
 double GammaConjugatePriorLogLikelihood::ln_Phi(double lp, double ls, double n,
                                                 double v, double epsabs,
-                                                double epsrel,
-                                                size_t workspace_size)
+                                                double epsrel)
 {
-	Workspace ws(workspace_size);
-
-	// Set error handler:
-	gsl_error_handler_t* error_handler \
-	    = gsl_set_error_handler(&pdtoolbox::error_handler_cpp);
-
-	/* Integrate: */
-	const double res = ln_Phi_backend(lp, ls, n, v, epsabs, epsrel,
-	                                  workspace_size, ws.get());
-
-	if (error_handler)
-		gsl_set_error_handler(error_handler);
-
 	/* Return: */
-	return res;
+	return ln_Phi_backend(lp, ls, n, v, epsabs, epsrel);
 }
 
 
@@ -451,15 +660,13 @@ compute_ab(const double* a, const double* b, size_t N)
 
 GammaConjugatePriorLogLikelihood::GammaConjugatePriorLogLikelihood(
          double p, double s, double n, double v, const std::vector<ab_t>& ab,
-         const std::vector<double>& w, double nv_surplus_min, double vmin,
-         double epsabs, double epsrel
+         double nv_surplus_min, double vmin, double epsabs, double epsrel
        )
 	: nv_surplus_min(nv_surplus_min), vmin(vmin), epsrel(epsrel),
-	  epsabs(epsabs), lp(std::log(p)), p_(p),
+	  epsabs(epsabs), lp_(std::log(p)), p_(p),
 	  ls(std::log(s)), s_(s), v_(std::max(v, vmin)),
 	  nv(std::max(n/v_, 1 + nv_surplus_min)), n_(std::max(n, nv*v_)),
-	  w(w), ab(ab),
-	  W((w.size() > 0) ? std::accumulate(w.begin(), w.end(), 0) : ab.size())
+	  ab(ab), W(ab.size())
 {
 	for (const ab_t& ab_ : ab){
 		if (ab_.a <= 0)
@@ -475,15 +682,14 @@ GammaConjugatePriorLogLikelihood::GammaConjugatePriorLogLikelihood(
 
 GammaConjugatePriorLogLikelihood::GammaConjugatePriorLogLikelihood(
          double p, double s, double n, double v, const double* a,
-         const double* b, size_t Nab, const double* w_, size_t Nw,
-         double nv_surplus_min, double vmin, double epsabs, double epsrel
+         const double* b, size_t Nab, double nv_surplus_min, double vmin,
+         double epsabs, double epsrel
        )
 	: nv_surplus_min(nv_surplus_min), vmin(vmin), epsrel(epsrel),
-	  epsabs(epsabs), lp(std::log(p)), p_(p),
+	  epsabs(epsabs), lp_(std::log(p)), p_(p),
 	  ls(std::log(s)), s_(s), v_(std::max(v, vmin)),
 	  nv(std::max(n/v_, 1 + nv_surplus_min)), n_(std::max(n, nv*v_)),
-	  w(w_, w_+Nw), ab(compute_ab(a, b, Nab)),
-	  W((Nw > 0) ? std::accumulate(w.begin(), w.end(), 0) : Nab)
+	  ab(compute_ab(a, b, Nab)), W(Nab)
 {
 	for (const ab_t& ab_ : ab){
 		if (ab_.a <= 0)
@@ -501,60 +707,51 @@ std::unique_ptr<GammaConjugatePriorLogLikelihood>
 GammaConjugatePriorLogLikelihood::make_unique(double p, double s, double n,
                                       double v, const double* a,
                                       const double* b, size_t Nab,
-                                      const double* w_, size_t Nw,
                                       double nv_surplus_min, double vmin,
                                       double epsabs, double epsrel)
 {
-	return std::make_unique<GammaConjugatePriorLogLikelihood>(p, s, n, v, a,
-	                                                      b, Nab, w_, Nw,
-	                                                      nv_surplus_min, vmin,
-	                                                      epsabs, epsrel);
+	typedef GammaConjugatePriorLogLikelihood GCPLL;
+	return std::make_unique<GCPLL>(p, s, n, v, a, b, Nab, nv_surplus_min, vmin,
+	                               epsabs, epsrel);
 }
 
 
-Vector<D4> GammaConjugatePriorLogLikelihood::parameters() const
+ColumnVector GammaConjugatePriorLogLikelihood::parameters() const
 {
-	return Vector<D4>({lp, ls, nv, v_});
+	return ColumnVector({lp_, ls, nv, v_});
 }
 
-Vector<D4> GammaConjugatePriorLogLikelihood::lower_bound() const
+ColumnVector GammaConjugatePriorLogLikelihood::lower_bound() const
 {
 	constexpr double inf = std::numeric_limits<double>::infinity();
-	return Vector<D4>({-inf, -inf, 1.0 + nv_surplus_min, vmin});
+	return ColumnVector({-inf, -inf, 1.0 + nv_surplus_min, vmin});
 }
 
-Vector<D4> GammaConjugatePriorLogLikelihood::upper_bound() const
+ColumnVector GammaConjugatePriorLogLikelihood::upper_bound() const
 {
-	return Vector<D4>({std::numeric_limits<double>::infinity(),
-	                   std::numeric_limits<double>::infinity(),
-	                   std::numeric_limits<double>::infinity(),
-	                   std::numeric_limits<double>::infinity()});
+	return ColumnVector({std::numeric_limits<double>::infinity(),
+	                     std::numeric_limits<double>::infinity(),
+	                     std::numeric_limits<double>::infinity(),
+	                     std::numeric_limits<double>::infinity()});
 }
 
 
 double GammaConjugatePriorLogLikelihood::operator()() const
 {
-	if (w.size() == 0){
-		/* Unweighted likelihood: */
-		const size_t N = ab.size();
-		const double s0 = v_ * albsum - lbsum;
-		const double s1 = lp*asum - N*lp;
-		const double s2 = -s_*bsum;
-		const double s3 = -n_*lgasum;
-		return s0 + s1 + s2 + s3 - N*_ints.lPhi;
-	} else {
-		/* Weighted likelihood: */
-		// TODO FIXME
-		throw std::runtime_error("Weighted GCP log-likelihood not yet "
-		                         "implemented.");
-	}
+	/* Unweighted likelihood: */
+	const size_t N = ab.size();
+	const double s0 = v_ * albsum - lbsum;
+	const double s1 = lp_*asum - N*lp_;
+	const double s2 = -s_*bsum;
+	const double s3 = -n_*lgasum;
+	return s0 + s1 + s2 + s3 - N*_ints.lPhi;
 }
 
 
-Vector<D4> GammaConjugatePriorLogLikelihood::gradient() const
+ColumnVector GammaConjugatePriorLogLikelihood::gradient() const
 {
 	/* Use numerical differentiation to derive log of normalization constant: */
-	Vector<D4> res;
+	ColumnVector res;
 	res[0] = -W * 0.5 * (_ints.forward[0] - _ints.backward[0]) / delta;
 	res[1] = -W * 0.5 * (_ints.forward[1] - _ints.backward[1]) / delta;
 	res[2] = -W * 0.5 * (_ints.forward[2] - _ints.backward[2]) / delta;
@@ -570,9 +767,9 @@ Vector<D4> GammaConjugatePriorLogLikelihood::gradient() const
 }
 
 
-SquareMatrix<D4> GammaConjugatePriorLogLikelihood::hessian() const
+SquareMatrix GammaConjugatePriorLogLikelihood::hessian() const
 {
-	SquareMatrix<D4> m;
+	SquareMatrix m;
 	/* Numerical derivatives of ln(Phi), logarithm of the normalization
 	 * constant: */
 	const double id2 = 1.0 / (delta * delta);
@@ -609,16 +806,9 @@ SquareMatrix<D4> GammaConjugatePriorLogLikelihood::hessian() const
 }
 
 
-ColumnSpecifiedMatrix<D4> GammaConjugatePriorLogLikelihood::jacobian() const
-{
-	/* Not implemented yet. */
-	throw std::runtime_error("TODO : Implement LogLogistic Jacobian!");
-}
-
-
 void GammaConjugatePriorLogLikelihood::optimize()
 {
-	newton_optimize<GammaConjugatePriorLogLikelihood,D4>(*this,
+	newton_optimize<GammaConjugatePriorLogLikelihood>(*this,
 	                                     /* Default values proven successful: */
 	                                             1e-2, // g
 	                                             2.0, // gstep_down
@@ -632,6 +822,11 @@ void GammaConjugatePriorLogLikelihood::optimize()
 double GammaConjugatePriorLogLikelihood::p() const
 {
 	return p_;
+}
+
+double GammaConjugatePriorLogLikelihood::lp() const
+{
+	return lp_;
 }
 
 double GammaConjugatePriorLogLikelihood::s() const
@@ -658,13 +853,13 @@ size_t GammaConjugatePriorLogLikelihood::data_count() const
 
 
 
-void GammaConjugatePriorLogLikelihood::update(const Vector<D4>& param)
+void GammaConjugatePriorLogLikelihood::update(const ColumnVector& param)
 {
-	lp = param[0];
-	ls = param[1];
-	nv = param[2];
-	v_ = param[3];
-	p_ = std::exp(lp);
+	lp_ = param(0);
+	ls = param(1);
+	nv = param(2);
+	v_ = param(3);
+	p_ = std::exp(lp_);
 	s_ = std::exp(ls);
 	n_ = nv * v_;
 
@@ -683,65 +878,48 @@ GammaConjugatePriorLogLikelihood::integrals_t
 GammaConjugatePriorLogLikelihood::integrals() const
 {
 	/* 1. The integrals: */
-	constexpr unsigned int workspace_size = 2000;
-	Workspace ws(workspace_size);
-	gsl_error_handler_t* error_handler \
-	    = gsl_set_error_handler(&pdtoolbox::error_handler_cpp);
 	integrals_t ints;
 
 	try {
 		/* 1.1 ln(Phi) */
-		ints.lPhi = ln_Phi_backend(lp, ls, n_, v_, epsabs, epsrel,
-		                           workspace_size, ws.get());
+		ints.lPhi = ln_Phi_backend(lp_, ls, n_, v_, epsabs, epsrel);
 
 		/* 1.2 The stencil of ln(Phi): */
-		ints.forward[0] = ln_Phi_backend(lp+delta, ls, n_, v_, epsabs, epsrel,
-		                                 workspace_size, ws.get());
-		ints.forward[1] = ln_Phi_backend(lp, ls+delta, n_, v_, epsabs, epsrel,
-		                                 workspace_size, ws.get());
-		ints.forward[2] = ln_Phi_backend(lp, ls, (nv+delta)*v_, v_, epsabs,
-		                                 epsrel, workspace_size, ws.get());
-		ints.forward[3] = ln_Phi_backend(lp, ls, nv*(v_+delta), v_+delta,
-		                                 epsabs, epsrel, workspace_size,
-		                                 ws.get());
+		ints.forward[0] = ln_Phi_backend(lp_+delta, ls, n_, v_, epsabs, epsrel);
+		ints.forward[1] = ln_Phi_backend(lp_, ls+delta, n_, v_, epsabs, epsrel);
+		ints.forward[2] = ln_Phi_backend(lp_, ls, (nv+delta)*v_, v_, epsabs,
+		                                 epsrel);
+		ints.forward[3] = ln_Phi_backend(lp_, ls, nv*(v_+delta), v_+delta,
+		                                 epsabs, epsrel);
 
 
-		ints.backward[0] = ln_Phi_backend(lp-delta, ls, n_, v_, epsabs, epsrel,
-		                                  workspace_size, ws.get());
-		ints.backward[1] = ln_Phi_backend(lp, ls-delta, n_, v_, epsabs, epsrel,
-		                                  workspace_size, ws.get());
-		ints.backward[2] = ln_Phi_backend(lp, ls, (nv-delta)*v_, v_, epsabs,
-		                                  epsrel, workspace_size, ws.get());
-		ints.backward[3] = ln_Phi_backend(lp, ls, nv*(v_-delta), v_-delta,
-		                                  epsabs, epsrel, workspace_size,
-		                                  ws.get());
+		ints.backward[0] = ln_Phi_backend(lp_-delta, ls, n_, v_, epsabs,
+		                                  epsrel);
+		ints.backward[1] = ln_Phi_backend(lp_, ls-delta, n_, v_, epsabs,
+		                                  epsrel);
+		ints.backward[2] = ln_Phi_backend(lp_, ls, (nv-delta)*v_, v_, epsabs,
+		                                  epsrel);
+		ints.backward[3] = ln_Phi_backend(lp_, ls, nv*(v_-delta), v_-delta,
+		                                  epsabs, epsrel);
 
 		if (use_hessian){
-			ints.fw_lp_ls = ln_Phi_backend(lp+delta, ls+delta, n_, v_, epsabs,
-			                               epsrel, workspace_size, ws.get());
-			ints.fw_lp_nv = ln_Phi_backend(lp+delta, ls, (nv+delta)*v_, v_,
-			                               epsabs, epsrel, workspace_size,
-			                               ws.get());
-			ints.fw_lp_v = ln_Phi_backend(lp+delta, ls, nv*(v_+delta), v_+delta,
-			                              epsabs, epsrel, workspace_size,
-			                              ws.get());
-			ints.fw_ls_nv = ln_Phi_backend(lp, ls+delta, (nv+delta)*v_, v_,
-			                               epsabs, epsrel, workspace_size,
-			                               ws.get());
-			ints.fw_ls_v = ln_Phi_backend(lp, ls+delta, nv*(v_+delta), v_+delta,
-			                              epsabs, epsrel, workspace_size,
-			                              ws.get());
-			ints.fw_nv_v = ln_Phi_backend(lp, ls, (nv+delta)*(v_+delta),
-			                              v_+delta, epsabs, epsrel,
-			                              workspace_size, ws.get());
+			ints.fw_lp_ls = ln_Phi_backend(lp_+delta, ls+delta, n_, v_, epsabs,
+			                               epsrel);
+			ints.fw_lp_nv = ln_Phi_backend(lp_+delta, ls, (nv+delta)*v_, v_,
+			                               epsabs, epsrel);
+			ints.fw_lp_v = ln_Phi_backend(lp_+delta, ls, nv*(v_+delta),
+			                              v_+delta, epsabs, epsrel);
+			ints.fw_ls_nv = ln_Phi_backend(lp_, ls+delta, (nv+delta)*v_, v_,
+			                               epsabs, epsrel);
+			ints.fw_ls_v = ln_Phi_backend(lp_, ls+delta, nv*(v_+delta),
+			                              v_+delta, epsabs, epsrel);
+			ints.fw_nv_v = ln_Phi_backend(lp_, ls, (nv+delta)*(v_+delta),
+			                              v_+delta, epsabs, epsrel);
 		} else {
 			ints.fw_lp_ls = ints.fw_lp_nv = ints.fw_lp_v = ints.fw_ls_nv
 			     = ints.fw_ls_v = ints.fw_nv_v = 0.0;
 		}
 	} catch (std::runtime_error& e) {
-
-		if (error_handler)
-			gsl_set_error_handler(error_handler);
 		std::string msg("Failed to compute integrals at parameters p=");
 		msg.append(std::to_string(p_));
 		msg.append(", s=");
@@ -755,9 +933,6 @@ GammaConjugatePriorLogLikelihood::integrals() const
 		msg.append("'");
 		throw std::runtime_error(msg);
 	}
-
-	if (error_handler)
-		gsl_set_error_handler(error_handler);
 
 	return ints;
 }

@@ -1,0 +1,2 @@
+
+from .regional import GammaConjugatePrior

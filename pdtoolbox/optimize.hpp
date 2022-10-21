@@ -20,16 +20,11 @@
 #ifndef PDTOOLBOX_OPTIMIZE_HPP
 #define PDTOOLBOX_OPTIMIZE_HPP
 
-#include <matrix.hpp>
-
 #include <cmath>
-/*
- * Levenberg-Marquardt with geodetic acceleration following
- * Transtrum & Sethna (2012)
- */
 
 #include <iostream>
 
+#include <eigenwrap.hpp>
 
 
 /* DEBUG
@@ -45,6 +40,15 @@
 namespace pdtoolbox {
 
 
+template<size_t n>
+Eigen::Matrix<double,n,1>
+linear_solve(const Eigen::Matrix<double,n,n>& A,
+             const Eigen::Matrix<double,n,1>& b)
+{
+	return LLT<Eigen::Matrix<double,n,n>>(A).solve(b);
+}
+
+
 
 /*
  *
@@ -55,19 +59,24 @@ namespace pdtoolbox {
  *       First Partial Derivatives", Pac. J. Math. 16(1)
  *
  */
-template<typename LogLikelihood, typename D,
-         std::enable_if<!std::is_same<D,DN>::value,int>::type=0>
+template<typename LogLikelihood>
 bool newton_optimize(LogLikelihood& ll, double g = 0.5,
                      const double gstep_down = 2.0,
                      const double gstep_up = 1.3, const double gmax = 1.0,
                      const size_t nmax=200, double armijo=0.5,
                      double armijo_gradient = 0.1)
 {
+	typedef typename LogLikelihood::nparams::value_type Dtype;
+	constexpr Dtype D = LogLikelihood::nparams::value;
+
+	typedef Eigen::Matrix<double,D,1> ColumnVector;
+	typedef Eigen::Matrix<double,D,D> SquareMatrix;
+
 	/* Parameter vector: */
 	double cost = -ll();
-	ColumnVector<D> p(ll.parameters());
-	const ColumnVector<D> lb(ll.lower_bound());
-	const ColumnVector<D> ub(ll.upper_bound());
+	ColumnVector p(ll.parameters());
+	const ColumnVector lb(ll.lower_bound());
+	const ColumnVector ub(ll.upper_bound());
 
 	/* Step size and max linesearch: */
 	const size_t max_linesearch = 20;
@@ -85,16 +94,16 @@ bool newton_optimize(LogLikelihood& ll, double g = 0.5,
 	for (size_t i=0; i<nmax; ++i){
 		/* Depending on whether the Likelihood supports Hessian computation
 		 * or not, we will compute the direction differently. */
-		ColumnVector<D> direction;
+		ColumnVector direction;
 		bool use_hessian = LogLikelihood::use_hessian;
 
 		/* Compute gradient and Hessian: */
-		const ColumnVector<D> grad(-ll.gradient());
+		const ColumnVector grad(-ll.gradient());
 
 		if (LogLikelihood::use_hessian)
 		{
 			/* Use Hessian and gradient: */
-			const SquareMatrix<D> H(-ll.hessian());
+			const SquareMatrix H(-ll.hessian());
 
 			/* Debug output: */
 			#ifdef PDTOOLBOX_DEBUG
@@ -110,28 +119,38 @@ bool newton_optimize(LogLikelihood& ll, double g = 0.5,
 				<< H.positive_definite();
 			#endif
 
+			/* Matrix M is positive_semidefinite, if:
+			 * - M is invertible with inverse I
+			 * - M = (I.T @ I)
+			 */
+			SquareMatrix Hinv;
+			H.computeInverseWithCheck(Hinv, use_hessian);
+			if (use_hessian){
+				use_hessian = H.isApprox(Hinv.transpose() * Hinv);
+			}
+
 			/* Depending on whether the function is convex, we choose
 			 * the step direction from the Newton method or according
 			 * to the steepest descent: */
-			use_hessian = H.positive_semidefinite();
+			//use_hessian = H.positive_semidefinite();
 			auto propose_step
-			   = [&](const SquareMatrix<D>& H, const ColumnVector<D>& grad)
-			     -> ColumnVector<D>
+			   = [&](const SquareMatrix& H, const ColumnVector& grad)
+			     -> ColumnVector
 			{
 				/* If H positive definite, i.e. the function is convex,
 				 * perform Newton step: */
 				if (use_hessian)
-					return -SquareMatrix<D>::solve(H, grad);
+					return -Hinv * grad;
 
 				/* Otherwise, propose gradient direction: */
-				ColumnVector<D> dir(-grad);
+				ColumnVector dir(-grad);
 
 				/* If we want to do the boundary traversal, we need to project
 				 * the direction: */
 				if (LogLikelihood::boundary_traversal){
 					/* First we need to project the gradient if we are at the
 					 * boundary: */
-					for (typename D::value_type j=0; j<D::value; ++j){
+					for (Dtype j=0; j<D; ++j){
 						if (p[j] == lb[j] && dir[j] < 0)
 							dir[j] = 0.0;
 						else if (p[j] == ub[j] && dir[j] > 0)
@@ -142,12 +161,12 @@ bool newton_optimize(LogLikelihood& ll, double g = 0.5,
 				/* Not using the Hessian is not entirely true - we do
 				 * use its information to scale the parameters.
 				 * Scale by the Hessian: */
-				double dnrm = 1.0 / std::sqrt(H.diagonal().norm2());
-				for (typename D::value_type j=0; j<D::value; ++j){
+				double dnrm = 1.0 / H.diagonal().norm();
+				for (Dtype j=0; j<D; ++j){
 					dir[j] /= std::fmax(1e-17, std::fabs(H(j,j)) * dnrm);
 				}
 
-				return dir / std::sqrt(dir.norm2());
+				return dir / dir.norm();
 			};
 			direction = propose_step(H, grad);
 
@@ -157,27 +176,27 @@ bool newton_optimize(LogLikelihood& ll, double g = 0.5,
 				/* First we need to project the gradient if we are at the
 				 * boundary: */
 				direction = -grad;
-				for (typename D::value_type j=0; j<D::value; ++j){
+				for (Dtype j=0; j<D; ++j){
 					if (p[j] == lb[j] && direction[j] < 0)
 						direction[j] = 0.0;
 					else if (p[j] == ub[j] && direction[j] > 0)
 						direction[j] = 0.0;
 				}
-				const double nrm = std::sqrt(grad.norm2());
+				const double nrm = grad.norm();
 				if (nrm == 0.0)
 					/* Early exit. */
 					early_exit = true;
 				direction /= nrm;
 			} else
 				/* Simple normalized gradient: */
-				direction = -(grad / std::sqrt(grad.norm2()));
+				direction = -(grad / grad.norm());
 
 			/* Debug output: */
 			#ifdef PDTOOLBOX_DEBUG
 			line_end_written = false;
-			for (int i=0; i<D::value; ++i)
+			for (Dtype i=0; i<D; ++i)
 				out << p[i] << ",";
-			for (int i=0; i<D::value; ++i)
+			for (Dtype i=0; i<D; ++i)
 				out << grad[i] << ",";
 			out << "0,0,0,0," << g << "," << cost << ","
 			    << "0";
@@ -195,18 +214,20 @@ bool newton_optimize(LogLikelihood& ll, double g = 0.5,
 				break;
 
 			/* Evaluate the new parameter step: */
-			const ColumnVector<D> dp(g*direction);
-			ColumnVector<D> p1(p + dp);
+			//const ColumnVector dp(g*direction);
+			//ColumnVector p1(p + dp);
+			ColumnVector p1(p + g*direction);
 
 			/* Bounds check: */
 			bool in_bounds = true;
 			if (LogLikelihood::boundary_traversal){
 				/* First identify whether any parameter is newly on the
 				 * boundary: */
-				typename D::value_type jmin = -1;
+				Dtype jmin = -1;
 				double gmin = g;
-				for (typename D::value_type j=0; j<D::value; ++j){
-					if (dp[j] == 0)
+				for (Dtype j=0; j<D; ++j){
+					//if (dp[j] == 0)
+					if (direction[j] == 0)
 						continue;
 					if (p1[j] <= lb[j]){
 						// There might be the case that multiple boundaries
@@ -238,7 +259,7 @@ bool newton_optimize(LogLikelihood& ll, double g = 0.5,
 				}
 				/* Now if we are out of bounds, shorten the step: */
 				if (!in_bounds){
-					for (typename D::value_type j=0; j<D::value; ++j){
+					for (Dtype j=0; j<D; ++j){
 						if (j == jmin){
 							p1[j] = (p1[j] <= lb[j]) ? lb[j] : ub[j];
 						} else {
@@ -248,7 +269,7 @@ bool newton_optimize(LogLikelihood& ll, double g = 0.5,
 					}
 				}
 			} else {
-				for (typename D::value_type j=0; j<D::value; ++j){
+				for (Dtype j=0; j<D; ++j){
 					if (p1[j] < lb[j] || p1[j] > ub[j]){
 						g /= gstep_down;
 						in_bounds = false;
@@ -270,9 +291,12 @@ bool newton_optimize(LogLikelihood& ll, double g = 0.5,
 			 * run the algorithm into fluctuation purgatory. But then, it is
 			 * likely that we are already quite close to the solution,
 			 * hence we use only a simple improvement check. */
-			const double armijo_delta = (armijo==0.0) ? 0.0 :
-				                        (use_hessian) ? armijo*(dp*grad)
-			                                 : armijo_gradient * (dp*grad);
+			const double armijo_delta
+			   = (armijo==0.0)
+			         ? 0.0
+			         : ((use_hessian)
+			                 ? g * armijo * direction.dot(grad)
+			                 : g * armijo_gradient * direction.dot(grad));
 			if (std::isnan(cost_1) || cost_1 >= cost + armijo_delta) {
 				/* Retract update: */
 				ll.update(p);
@@ -282,7 +306,7 @@ bool newton_optimize(LogLikelihood& ll, double g = 0.5,
 				/* If the stepsize is already small enough that parameters are
 				 * equal to double precision, exit:
 				 * (In the first exit, we relax the Armijo constraint)*/
-				if ((p-p1).norm2() < 9e-32 * p.norm2()){
+				if ((p-p1).squaredNorm() < 9e-32 * p.squaredNorm()){
 					if (armijo == 0.0){
 						early_exit = true;
 					}
