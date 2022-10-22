@@ -153,46 +153,9 @@ class GammaConjugatePrior:
         # Sanity:
         qset = [np.ascontiguousarray(q) for q in hf_samples]
 
-        # Compute the extents:
-        amin_ = amin
-        amin = inf
-        amax = -inf
-        bmin = inf
-        bmax = -inf
-        for q in qset:
-            a,b = gamma_mle(q, amin_)
-            amin = min(a, amin)
-            amax = max(a, amax)
-            bmin = min(b, bmin)
-            bmax = max(b, bmax)
-
-        print("alim:",amin,amax)
-        print("blim:",bmin,bmax)
-
-        # Trial points:
-        atr = np.linspace(0.01*amin, 10*amax, 1000)
-        btr = np.linspace(0.01*bmin, 10*bmax, 1000)
-        ag,bg = np.meshgrid(atr, btr)
-        ag = ag.flatten()
-        bg = bg.flatten()
-
-        # Evaluate posteriors for an "uninformative" prior
-        # for all the data sets:
-        logP = np.empty((len(qset), ag.size))
-        for i,q in enumerate(qset):
-            gcp = GammaConjugatePrior(1.0, 0.0, 0.0, 0.0).updated(q)
-            #print("gcp[",i,"]:",gcp)
-            logP[i,:] = gcp.log_probability(ag, bg)
-
-        # Mask irrelevant ones:
-        mask = np.any(logP >= logP.max(axis=1)[:,np.newaxis] - 50, axis=0)
-        print("nonzero:", np.count_nonzero(mask))
-        logP = logP[:,mask]
-        ag = ag[mask]
-        bg = bg[mask]
-
-        P = np.exp(logP)
-        print("P:",P.sum(axis=1).min(), P.sum(axis=1).max())
+        # Compute the "uninformed" estimates for each sample:
+        GCP_i = [GammaConjugatePrior(1.0, 0.0, 0.0, 0.0).updated(q)
+                 for q in qset]
 
         # Cost function for the optimization:
         def cost(x):
@@ -201,34 +164,21 @@ class GammaConjugatePrior:
             s = exp(x[1])
             v = x[3]
             n = v * (1.0 + x[2])
-
-            # Compute the log probability at the integration points:
-            logQ = GammaConjugatePrior(None, s, n, v, lp).log_probability(ag,bg)
-            #Q = np.exp(logQ)
+            gcp_test = GammaConjugatePrior(None, s, n, v, lp)
 
             # Compute the Kullback-Leibler divergences:
-            #C = 0.0
-            #KL = (Q * (logQ - logP)).sum(axis=1)
-            KL = (P * (logP - logQ)).sum(axis=1)
-            C = np.abs(KL).max()
-            #for i in range(len(qset)):
-            #    #KL = (P[i,:] * (logP[i,:] - logQ)).sum()
-            #    KL = (Q * (logQ - logP[i,:])).sum()
-            #    # C = max(KL, KLmax)
-            #    C += abs(KL)
+            KLmax = -inf
+            for gcp in GCP_i:
+                KL = gcp_test.kullback_leibler(gcp)
+                KLmax = max(KLmax, KL)
 
-            # Return the maximum expected surprise:
-            print("  ",C)
-            return C
+            return KLmax
 
         res = minimize(cost, (log(p0), log(s0), max(n0/v0-1.0, nv_surplus_min),
                               v0),
                        bounds=((-inf, inf), (-inf, inf), (nv_surplus_min, inf),
                                (vmin, inf)),
                        method='Nelder-Mead')
-
-        print("result:")
-        print(res)
 
         lp = res.x[0]
         s = exp(res.x[1])
