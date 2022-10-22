@@ -40,9 +40,9 @@ cdef extern from "ll_gamma_conjugate_prior.hpp" namespace "pdtoolbox" nogil:
     """
     namespace pdtoolbox {
     double _gcp_ln_Phi(double lp, double ls, double n, double v,
-                       double epsrel=1e-10)
+                       double amin, double epsrel=1e-10)
     {
-        return GammaConjugatePriorLogLikelihood::ln_Phi(lp, ls, n, v, 0.0,
+        return GammaConjugatePriorLogLikelihood::ln_Phi(lp, ls, n, v, amin, 0.0,
                                                         epsrel);
     }
     }
@@ -52,17 +52,24 @@ cdef extern from "ll_gamma_conjugate_prior.hpp" namespace "pdtoolbox" nogil:
         unique_ptr[GammaConjugatePriorLogLikelihood] \
            make_unique(double p, double s, double n, double v, const double* a,
                        const double* b, size_t Nab, double nv_surplus_min,
-                       double vmin, double epsabs, double epsrel) except+
+                       double vmin, double amin, double epsabs,
+                       double epsrel) except+
 
         @staticmethod
-        double ln_Phi(double lp, double ls, double n, double v, double epsabs,
-                      double epsrel) except+
+        double ln_Phi(double lp, double ls, double n, double v, double amin,
+                      double epsabs, double epsrel) except+
 
         @staticmethod
         double kullback_leibler(double lp, double s, double n, double v,
                                 double lp_ref, double ls_ref, double n_ref,
-                                double v_ref, double epsabs,
+                                double v_ref, double amin, double epsabs,
                                 double epsrel) except+
+
+        @staticmethod
+        void posterior_predictive_cdf(size_t Nq, const double* q, double* out,
+                                      double lp, double s, double n, double v,
+                                      double amin, double epsabs,
+                                      double epsrel) except+
 
         bool optimize() except+
 
@@ -72,9 +79,10 @@ cdef extern from "ll_gamma_conjugate_prior.hpp" namespace "pdtoolbox" nogil:
         double v() const
 
     cdef double _gcp_ln_Phi(double lp, double ls, double n, double v,
-                            double epsrel) except+
+                            double amin, double epsrel) except+
 
-    cdef double _gcp_ln_Phi(double lp, double ls, double n, double v) except+
+    cdef double _gcp_ln_Phi(double lp, double ls, double n, double v,
+                            double amin) except+
 
 
 cdef extern from "gamma.hpp" namespace "pdtoolbox" nogil:
@@ -94,8 +102,8 @@ cdef extern from "gamma.hpp" namespace "pdtoolbox" nogil:
 def gamma_conjugate_prior_mle(const double[::1] a, const double[::1] b,
                               double p0 = 1.0, double s0 = 1.0, double n0 = 1.5,
                               double v0 = 1.0, double nv_surplus_min = 1e-3,
-                              double vmin = 0.1, double epsabs = 0.0,
-                              double epsrel = 1e-10):
+                              double vmin = 0.1, double amin = 1.0,
+                              double epsabs = 0.0, double epsrel = 1e-10):
     """
     Maximum likelihood estimator of the gamma conjugate prior.
 
@@ -114,7 +122,7 @@ def gamma_conjugate_prior_mle(const double[::1] a, const double[::1] b,
         ll = make_shared[GammaConjugatePriorLogLikelihood](p0, s0, n0, v0,
                                                            &a[0], &b[0], N,
                                                            nv_surplus_min, vmin,
-                                                           epsabs, epsrel)
+                                                           amin, epsabs, epsrel)
         if ll:
             deref(ll).optimize()
     if not ll:
@@ -126,7 +134,7 @@ def gamma_conjugate_prior_mle(const double[::1] a, const double[::1] b,
 
 @cython.boundscheck(False)
 def gamma_conjugate_prior_logL(double[::1] a, double[::1] b, double lp,
-                               double s, double n, double v):
+                               double s, double n, double v, double amin = 1.0):
     """
     Log-likelihood of the gamma conjugate prior.
 
@@ -142,7 +150,7 @@ def gamma_conjugate_prior_logL(double[::1] a, double[::1] b, double lp,
     cdef double ll
     with nogil:
         # Compute the normalization:
-        ll = -_gcp_ln_Phi(lp, log(s), n, v)
+        ll = -_gcp_ln_Phi(lp, log(s), n, v, amin)
 
         # Compute the log-likelihood:
         for i in range(N):
@@ -152,13 +160,14 @@ def gamma_conjugate_prior_logL(double[::1] a, double[::1] b, double lp,
     return ll
 
 
-def gcp_ln_Phi(double lp, double s, double n, double v):
-    return _gcp_ln_Phi(lp, log(s), n, v)
+def gcp_ln_Phi(double lp, double s, double n, double v, double amin = 1.0):
+    return _gcp_ln_Phi(lp, log(s), n, v, amin)
 
 
 @cython.boundscheck(False)
 def gamma_conjugate_prior_bulk_log_p(const double[:] a, const double[:] b,
-                                     double lp, double s, double n, double v):
+                                     double lp, double s, double n, double v,
+                                     double amin = 1.0):
     """
     Log-probability of the conjugate prior, evaluated in bulk for
     each point `a` and `b` individually. Yields the same results as
@@ -178,7 +187,7 @@ def gamma_conjugate_prior_bulk_log_p(const double[:] a, const double[:] b,
     cdef double[::1] res = np.empty(N)
     with nogil:
         # Compute the normalization:
-        norm = _gcp_ln_Phi(lp, log(s), n, v)
+        norm = _gcp_ln_Phi(lp, log(s), n, v, amin)
 
         # Compute the log-likelihood:
         for i in range(N):
@@ -190,7 +199,8 @@ def gamma_conjugate_prior_bulk_log_p(const double[:] a, const double[:] b,
 
 @cython.boundscheck(False)
 def gamma_conjugate_prior_predictive(double[::1] q, double lp, double s,
-                                     double n, double v, bool inplace=False):
+                                     double n, double v, double amin,
+                                     bool inplace=False):
     """
     Posterior predictive of the gamma conjugate prior.
     """
@@ -205,7 +215,7 @@ def gamma_conjugate_prior_predictive(double[::1] q, double lp, double s,
     cdef size_t i
     with nogil:
         # Compute the normalization:
-        lnPhi = _gcp_ln_Phi(lp, log(s), n, v)
+        lnPhi = _gcp_ln_Phi(lp, log(s), n, v, amin)
 
         # Compute the shifted normalization that occurs in the
         # posterior predictive:
@@ -215,8 +225,33 @@ def gamma_conjugate_prior_predictive(double[::1] q, double lp, double s,
             if q[i] <= 0:
                 out[i] = 0.0
             else:
-                out[i] = exp(_gcp_ln_Phi(lp + log(q[i]), log(s+q[i]), n+1, v+1)
+                out[i] = exp(_gcp_ln_Phi(lp + log(q[i]), log(s+q[i]), n+1, v+1,
+                                         amin)
                              - lnPhi)
+
+    return out.base
+
+
+@cython.boundscheck(False)
+def gamma_conjugate_prior_predictive_cdf(double[::1] q, double lp, double s,
+                                         double n, double v, double amin,
+                                         double epsabs = 0.0,
+                                         double epsrel = 1e-10,
+                                         bool inplace=False):
+    """
+    Posterior predictive of the gamma conjugate prior.
+    """
+    cdef size_t N = q.shape[0]
+    cdef double[::1] out
+    if inplace:
+        out = q
+    else:
+        out = np.empty(N)
+
+    with nogil:
+        GammaConjugatePriorLogLikelihood\
+            .posterior_predictive_cdf(N, &q[0], &out[0], lp, s, n, v, amin,
+                                      epsabs, epsrel)
 
     return out.base
 
@@ -224,18 +259,20 @@ def gamma_conjugate_prior_predictive(double[::1] q, double lp, double s,
 def gamma_conjugate_prior_kullback_leibler(double lp, double s, double n,
                                            double v, double lp_ref,
                                            double s_ref, double n_ref,
-                                           double v_ref, double epsabs = 0.0,
+                                           double v_ref, double amin = 1.0,
+                                           double epsabs = 0.0,
                                            double epsrel = 1e-10):
     """
     Compute the Kullback-Leibler divergence between a reference
     gamma conjugate prior and another one.
     """
     return GammaConjugatePriorLogLikelihood.kullback_leibler(lp, s, n, v,
-                                   lp_ref, s_ref, n_ref, v_ref, epsabs, epsrel)
+                                   lp_ref, s_ref, n_ref, v_ref, amin, epsabs,
+                                   epsrel)
 
 
 @cython.boundscheck(False)
-def gamma_mle(const double[:] x, double amin):
+def gamma_mle(const double[:] x, double amin = 1.0):
     """
     Subroutine to compute the Gamma distribution MLE for a set
     of unweighted data.

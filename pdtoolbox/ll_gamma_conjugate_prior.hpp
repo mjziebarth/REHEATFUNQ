@@ -30,11 +30,6 @@
 
 namespace pdtoolbox {
 
-/*
- * The minimum shape parameter `a` to accept - must be >= 0
- */
-constexpr double GCP_AMIN = 1.0;
-
 class GammaConjugatePriorLogLikelihood
 {
 	public:
@@ -51,21 +46,22 @@ class GammaConjugatePriorLogLikelihood
 		                                 double v, const double* a,
 		                                 const double* b, size_t Nab,
 		                                 double nv_surplus_min=1e-3,
-		                                 double vmin = 0.1, double epsabs=0,
-		                                 double epsrel=1e-10);
+		                                 double vmin = 0.1, double amin = 1.0,
+		                                 double epsabs=0, double epsrel=1e-10);
 
 		GammaConjugatePriorLogLikelihood(double p, double s, double n,
 		                                 double v, const std::vector<ab_t>& ab,
 		                                 double nv_surplus_min=1e-3,
-		                                 double vmin = 0.1, double epsabs=0,
-		                                 double epsrel=1e-10);
+		                                 double vmin = 0.1, double amin = 1.0,
+		                                 double epsabs=0, double epsrel=1e-10);
 
 		/* Create a unique ptr (for Cython): */
 		static std::unique_ptr<GammaConjugatePriorLogLikelihood>
 		    make_unique(double p, double s, double n, double v,
 			            const double* a, const double* b, size_t Nab,
 			            double nv_surplus_min=1e-3, double vmin = 0.1,
-			            double epsabs=0, double epsrel = 1e-10);
+			            double amin = 1.0, double epsabs=0,
+			            double epsrel = 1e-10);
 
 		/*
 		 * (2) The optimization interface:
@@ -104,17 +100,25 @@ class GammaConjugatePriorLogLikelihood
 		 * (4) Static methods:
 		 */
 		static double ln_Phi(double lp, double ls, double n, double v,
-		                     double epsabs, double epsrel=1e-10);
+		                     double amin, double epsabs, double epsrel=1e-10);
 
 		static double
 		kullback_leibler(double lp, double s, double n, double v,
 		                 double lp_ref, double s_ref, double n_ref,
-		                 double v_ref, double epsabs, double epsrel=1e-10);
+		                 double v_ref, double amin, double epsabs,
+		                 double epsrel=1e-10);
+
+		static void
+		posterior_predictive_cdf(const size_t Nq, const double* q,
+		                         double* out,
+		                         double lp, double s, double n, double v,
+		                         double amin, double epsabs, double epsrel);
 
 	private:
 		constexpr static double delta = 1e-5;
 		const double nv_surplus_min;
 		const double vmin;
+		const double amin;
 		const double epsrel, epsabs;
 		double lp_, p_, ls, s_, v_, nv, n_;
 		double lPhi, albsum, lbsum, asum, bsum, lgasum;

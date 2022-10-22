@@ -49,8 +49,6 @@ using boost::math::quadrature::tanh_sinh,
       boost::math::quadrature::gauss_kronrod;
 
 
-static_assert(GCP_AMIN >= 0.0);
-
 
 struct params0_t {
 	double lp;
@@ -455,7 +453,7 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 
 /* Compute the natural logarithm of the integration constant: */
 static double ln_Phi_backend(double lp, double ls, double n, double v,
-                             double epsabs, double epsrel)
+                             double amin, double epsabs, double epsrel)
 {
 	/* Shortcut for the case that p=0, in which case the
 	 * integral is zero. This case is not particularly useful
@@ -466,6 +464,11 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 	 */
 	if (std::isinf(lp) && lp < 0)
 		return -std::numeric_limits<double>::infinity();
+
+	/* `amin` sanity: */
+	if (amin < 0)
+		throw std::runtime_error("Parameter amin needs to be positive or "
+		                         "zero.");
 
 	/* Get a parameter structure: */
 	params0_t P = {.lp=lp, .ls=ls, .n=n, .v=v, .lFmax=0.0, .epsrel=epsrel};
@@ -532,7 +535,7 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 		return std::exp(lF - P.lFmax);
 	};
 
-	if (n_extrema >= 1 && amax > GCP_AMIN){
+	if (n_extrema >= 1 && amax > amin){
 		/* Compute the maximum value of the logarithm of the integrand: */
 		if (std::isinf(amax))
 			throw std::runtime_error("Cannot normalize the integration constant"
@@ -556,7 +559,6 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 			bounds_t bounds = peak_integration_bounds(amax, epsrel, epsabs,
 			                                          f2_amax, P);
 
-			const double da_l = amax - bounds.l, da_r = bounds.r - amax;
 			/* For consistency checking, make sure that the first non-quadratic
 			 * term of the Taylor expansion of the log-integrand (the cubic
 			 * term) is less than 4.61 (=log(1e2)) at the location of the
@@ -583,7 +585,7 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 		double S = 0.0;
 		{
 			tanh_sinh<double> ts;
-			const double I = ts.integrate(integrand1, GCP_AMIN, amax, term,
+			const double I = ts.integrate(integrand1, amin, amax, term,
 			                              &err, &L1);
 			S += I;
 			condition_warn(I, err, L1);
@@ -613,11 +615,11 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 	} else {
 		/* Integrate the singularity at a=0 and for the rest, integrate to
 		 * infinity: */
-		P.lFmax = ln_F(max(GCP_AMIN, 1.0), lp, ls, n, v);
+		P.lFmax = ln_F(max(amin, 1.0), lp, ls, n, v);
 		res = P.lFmax;
 
 		auto integrand3 = [&](double a) -> double {
-			double lF = ln_F(a+GCP_AMIN, P.lp, P.ls, P.n, P.v);
+			double lF = ln_F(a+amin, P.lp, P.ls, P.n, P.v);
 			if (std::isinf(std::exp(lF - P.lFmax)))
 				std::cerr << "Found inf result in integrand for amax = "
 					      << amax << ", a = " << a << ".\n";
@@ -639,11 +641,11 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 
 
 double GammaConjugatePriorLogLikelihood::ln_Phi(double lp, double ls, double n,
-                                                double v, double epsabs,
-                                                double epsrel)
+                                                double v, double amin,
+                                                double epsabs, double epsrel)
 {
 	/* Return: */
-	return ln_Phi_backend(lp, ls, n, v, epsabs, epsrel);
+	return ln_Phi_backend(lp, ls, n, v, amin, epsabs, epsrel);
 }
 
 
@@ -654,17 +656,17 @@ double GammaConjugatePriorLogLikelihood::ln_Phi(double lp, double ls, double n,
 double GammaConjugatePriorLogLikelihood::kullback_leibler(
             double lp, double s, double n, double v,
             double lp_ref, double s_ref, double n_ref,
-            double v_ref, double epsabs, double epsrel)
+            double v_ref, double amin, double epsabs, double epsrel)
 {
 	const double ls = log(s);
 	const double ls_ref = log(s_ref);
-	const double ln_Phi = ln_Phi_backend(lp, ls, n, v, epsabs, epsrel);
+	const double ln_Phi = ln_Phi_backend(lp, ls, n, v, amin, epsabs, epsrel);
 	const double ln_Phi_ref = ln_Phi_backend(lp_ref, ls_ref, n_ref, v_ref,
-	                                         epsabs, epsrel);
+	                                         amin, epsabs, epsrel);
 
 	/* Now the integral: */
 	auto integrand = [=](double a) -> double {
-		a += GCP_AMIN;
+		a += amin;
 		return std::exp((a - 1.0)*lp - n*lgamma(a) + lgamma(a*v) - v * a * ls
 		                - ln_Phi)
 		       * ( (a - 1.0)*(lp - lp_ref) - (n - n_ref) * lgamma(a)
@@ -679,6 +681,76 @@ double GammaConjugatePriorLogLikelihood::kullback_leibler(
 	condition_warn(I, err, L1);
 
 	return ln_Phi_ref - ln_Phi + I;
+}
+
+
+/*
+ * Posterior predictive CDF:
+ */
+void
+GammaConjugatePriorLogLikelihood::posterior_predictive_cdf(
+        const size_t Nq, const double* q, double* out,
+        double lp, double s, double n, double v,
+        double amin, double epsabs, double epsrel
+)
+{
+	if (Nq == 0)
+		return;
+
+	/* Sort the heat flow values: */
+	struct orddbl {
+		double val = 0;
+		size_t index = 0;
+		bool operator<(const orddbl& other) const {
+			return val < other.val;
+		};
+	};
+	std::vector<orddbl> qord(Nq);
+	for (size_t i=0; i<Nq; ++i){
+		qord[i] = {q[i], i};
+	}
+	std::sort(qord.begin(), qord.end());
+
+	/* Reference Phi: */
+	const double ls = log(s);
+	const double ln_Phi = ln_Phi_backend(lp, ls, n, v, amin, epsabs, epsrel);
+
+	/* The integrand: */
+	auto integrand = [=](double qi) -> double {
+		return std::exp(ln_Phi_backend(lp + std::log(qi), std::log(s + qi),
+		                               n+1, v+1, amin, epsabs, epsrel)
+		                - ln_Phi);
+	};
+
+	/* Now the piecewise integration.
+	 * This loop could be parallelized easily: */
+	double err;
+	for (size_t i=0; i<Nq; ++i){
+		/* Numerical integration of this part: */
+		const size_t j = qord[i].index;
+		double ql = (i == 0) ? 0.0 : qord[i-1].val;
+		if (qord[i].val == ql)
+			out[j] = 0.0;
+		else
+			out[j] = gauss_kronrod<double, 15>::integrate(integrand,
+			                                              ql, qord[i].val,
+			                                              5, 1e-9, &err);
+
+		/* Error checking? */
+	}
+
+	/* Accumulation: */
+	for (size_t i=1; i<Nq; ++i){
+		out[qord[i].index] += out[qord[i-1].index];
+	}
+
+	/* Ensure normalization: */
+	const double Send = out[qord[Nq - 1].index];
+	if (Send > 1.0){
+		for (size_t i=0; i<Nq; ++i){
+			out[i] /= Send;
+		}
+	}
 }
 
 
@@ -707,16 +779,17 @@ compute_ab(const double* a, const double* b, size_t N)
 
 GammaConjugatePriorLogLikelihood::GammaConjugatePriorLogLikelihood(
          double p, double s, double n, double v, const std::vector<ab_t>& ab,
-         double nv_surplus_min, double vmin, double epsabs, double epsrel
+         double nv_surplus_min, double vmin, double amin, double epsabs,
+         double epsrel
        )
-	: nv_surplus_min(nv_surplus_min), vmin(vmin), epsrel(epsrel),
+	: nv_surplus_min(nv_surplus_min), vmin(vmin), amin(amin), epsrel(epsrel),
 	  epsabs(epsabs), lp_(std::log(p)), p_(p),
 	  ls(std::log(s)), s_(s), v_(std::max(v, vmin)),
 	  nv(std::max(n/v_, 1 + nv_surplus_min)), n_(std::max(n, nv*v_)),
 	  ab(ab), W(ab.size())
 {
 	for (const ab_t& ab_ : ab){
-		if (ab_.a < GCP_AMIN || ab_.a <= 0.0)
+		if (ab_.a < amin || ab_.a <= 0.0)
 			throw std::domain_error("a out of bounds ]amin, inf[.");
 		if (ab_.b <= 0.0)
 			throw std::domain_error("b out of bounds ]0, inf[.");
@@ -730,16 +803,16 @@ GammaConjugatePriorLogLikelihood::GammaConjugatePriorLogLikelihood(
 GammaConjugatePriorLogLikelihood::GammaConjugatePriorLogLikelihood(
          double p, double s, double n, double v, const double* a,
          const double* b, size_t Nab, double nv_surplus_min, double vmin,
-         double epsabs, double epsrel
+         double amin, double epsabs, double epsrel
        )
-	: nv_surplus_min(nv_surplus_min), vmin(vmin), epsrel(epsrel),
+	: nv_surplus_min(nv_surplus_min), vmin(vmin), amin(amin), epsrel(epsrel),
 	  epsabs(epsabs), lp_(std::log(p)), p_(p),
 	  ls(std::log(s)), s_(s), v_(std::max(v, vmin)),
 	  nv(std::max(n/v_, 1 + nv_surplus_min)), n_(std::max(n, nv*v_)),
 	  ab(compute_ab(a, b, Nab)), W(Nab)
 {
 	for (const ab_t& ab_ : ab){
-		if (ab_.a < GCP_AMIN || ab_.a <= 0.0)
+		if (ab_.a < amin || ab_.a <= 0.0)
 			throw std::domain_error("a out of bounds ]amin, inf[.");
 		if (ab_.b <= 0)
 			throw std::domain_error("b out of bounds ]0, inf[.");
@@ -755,11 +828,11 @@ GammaConjugatePriorLogLikelihood::make_unique(double p, double s, double n,
                                       double v, const double* a,
                                       const double* b, size_t Nab,
                                       double nv_surplus_min, double vmin,
-                                      double epsabs, double epsrel)
+                                      double amin, double epsabs, double epsrel)
 {
 	typedef GammaConjugatePriorLogLikelihood GCPLL;
 	return std::make_unique<GCPLL>(p, s, n, v, a, b, Nab, nv_surplus_min, vmin,
-	                               epsabs, epsrel);
+	                               amin, epsabs, epsrel);
 }
 
 
@@ -929,39 +1002,41 @@ GammaConjugatePriorLogLikelihood::integrals() const
 
 	try {
 		/* 1.1 ln(Phi) */
-		ints.lPhi = ln_Phi_backend(lp_, ls, n_, v_, epsabs, epsrel);
+		ints.lPhi = ln_Phi_backend(lp_, ls, n_, v_, amin, epsabs, epsrel);
 
 		/* 1.2 The stencil of ln(Phi): */
-		ints.forward[0] = ln_Phi_backend(lp_+delta, ls, n_, v_, epsabs, epsrel);
-		ints.forward[1] = ln_Phi_backend(lp_, ls+delta, n_, v_, epsabs, epsrel);
-		ints.forward[2] = ln_Phi_backend(lp_, ls, (nv+delta)*v_, v_, epsabs,
+		ints.forward[0] = ln_Phi_backend(lp_+delta, ls, n_, v_, amin, epsabs,
 		                                 epsrel);
-		ints.forward[3] = ln_Phi_backend(lp_, ls, nv*(v_+delta), v_+delta,
+		ints.forward[1] = ln_Phi_backend(lp_, ls+delta, n_, v_, amin, epsabs,
+		                                 epsrel);
+		ints.forward[2] = ln_Phi_backend(lp_, ls, (nv+delta)*v_, v_, amin,
 		                                 epsabs, epsrel);
+		ints.forward[3] = ln_Phi_backend(lp_, ls, nv*(v_+delta), v_+delta,
+		                                 amin, epsabs, epsrel);
 
 
-		ints.backward[0] = ln_Phi_backend(lp_-delta, ls, n_, v_, epsabs,
+		ints.backward[0] = ln_Phi_backend(lp_-delta, ls, n_, v_, amin, epsabs,
 		                                  epsrel);
-		ints.backward[1] = ln_Phi_backend(lp_, ls-delta, n_, v_, epsabs,
+		ints.backward[1] = ln_Phi_backend(lp_, ls-delta, n_, v_, amin, epsabs,
 		                                  epsrel);
-		ints.backward[2] = ln_Phi_backend(lp_, ls, (nv-delta)*v_, v_, epsabs,
-		                                  epsrel);
-		ints.backward[3] = ln_Phi_backend(lp_, ls, nv*(v_-delta), v_-delta,
+		ints.backward[2] = ln_Phi_backend(lp_, ls, (nv-delta)*v_, v_, amin,
 		                                  epsabs, epsrel);
+		ints.backward[3] = ln_Phi_backend(lp_, ls, nv*(v_-delta), v_-delta,
+		                                  amin, epsabs, epsrel);
 
 		if (use_hessian){
-			ints.fw_lp_ls = ln_Phi_backend(lp_+delta, ls+delta, n_, v_, epsabs,
-			                               epsrel);
+			ints.fw_lp_ls = ln_Phi_backend(lp_+delta, ls+delta, n_, v_, amin,
+			                               epsabs, epsrel);
 			ints.fw_lp_nv = ln_Phi_backend(lp_+delta, ls, (nv+delta)*v_, v_,
-			                               epsabs, epsrel);
+			                               amin, epsabs, epsrel);
 			ints.fw_lp_v = ln_Phi_backend(lp_+delta, ls, nv*(v_+delta),
-			                              v_+delta, epsabs, epsrel);
+			                              v_+delta, amin, epsabs, epsrel);
 			ints.fw_ls_nv = ln_Phi_backend(lp_, ls+delta, (nv+delta)*v_, v_,
-			                               epsabs, epsrel);
+			                               amin, epsabs, epsrel);
 			ints.fw_ls_v = ln_Phi_backend(lp_, ls+delta, nv*(v_+delta),
-			                              v_+delta, epsabs, epsrel);
+			                              v_+delta, amin, epsabs, epsrel);
 			ints.fw_nv_v = ln_Phi_backend(lp_, ls, (nv+delta)*(v_+delta),
-			                              v_+delta, epsabs, epsrel);
+			                              v_+delta, amin, epsabs, epsrel);
 		} else {
 			ints.fw_lp_ls = ints.fw_lp_nv = ints.fw_lp_v = ints.fw_ls_nv
 			     = ints.fw_ls_v = ints.fw_nv_v = 0.0;

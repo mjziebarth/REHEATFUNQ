@@ -28,6 +28,7 @@ from scipy.special import loggamma
 from scipy.optimize import minimize
 from .backend import gamma_conjugate_prior_logL, \
                      gamma_conjugate_prior_predictive, \
+                     gamma_conjugate_prior_predictive_cdf, \
                      gamma_conjugate_prior_mle, \
                      gamma_conjugate_prior_bulk_log_p, \
                      gamma_mle, \
@@ -42,9 +43,10 @@ class GammaConjugatePrior:
     s : float
     n : float
     v : float
+    amin : float
 
     def __init__(self, p: Optional[float], s: float, n: float, v: float,
-                 lp: Optional[float] = None):
+                 lp: Optional[float] = None, amin: float = 1.0):
         if p is None:
             self.lp = float(lp)
         else:
@@ -52,11 +54,13 @@ class GammaConjugatePrior:
         self.s = float(s)
         self.n = float(n)
         self.v = float(v)
+        self.amin = float(amin)
 
 
     def __repr__(self):
         return "GammaConjugatePrior(p=" + str(exp(self.lp)) + ", s=" \
-               + str(self.s) + ", n=" + str(self.n) + ", ν=" + str(self.v) + ")"
+               + str(self.s) + ", n=" + str(self.n) + ", ν=" + str(self.v) \
+               + ", amin=" + str(self.amin) + ")"
 
 
     def updated(self, q: ArrayLike):
@@ -68,14 +72,15 @@ class GammaConjugatePrior:
         n  = self.n + q.size
         v  = self.v + q.size
         lp = self.lp + np.log(q, out=q).sum()
-        return GammaConjugatePrior(None, s, n, v, lp)
+        return GammaConjugatePrior(None, s, n, v, lp, self.amin)
 
 
     def log_likelihood(self, a: ArrayLike, b: ArrayLike) -> float:
         """
         Evaluate the log-likelihood at a parameter point.
         """
-        return gamma_conjugate_prior_logL(a, b, self.lp, self.s, self.n, self.v)
+        return gamma_conjugate_prior_logL(a, b, self.lp, self.s, self.n, self.v,
+                                          self.amin)
 
 
     def log_probability(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
@@ -83,7 +88,7 @@ class GammaConjugatePrior:
         Evaluate the logarithm of the probability at parameter points.
         """
         return gamma_conjugate_prior_bulk_log_p(a, b, self.lp, self.s, self.n,
-                                                self.v)
+                                                self.v, self.amin)
 
 
     def probability(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
@@ -101,7 +106,18 @@ class GammaConjugatePrior:
         flow `q`.
         """
         return gamma_conjugate_prior_predictive(q, self.lp, self.s, self.n,
-                                                self.v, inplace)
+                                                self.v, self.amin, inplace)
+
+
+    def posterior_predictive_cdf(self, q: ArrayLike,
+                                 inplace: bool = False) -> ArrayLike:
+        """
+        Evaluate the posterior predictive distribution for given heat
+        flow `q`.
+        """
+        q = np.ascontiguousarray(q)
+        return gamma_conjugate_prior_predictive_cdf(q, self.lp, self.s, self.n,
+                                                    self.v, self.amin, inplace)
 
 
     def kullback_leibler(self, other: GammaConjugatePrior) -> float:
@@ -120,7 +136,8 @@ class GammaConjugatePrior:
                                     p0: float = 1.0, s0: float = 1.0,
                                     n0: float = 1.5, v0: float = 1.0,
                                     nv_surplus_min: float = 0.04,
-                                    vmin: float = 0.1, epsabs: float = 0.0,
+                                    vmin: float = 0.1, amin: float = 1.0,
+                                    epsabs: float = 0.0,
                                     epsrel: float = 1e-10
         ) -> GammaConjugatePrior:
         """
@@ -131,9 +148,9 @@ class GammaConjugatePrior:
         lp, s, n, v = gamma_conjugate_prior_mle(a, b, p0=p0, s0=s0, n0=n0,
                                                 v0=v0,
                                                 nv_surplus_min=nv_surplus_min,
-                                                vmin=vmin, epsabs=epsabs,
-                                                epsrel=epsrel)
-        return GammaConjugatePrior(None, s, n, v, lp)
+                                                vmin=vmin, amin=amin,
+                                                epsabs=epsabs, epsrel=epsrel)
+        return GammaConjugatePrior(None, s, n, v, lp, amin)
 
 
     @staticmethod
@@ -141,9 +158,8 @@ class GammaConjugatePrior:
                                   p0: float = 1.0, s0: float = 1.0,
                                   n0: float = 1.5, v0: float = 1.0,
                                   nv_surplus_min: float = 0.04,
-                                  vmin: float = 0.1, epsabs: float = 0.0,
-                                  epsrel: float = 1e-10,
-                                  amin = 1e-3
+                                  vmin: float = 0.1, amin: float = 1.0,
+                                  epsabs: float = 0.0, epsrel: float = 1e-10
         ) -> GammaConjugatePrior:
         """
         Compute the estimate that minimizes the maximum Kullback-Leibler
@@ -154,7 +170,7 @@ class GammaConjugatePrior:
         qset = [np.ascontiguousarray(q) for q in hf_samples]
 
         # Compute the "uninformed" estimates for each sample:
-        GCP_i = [GammaConjugatePrior(1.0, 0.0, 0.0, 0.0).updated(q)
+        GCP_i = [GammaConjugatePrior(1.0, 0.0, 0.0, 0.0, amin).updated(q)
                  for q in qset]
 
         # Cost function for the optimization:
@@ -164,7 +180,7 @@ class GammaConjugatePrior:
             s = exp(x[1])
             v = x[3]
             n = v * (1.0 + x[2])
-            gcp_test = GammaConjugatePrior(None, s, n, v, lp)
+            gcp_test = GammaConjugatePrior(None, s, n, v, lp, amin)
 
             # Compute the Kullback-Leibler divergences:
             KLmax = -inf
@@ -184,74 +200,7 @@ class GammaConjugatePrior:
         s = exp(res.x[1])
         v = res.x[3]
         n = v * (1.0 + res.x[2])
-        return GammaConjugatePrior(None, s, n, v, lp)
-
-
-    @staticmethod
-    def equal_probability_least_squares(a: ArrayLike, b: ArrayLike,
-                                        p0: float = 1.0, s0: float = 1.0,
-                                        n0: float = 1.5, v0: float = 1.0,
-                                        nv_surplus_min: float = 1e-3,
-                                        vmin: float = 0.2, epsabs: float = 0.0,
-                                        epsrel: float = 1e-10
-        ) -> GammaConjugatePrior:
-        """
-        Compute an estimate
-        """
-        def cost(x):
-            lp = x[0]
-            s = exp(x[1])
-            v = x[3]
-            n = v * (1.0 + x[2])
-            try:
-                log_p = gamma_conjugate_prior_bulk_log_p(a, b, lp, s, n, v)
-            except RuntimeError:
-                return inf
-            log_p_mean = log_p.mean()
-            log_p -= log_p_mean
-            log_p **= 2
-            #log_p **= 2
-            #return 20 * log_p.mean() - log_p_mean
-            return 20 * log_p.max() - log_p_mean
-
-        res = minimize(cost, (log(p0), log(s0), max(n0/v0-1.0, nv_surplus_min),
-                              v0),
-                       bounds=((-inf, inf), (-inf, inf), (nv_surplus_min, inf),
-                               (vmin, inf)),
-                       method='Nelder-Mead')
-        print("result:")
-        print(res)
-
-        def cost_post(x):
-            lp = x[0]
-            s = exp(x[1])
-            v = x[3]
-            n = v * (1.0 + x[2])
-            try:
-                log_p = gamma_conjugate_prior_bulk_log_p(a, b, lp, s, n, v)
-            except RuntimeError:
-                return inf
-            log_p_mean = log_p.mean()
-            log_p -= log_p_mean
-            #log_p **= 2
-            #return log_p.mean()
-            np.abs(log_p, out=log_p)
-            return log_p.max()
-
-        res = minimize(cost_post, res.x,
-                       bounds=((-inf, inf), (-inf, inf), (nv_surplus_min, inf),
-                               (vmin, inf)),
-                       method='Nelder-Mead')
-
-        print("result:")
-        print(res)
-
-        lp = res.x[0]
-        s = exp(res.x[1])
-        v = res.x[3]
-        n = v * (1.0 + res.x[2])
-        return GammaConjugatePrior(None, s, n, v, lp)
-
+        return GammaConjugatePrior(None, s, n, v, lp, amin)
 
 
     # Aliases:
