@@ -30,7 +30,8 @@ from .backend import gamma_conjugate_prior_logL, \
                      gamma_conjugate_prior_predictive, \
                      gamma_conjugate_prior_mle, \
                      gamma_conjugate_prior_bulk_log_p, \
-                     gamma_mle
+                     gamma_mle, \
+                     gamma_conjugate_prior_kullback_leibler
 
 
 class GammaConjugatePrior:
@@ -101,6 +102,17 @@ class GammaConjugatePrior:
         """
         return gamma_conjugate_prior_predictive(q, self.lp, self.s, self.n,
                                                 self.v, inplace)
+
+
+    def kullback_leibler(self, other: GammaConjugatePrior) -> float:
+        """
+        Compute the Kullback-Leibler divergence to another gamma
+        conjugate prior.
+        """
+        return gamma_conjugate_prior_kullback_leibler(other.lp, other.s,
+                                                      other.n, other.v,
+                                                      self.lp, self.s, self.n,
+                                                      self.v)
 
 
     @staticmethod

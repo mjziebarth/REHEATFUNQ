@@ -30,6 +30,11 @@
 
 namespace pdtoolbox {
 
+/*
+ * The minimum shape parameter `a` to accept - must be >= 0
+ */
+constexpr double GCP_AMIN = 1.0;
+
 class GammaConjugatePriorLogLikelihood
 {
 	public:
@@ -100,6 +105,11 @@ class GammaConjugatePriorLogLikelihood
 		 */
 		static double ln_Phi(double lp, double ls, double n, double v,
 		                     double epsabs, double epsrel=1e-10);
+
+		static double
+		kullback_leibler(double lp, double s, double n, double v,
+		                 double lp_ref, double s_ref, double n_ref,
+		                 double v_ref, double epsabs, double epsrel=1e-10);
 
 	private:
 		constexpr static double delta = 1e-5;

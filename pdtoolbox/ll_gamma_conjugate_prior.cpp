@@ -49,6 +49,8 @@ using boost::math::quadrature::tanh_sinh,
       boost::math::quadrature::gauss_kronrod;
 
 
+static_assert(GCP_AMIN >= 0.0);
+
 
 struct params0_t {
 	double lp;
@@ -251,6 +253,8 @@ static void condition_warn(double S, double err, double L1)
 static double ln_Phi_backend(double lp, double ls, double n, double v,
                              double epsabs, double epsrel)
 {
+	static_assert(false, "Implement GCP_AMIN!");
+
 	/* Shortcut for the case that p=0, in which case the
 	 * integral is zero. This case is not particularly useful
 	 * for the conjugate prior itself since then there is a zero
@@ -484,7 +488,7 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 	 *    integrand's derivative is negative, zero, or positive at its maximum.
 	 */
 	uint8_t n_extrema;
-	double amax = 0;
+	double amax = 0.0;
 
 	if (n > 1){
 		/* Case 1, guaranteed extremum: */
@@ -528,7 +532,7 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 		return std::exp(lF - P.lFmax);
 	};
 
-	if (n_extrema >= 1 && amax > 0){
+	if (n_extrema >= 1 && amax > GCP_AMIN){
 		/* Compute the maximum value of the logarithm of the integrand: */
 		if (std::isinf(amax))
 			throw std::runtime_error("Cannot normalize the integration constant"
@@ -571,7 +575,7 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 		}
 
 		/* Split the integral into two parts:
-		 * (   0, amax) -> use tanh-sinh quadrature
+		 * (amin, amax) -> use tanh-sinh quadrature
 		 * (amax,  inf) -> use exp-sinh quadrature
 		 *
 		 * (1) From 0 to amax:
@@ -579,7 +583,7 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 		double S = 0.0;
 		{
 			tanh_sinh<double> ts;
-			const double I = ts.integrate(integrand1, 0.0, amax, term,
+			const double I = ts.integrate(integrand1, GCP_AMIN, amax, term,
 			                              &err, &L1);
 			S += I;
 			condition_warn(I, err, L1);
@@ -609,11 +613,19 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 	} else {
 		/* Integrate the singularity at a=0 and for the rest, integrate to
 		 * infinity: */
-		P.lFmax = ln_F(1.0, lp, ls, n, v);
+		P.lFmax = ln_F(max(GCP_AMIN, 1.0), lp, ls, n, v);
 		res = P.lFmax;
 
+		auto integrand3 = [&](double a) -> double {
+			double lF = ln_F(a+GCP_AMIN, P.lp, P.ls, P.n, P.v);
+			if (std::isinf(std::exp(lF - P.lFmax)))
+				std::cerr << "Found inf result in integrand for amax = "
+					      << amax << ", a = " << a << ".\n";
+			return std::exp(lF - P.lFmax);
+		};
+
 		exp_sinh<double> es;
-		const double I = es.integrate(integrand1, term, &err, &L1);
+		const double I = es.integrate(integrand3, term, &err, &L1);
 		condition_warn(I, err, L1);
 		res += std::log(I);
 	}
@@ -632,6 +644,41 @@ double GammaConjugatePriorLogLikelihood::ln_Phi(double lp, double ls, double n,
 {
 	/* Return: */
 	return ln_Phi_backend(lp, ls, n, v, epsabs, epsrel);
+}
+
+
+
+/*
+ * Kullback-Leibler distance:
+ */
+double GammaConjugatePriorLogLikelihood::kullback_leibler(
+            double lp, double s, double n, double v,
+            double lp_ref, double s_ref, double n_ref,
+            double v_ref, double epsabs, double epsrel)
+{
+	const double ls = log(s);
+	const double ls_ref = log(s_ref);
+	const double ln_Phi = ln_Phi_backend(lp, ls, n, v, epsabs, epsrel);
+	const double ln_Phi_ref = ln_Phi_backend(lp_ref, ls_ref, n_ref, v_ref,
+	                                         epsabs, epsrel);
+
+	/* Now the integral: */
+	auto integrand = [=](double a) -> double {
+		a += GCP_AMIN;
+		return std::exp((a - 1.0)*lp - n*lgamma(a) + lgamma(a*v) - v * a * ls
+		                - ln_Phi)
+		       * ( (a - 1.0)*(lp - lp_ref) - (n - n_ref) * lgamma(a)
+		            - a * v * (s - s_ref) / s
+		            + a * (v - v_ref) * (digamma(a*v) - ls));
+	};
+
+	exp_sinh<double> es;
+	constexpr double term = std::sqrt(std::numeric_limits<double>::epsilon());
+	double err, L1;
+	const double I = es.integrate(integrand, term, &err, &L1);
+	condition_warn(I, err, L1);
+
+	return ln_Phi_ref - ln_Phi + I;
 }
 
 
@@ -669,9 +716,9 @@ GammaConjugatePriorLogLikelihood::GammaConjugatePriorLogLikelihood(
 	  ab(ab), W(ab.size())
 {
 	for (const ab_t& ab_ : ab){
-		if (ab_.a <= 0)
-			throw std::domain_error("a out of bounds ]0, inf[.");
-		if (ab_.b <= 0)
+		if (ab_.a < GCP_AMIN || ab_.a <= 0.0)
+			throw std::domain_error("a out of bounds ]amin, inf[.");
+		if (ab_.b <= 0.0)
 			throw std::domain_error("b out of bounds ]0, inf[.");
 	}
 	init_constants();
@@ -692,8 +739,8 @@ GammaConjugatePriorLogLikelihood::GammaConjugatePriorLogLikelihood(
 	  ab(compute_ab(a, b, Nab)), W(Nab)
 {
 	for (const ab_t& ab_ : ab){
-		if (ab_.a <= 0)
-			throw std::domain_error("a out of bounds ]0, inf[.");
+		if (ab_.a < GCP_AMIN || ab_.a <= 0.0)
+			throw std::domain_error("a out of bounds ]amin, inf[.");
 		if (ab_.b <= 0)
 			throw std::domain_error("b out of bounds ]0, inf[.");
 	}

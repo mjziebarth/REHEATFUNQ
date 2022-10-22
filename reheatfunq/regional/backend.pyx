@@ -58,6 +58,12 @@ cdef extern from "ll_gamma_conjugate_prior.hpp" namespace "pdtoolbox" nogil:
         double ln_Phi(double lp, double ls, double n, double v, double epsabs,
                       double epsrel) except+
 
+        @staticmethod
+        double kullback_leibler(double lp, double s, double n, double v,
+                                double lp_ref, double ls_ref, double n_ref,
+                                double v_ref, double epsabs,
+                                double epsrel) except+
+
         bool optimize() except+
 
         double lp() const
@@ -213,6 +219,19 @@ def gamma_conjugate_prior_predictive(double[::1] q, double lp, double s,
                              - lnPhi)
 
     return out.base
+
+
+def gamma_conjugate_prior_kullback_leibler(double lp, double s, double n,
+                                           double v, double lp_ref,
+                                           double s_ref, double n_ref,
+                                           double v_ref, double epsabs = 0.0,
+                                           double epsrel = 1e-10):
+    """
+    Compute the Kullback-Leibler divergence between a reference
+    gamma conjugate prior and another one.
+    """
+    return GammaConjugatePriorLogLikelihood.kullback_leibler(lp, s, n, v,
+                                   lp_ref, s_ref, n_ref, v_ref, epsabs, epsrel)
 
 
 @cython.boundscheck(False)
