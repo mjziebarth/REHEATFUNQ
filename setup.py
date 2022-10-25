@@ -17,7 +17,8 @@ setup(name='REHEATFUNQ',
       version='1.0.0',
       author='Malte J. Ziebarth',
       description='',
-      packages = ['reheatfunq','reheatfunq.regional','reheatfunq.anomaly'],
+      packages = ['reheatfunq','reheatfunq.regional','reheatfunq.anomaly',
+                  'reheatfunq.data'],
       ext_modules=[regional_backend, anomaly_bayes],
       cmdclass={'build_ext' : build_ext}
 )
