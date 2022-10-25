@@ -228,17 +228,24 @@ static double add_logs(double la, double lb)
 }
 
 
-static void condition_warn(double S, double err, double L1)
+static bool condition_warn(double S, double err, double L1, int where,
+                           double critical_condition_number)
 {
 	const double condition_number = L1 / std::abs(S);
-	if (condition_number > 3){
-		std::cerr << "WARNING: Large condition number in gamma conjugate prior "
-		             "quadrature.\n" << std::flush;
+	bool do_warn = false;
+	if (condition_number > critical_condition_number){
+		std::cerr << "WARNING: Large condition number (" << condition_number
+		          << ") in gamma conjugate prior "
+		             "quadrature (in line " << where << ")\n" << std::flush;
+		do_warn = true;
 	}
 	if (err > 1e-3 * std::abs(S)){
 		std::cerr << "WARNING: Large relative error (" << err / std::abs(S)
-		          << ") in gamma conjugate prior quadrature.\n" << std::flush;
+		          << ") in gamma conjugate prior quadrature (in line " << where
+		          << ")\n" << std::flush;
+		do_warn = true;
 	}
+	return do_warn;
 }
 
 
@@ -588,7 +595,7 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 			const double I = ts.integrate(integrand1, amin, amax, term,
 			                              &err, &L1);
 			S += I;
-			condition_warn(I, err, L1);
+			condition_warn(I, err, L1, __LINE__, 3.0);
 		}
 
 		/* (2) From amax to inf: */
@@ -600,16 +607,19 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 					std::cerr << "Found inf result in integrand2 for amax = "
 					          << amax << ", a = " << a << ".\n";
 					std::cerr << "P.lFmax         = " << P.lFmax << "\n";
-					std::cerr << "ln_F(a)         = " << ln_F(a+amax, P.lp, P.ls, P.n, P.v) << "\n";
-					std::cerr << "ln_F(a) - lFmax = " << ln_F(a+amax, P.lp, P.ls, P.n, P.v) << "\n";
+					std::cerr << "ln_F(a)         = " << ln_F(a+amax, P.lp,
+					                                          P.ls, P.n, P.v)
+					          << "\n";
+					std::cerr << "ln_F(a) - lFmax = " << ln_F(a+amax, P.lp,
+					                                          P.ls, P.n, P.v)
+					          << "\n";
 				}
-				return std::exp(ln_F(a+amax, P.lp, P.ls, P.n, P.v)
-				                - P.lFmax);
+				return res;
 			};
 			exp_sinh<double> es;
 			const double I = es.integrate(integrand2, term, &err, &L1);
 			S += I;
-			condition_warn(I, err, L1);
+			condition_warn(I, err, L1, __LINE__, 3.0);
 		}
 		return P.lFmax + std::log(S);
 	} else {
@@ -628,7 +638,7 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 
 		exp_sinh<double> es;
 		const double I = es.integrate(integrand3, term, &err, &L1);
-		condition_warn(I, err, L1);
+		condition_warn(I, err, L1, __LINE__, 3.0);
 		res += std::log(I);
 	}
 
@@ -667,18 +677,30 @@ double GammaConjugatePriorLogLikelihood::kullback_leibler(
 	/* Now the integral: */
 	auto integrand = [=](double a) -> double {
 		a += amin;
-		return std::exp((a - 1.0)*lp - n*lgamma(a) + lgamma(a*v) - v * a * ls
+		const double lga = lgamma(a);
+		const double C1 = (lp - lp_ref) - v * (s - s_ref) / s
+		                  - ls * (v - v_ref);
+		const double C0 = (lp_ref - lp);
+		const double C2 = - (n - n_ref);
+		const double C3 =  (v - v_ref);
+		return std::exp((a - 1.0)*lp - n*lga + lgamma(a*v) - v * a * ls
 		                - ln_Phi)
-		       * ( (a - 1.0)*(lp - lp_ref) - (n - n_ref) * lgamma(a)
-		            - a * v * (s - s_ref) / s
-		            + a * (v - v_ref) * (digamma(a*v) - ls));
+		       * ((C1 + C3 * digamma(a*v)) * a  +  C0  +  C2 * lga);
 	};
 
 	exp_sinh<double> es;
 	constexpr double term = std::sqrt(std::numeric_limits<double>::epsilon());
 	double err, L1;
 	const double I = es.integrate(integrand, term, &err, &L1);
-	condition_warn(I, err, L1);
+
+	/* The integrand changes sign due to non-exponentiated part.
+	 * A moderately large condition number (~1e3) occurs rather frequently
+	 * without the integrand being highly oscillatory (typically
+	 * perhaps one change of sign).
+	 * Warn for a condition number of 1e5 - this should still give
+	 * sufficient precision from the remaining ~10 digits.
+	 */
+	condition_warn(I, err, L1, __LINE__, 1e5);
 
 	return ln_Phi_ref - ln_Phi + I;
 }
