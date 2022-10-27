@@ -19,11 +19,11 @@
 
 # Typing:
 from __future__ import annotations
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Literal
 from numpy.typing import ArrayLike
 
 import numpy as np
-from math import exp, log, inf, sqrt
+from math import exp, log, inf, sqrt, log10
 from scipy.special import loggamma
 from scipy.optimize import minimize
 from .backend import gamma_conjugate_prior_logL, \
@@ -201,6 +201,165 @@ class GammaConjugatePrior:
         v = res.x[3]
         n = v * (1.0 + res.x[2])
         return GammaConjugatePrior(None, s, n, v, lp, amin)
+
+
+    def visualize(self, ax, distributions: Optional[list[ArrayLike]] = None,
+                  cax: Optional[object] = None, log_axes: bool = True,
+                  cmap='inferno', color_scale: Literal['log','lin'] = 'log',
+                  plot_mean: bool = True, q_mean: float = 68.3,
+                  q_plot: list[tuple[float,float,float,str] | float] = [],
+                  qstd_plot: list[tuple[float,float,float,str] | float] = []):
+        """
+        Visualize this GammaConjugatePrior instance on an axis.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+           The :class:`matplotlib.axes.Axes` to visualize on.
+        distributions : list[array_like], optional
+           A set of aggregate heat flow distributions, each given
+           as a one-dimensional :class:`numpy.ndarray` of heat flow
+           values in :math:`\\mathrm{mW}/\\mathrm{m}^2`. Each
+           distribution will be displayed via its :math:`\\alpha`
+           and :math:`\\beta` maximum likelihood estimate, indicating
+           regions of interest.
+           This may also determine the extent of the plot.
+        cax : matplotlib.axes.Axes, optional
+           The :class:`matplotlib.axes.Axes` for plotting a color bar.
+        log_axes : bool, optional
+           If **True**, set the axes scale to logarithmic, else use
+           linear axes.
+        cmap : str or matplotlib.colors.Colormap, optional
+           Which color map to use for the background probability
+           visualization.
+        color_scale : Literal['log','lin'], optional
+           If `'log'`, plot log-probability in background, else
+           plot probability linearly.
+        plot_mean : bool, optional
+           If `'False'`, do not plot the mean heat flow lines.
+        q_mean : float, optional
+           The global mean heat flow in :math:`\\mathrm{mW}/\\mathrm{m}^2`.
+           The default value is 68.3 from Lucazeau (2019).
+        q_plot : list[tuple[float,float,float,str] | float], optional
+           A list of additional average heat flow values to display.
+           For each *q* a line through the :math:`(\\alpha,\\beta)` parameter
+           space, enumerating parameter combinations whose distributions
+           average to the given *q*. Each entry in `q_plot` needs to be
+           either a float *q* or a tuple (*q*,*amin*,*amax*,*c*), where *amin*
+           and *amax* denote the :math:`\\alpha`-interval within which the
+           line should be plotted, and *c* is the color.
+        qstd_plot : list[tuple[float,float,float,str] | float], optional
+           A list of additional heat flow standard deviations to display.
+           For each *qstd* a line through the :math:`(\\alpha,\\beta)` parameter
+           space, enumerating parameter combinations whose distributions
+           are quantified by a standard deviation *qstd*. Each entry in
+           `qstd_plot` needs to be either a float *qstd* or a tuple
+           (*q*,*amin*,*amax*,*c*), where *amin* and *amax* denote the
+           :math:`\\alpha`-interval within which the line should be plotted,
+           and *c* is the color.
+
+        Notes
+        -----
+        Lucazeau, F. (2019). Analysis and mapping of an updated terrestrial
+           heat flow data set. Geochemistry, Geophysics, Geosystems, 20,
+           4001– 4024. https://doi.org/10.1029/2019GC008389
+        """
+        # Determine maximum likelihood estimates of the distributions:
+        if distributions is not None:
+            ai, bi = np.array([gamma_mle(dist, amin=self.amin)
+                               for dist in distributions]).T
+            amin = max(self.amin, ai.min()*0.8)
+            amax = max(self.amin, ai.max()/0.8)
+            bmin = bi.min() * 0.8
+            bmax = bi.max() / 0.8
+        else:
+            ai = bi = None
+            amin = self.amin
+            amax = 1000.0
+            bmin = 1e-2
+            bmax = 50.0
+
+        # Generate the coordinate grid and evaluate the prior:
+        if log_axes:
+            aplot = np.geomspace(amin, amax, 101)
+            bplot = np.geomspace(bmin, bmax, 100)
+        else:
+            aplot = np.linspace(amin, amax, 101)
+            bplot = np.linspace(bmin, bmax, 100)
+
+        ag, bg = np.meshgrid(aplot, bplot)
+        zg = self.log_probability(ag.flatten(), bg.flatten()).reshape(ag.shape)
+
+        # Plot.
+        # 1) The background color:
+        if color_scale == 'log':
+            zg *= log10(exp(1))
+            vmax = zg.max()
+            vmin = vmax - 9.0
+        else:
+            np.exp(zg, out=zg)
+            vmax = zg.max()
+            vmin = 0.0
+        h = ax.pcolormesh(aplot, bplot, zg, cmap=cmap, vmin=vmin, vmax=vmax)
+
+        # 2) The average heat flow isolines:
+        if log_axes:
+            a_plot = np.geomspace(amin / 0.9, amax * 0.9)
+        else:
+            a_plot = np.linspace(amin + 0.05*(amax-amin),
+                                 amax - 0.05*(amax-amin))
+        ax.plot(a_plot, a_plot / q_mean, color='lightskyblue', linewidth=1.0,
+                zorder=1)
+        ax.text(2, 4.3e-2, f'${q_mean}\,\\mathrm{{mW}}/\\mathrm{{m}}^2$',
+                fontsize=8, rotation=45, color='lightskyblue')
+        for entry in q_plot:
+            if isinstance(entry, tuple):
+                q, qamin, qamax, color = entry
+            else:
+                q = entry
+                qamin = amin
+                qamax = amax
+                color = 'lightgray'
+            ax.plot(a_plot[(a_plot >= qamin) & (a_plot <= qamax)],
+                    a_plot[(a_plot >= qamin) & (a_plot <= qamax)] / q,
+                    color=color, linewidth=0.7, zorder=1)
+            ax.text(sqrt(qamin * qamax), 1.2 * sqrt(qamin * qamax) / q,
+                    f'${q}\,\\mathrm{{mW}}/\\mathrm{{m}}^2$', fontsize=8,
+                    rotation=45, color=color)
+
+        # 3) The standard deviation isolines:
+        for entry in qstd_plot:
+            if isinstance(entry, tuple):
+                qstd, qamin, qamax, color = entry
+            else:
+                qstd = entry
+                qamin = amin
+                qamax = amax
+                color = 'k'
+            ax.plot(a_plot[(a_plot >= qamin) & (a_plot <= qamax)],
+                    np.sqrt(a_plot[(a_plot >= qamin) & (a_plot <= qamax)])
+                        / qstd,
+                    linestyle=':', color=color, linewidth=0.7)
+            albl = sqrt(qamin * qamax)
+            blbl = sqrt(albl) / qstd
+            ax.text(albl, 1.1*blbl, f'${qstd}\,\\mathrm{{mW}}/\\mathrm{{m}}^2$',
+                    fontsize=8, rotation=27, color=color)
+
+        if ai is not None:
+            ax.scatter(ai, bi, marker='.', color='tab:orange')
+        if log_axes:
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+        ax.set_xlabel('$a$')
+        ax.set_ylabel('$b$')
+        ax.set_xlim(amin, amax)
+        ax.set_ylim(bmin, bmax)
+        cbar = ax.figure.colorbar(h, cax=cax)
+        cticks = cbar.ax.get_yticks()
+        cbar.ax.set_yticks(cticks)
+        cbar.ax.set_yticklabels([str(10**t) for t in cticks])
+
+
 
 
     # Aliases:
