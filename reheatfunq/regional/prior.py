@@ -300,7 +300,8 @@ class GammaConjugatePrior:
             np.exp(zg, out=zg)
             vmax = zg.max()
             vmin = 0.0
-        h = ax.pcolormesh(aplot, bplot, zg, cmap=cmap, vmin=vmin, vmax=vmax)
+        h = ax.pcolormesh(aplot, bplot, zg, cmap=cmap, vmin=vmin, vmax=vmax,
+                          rasterized=True)
 
         # 2) The average heat flow isolines:
         if log_axes:
@@ -350,8 +351,8 @@ class GammaConjugatePrior:
         if log_axes:
             ax.set_xscale('log')
             ax.set_yscale('log')
-        ax.set_xlabel('$a$')
-        ax.set_ylabel('$b$')
+        ax.set_xlabel('$\\alpha$')
+        ax.set_ylabel('$\\beta$')
         ax.set_xlim(amin, amax)
         ax.set_ylim(bmin, bmax)
         cbar = ax.figure.colorbar(h, cax=cax)
