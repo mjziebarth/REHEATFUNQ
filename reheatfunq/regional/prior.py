@@ -25,7 +25,7 @@ from numpy.typing import ArrayLike
 import numpy as np
 from math import exp, log, inf, sqrt, log10
 from scipy.special import loggamma
-from scipy.optimize import minimize
+from scipy.optimize import shgo
 from .backend import gamma_conjugate_prior_logL, \
                      gamma_conjugate_prior_predictive, \
                      gamma_conjugate_prior_predictive_cdf, \
@@ -155,14 +155,13 @@ class GammaConjugatePrior:
 
     @staticmethod
     def minimum_surprise_estimate(hf_samples: list[ArrayLike],
-                                  p0: float = 1.0, s0: float = 1.0,
-                                  n0: float = 1.5, v0: float = 1.0,
-                                  nv_surplus_min: float = 0.04,
-                                  vmin: float = 0.1, amin: float = 1.0,
+                                  pmin: float = 1.0, pmax: float = 1e5,
+                                  smin: float = 0.0, smax: float = 1e3,
+                                  vmin: float = 0.02, vmax: float = 1.0,
+                                  nv_surplus_min: float = 1e-8,
+                                  nv_surplus_max: float = 2.0,
+                                  amin: float = 1.0,
                                   epsabs: float = 0.0, epsrel: float = 1e-10,
-                                  method: Literal["Nelder-Mead","L-BFGS-B",
-                                                  "Powell", "trust-constr",
-                                                  "TNC"] = "Nelder-Mead",
                                   verbose: bool = False
         ) -> GammaConjugatePrior:
         """
@@ -172,10 +171,6 @@ class GammaConjugatePrior:
         """
         # Sanity:
         qset = [np.ascontiguousarray(q) for q in hf_samples]
-        if method not in set(["Nelder-Mead", "L-BFGS-B", "Powell",
-                              "trust-constr", "TNC"]):
-            raise ValueError("`method` has to be one of 'Nelder-Mead', "
-                             "'L-BFGS-B', 'Powell', 'trust-constr', or 'TNC'.")
 
         # Compute the "uninformed" estimates for each sample:
         GCP_i = [GammaConjugatePrior(1.0, 0.0, 0.0, 0.0, amin).updated(q)
@@ -185,9 +180,9 @@ class GammaConjugatePrior:
         def cost(x):
             # Retrieve parameters:
             lp = x[0]
-            s = exp(x[1])
+            s = x[1]
             v = x[3]
-            n = v * (1.0 + x[2])
+            n = v * (1.0 + exp(x[2]))
             gcp_test = GammaConjugatePrior(None, s, n, v, lp, amin)
 
             # Compute the Kullback-Leibler divergences:
@@ -201,29 +196,34 @@ class GammaConjugatePrior:
             except RuntimeError:
                 return inf
 
-        algargs = {
-            "Nelder-Mead" : {
-                "adaptive" : True,
-                "fatol" : 1e-8,
-                "xatol" : 1e-8
-            }
-        }
 
         if verbose:
             print("Optimizing...")
-        res = minimize(cost, (log(p0), log(s0), max(n0/v0-1.0, nv_surplus_min),
-                              v0),
-                       bounds=((-inf, inf), (-inf, inf), (nv_surplus_min, inf),
-                               (vmin, inf)),
-                       method=method)
+        bounds = ((log(pmin), log(pmax)),
+                  (smin, smax),
+                  (log(nv_surplus_min), log(nv_surplus_max)),
+                  (vmin, vmax))
+        res = shgo(cost, bounds=bounds,
+                   minimizer_kwargs={
+                       'method'  : 'Nelder-Mead',
+                       'options' : {
+                           'fatol' : 1e-8,
+                           'xatol' : 1e-8
+                       },
+                       'bounds' : bounds
+                   },
+                   options = {
+                       "f_tol" : 1e-8
+                   },
+                   iters=3)
         if verbose:
             print("Optimization finished.\nResult:")
             print(res)
 
         lp = res.x[0]
-        s = exp(res.x[1])
+        s = res.x[1]
         v = res.x[3]
-        n = v * (1.0 + res.x[2])
+        n = v * (1.0 + exp(res.x[2]))
         return GammaConjugatePrior(None, s, n, v, lp, amin)
 
 
