@@ -159,7 +159,11 @@ class GammaConjugatePrior:
                                   n0: float = 1.5, v0: float = 1.0,
                                   nv_surplus_min: float = 0.04,
                                   vmin: float = 0.1, amin: float = 1.0,
-                                  epsabs: float = 0.0, epsrel: float = 1e-10
+                                  epsabs: float = 0.0, epsrel: float = 1e-10,
+                                  method: Literal["Nelder-Mead","L-BFGS-B",
+                                                  "Powell", "trust-constr",
+                                                  "TNC"] = "Nelder-Mead",
+                                  verbose: bool = False
         ) -> GammaConjugatePrior:
         """
         Compute the estimate that minimizes the maximum Kullback-Leibler
@@ -168,6 +172,10 @@ class GammaConjugatePrior:
         """
         # Sanity:
         qset = [np.ascontiguousarray(q) for q in hf_samples]
+        if method not in set(["Nelder-Mead", "L-BFGS-B", "Powell",
+                              "trust-constr", "TNC"]):
+            raise ValueError("`method` has to be one of 'Nelder-Mead', "
+                             "'L-BFGS-B', 'Powell', 'trust-constr', or 'TNC'.")
 
         # Compute the "uninformed" estimates for each sample:
         GCP_i = [GammaConjugatePrior(1.0, 0.0, 0.0, 0.0, amin).updated(q)
@@ -183,18 +191,34 @@ class GammaConjugatePrior:
             gcp_test = GammaConjugatePrior(None, s, n, v, lp, amin)
 
             # Compute the Kullback-Leibler divergences:
-            KLmax = -inf
-            for gcp in GCP_i:
-                KL = gcp_test.kullback_leibler(gcp)
-                KLmax = max(KLmax, KL)
+            try:
+                KLmax = -inf
+                for gcp in GCP_i:
+                    KL = gcp_test.kullback_leibler(gcp)
+                    KLmax = max(KLmax, KL)
 
-            return KLmax
+                return KLmax
+            except RuntimeError:
+                return inf
 
+        algargs = {
+            "Nelder-Mead" : {
+                "adaptive" : True,
+                "fatol" : 1e-8,
+                "xatol" : 1e-8
+            }
+        }
+
+        if verbose:
+            print("Optimizing...")
         res = minimize(cost, (log(p0), log(s0), max(n0/v0-1.0, nv_surplus_min),
                               v0),
                        bounds=((-inf, inf), (-inf, inf), (nv_surplus_min, inf),
                                (vmin, inf)),
-                       method='Nelder-Mead')
+                       method=method)
+        if verbose:
+            print("Optimization finished.\nResult:")
+            print(res)
 
         lp = res.x[0]
         s = exp(res.x[1])
