@@ -5,7 +5,8 @@
 #
 # Authors: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
 #
-# Copyright (C) 2022 Deutsches GeoForschungsZentrum Potsdam
+# Copyright (C) 2022 Deutsches GeoForschungsZentrum Potsdam,
+#               2022 Malte J. Ziebarth
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -23,8 +24,12 @@
 import numpy as np
 from numpy.random cimport bitgen_t
 cimport cython
+from cython.operator cimport dereference as deref
 from libcpp cimport bool as cbool
 from libcpp.vector cimport vector
+from libcpp.unordered_map cimport unordered_map
+from libcpp.utility cimport pair
+from libcpp.functional cimport hash as cpphash
 from libc.math cimport sqrt
 from cpython.pycapsule cimport PyCapsule_IsValid, PyCapsule_GetPointer
 from numpy.random.c_distributions cimport random_interval
@@ -90,9 +95,10 @@ cdef void restricted_sample(const double[:,:] xy, double dmin, uint8_t[::1] out,
 
     # Now iteratively add a point to the set of retained points.
     # For each, mark all points within `dmin` as removed.
-    cdef double dist, r
+    cdef double dist2, r
     cdef size_t o0, o1
     cdef double xi, yi
+    cdef double dmin2 = dmin * dmin
     for i in range(N):
         o0 = order.at(i)
         if out[o0]:
@@ -106,8 +112,8 @@ cdef void restricted_sample(const double[:,:] xy, double dmin, uint8_t[::1] out,
                 continue
 
             # Compute distance:
-            dist = sqrt((xi-xy[o1,0])**2 + (yi-xy[o1,1])**2)
-            if dist < dmin:
+            dist2 = (xi-xy[o1,0])**2 + (yi-xy[o1,1])**2
+            if dist2 < dmin2:
                 out[o1] = True
 
     # Now invert out (meaning "remove" --> "keep")
@@ -141,3 +147,81 @@ def conforming_data_selection(const double[:,:] xy, double dmin_m, rng=128):
         restricted_sample(xy, dmin_m, mask, bitgen)
 
     return mask.base
+
+
+@cython.boundscheck(False)
+def bootstrap_data_selection(const double[:,::1] xy, double dmin_m, size_t B,
+                             rng=127):
+    """
+    Computes a set of bootstrap samples of heat flow data points
+    conforming to the data selection criterion.
+
+    Parameters:
+       xy     : (N,2) array of data points in a projected
+                Euclidean coordinate system.
+                Given in [m].
+       dmin_m : Minimum inter-point distance for the
+                conforming selection criterion.
+       B      : Number of bootstrap samples.
+    """
+    # Sanity:
+    if xy.shape[1] != 2:
+        raise RuntimeError("Shape of xy must be (N,2).")
+    cdef size_t N = xy.shape[0]
+
+    # Reproducible random number generation:
+    bg = get_generator_stage_1(rng)
+    cdef bitgen_t* bitgen = get_generator_stage_2(bg)
+
+    # Compute a conforming subselection:
+    cdef list subselections = []
+    cdef size_t i,j,n,nsubsel
+    cdef uint8_t[::1] mask = np.empty(N, dtype=bool)
+    cdef long[::1] newsample
+    #cdef vector[cbool] cppmask = vector[cbool](N)
+    cdef unordered_map[vector[cbool],size_t] m2i
+    cdef unordered_map[vector[cbool],size_t].iterator it
+    cdef pair[vector[cbool], size_t] value
+    cdef size_t h
+    #cppmask.resize(N)
+    value.first.resize(N)
+    nsubsel = 0
+    with nogil:
+        for i in range(B):
+            # 1) Compute a new data set randomly selected from the data
+            #    (the bootstrapping part):
+            restricted_sample(xy, dmin_m, mask, bitgen)
+            n = 0
+
+            for j in range(N):
+                if mask[j]:
+                    n += 1
+                value.first[j] = mask[j]
+
+            # Depending on whether this configuration has already been found,
+            # continue:
+            it = m2i.find(value.first)
+            if it == m2i.end():
+                value.second = nsubsel
+                m2i.insert(it, value)
+                nsubsel += 1
+                with gil:
+                    newsample = np.empty(n, dtype=np.int64)
+                    subselections.append([1.0, newsample.base])
+                n = 0
+                for j in range(N):
+                    if value.first[j]:
+                        newsample[n] = j
+                        n += 1
+            else:
+                n = deref(it).second
+                with gil:
+                    subselections[n][0] += 1.0
+
+    # Now transform the multiplicity to weights:
+    for i in range(nsubsel):
+        subselections[i][0] /= B
+
+    bitgen = NULL
+
+    return subselections

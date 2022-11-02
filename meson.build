@@ -20,6 +20,21 @@ libgcp = static_library(
     include_directories : include
 )
 
+
+#
+# Anomaly:
+#
+sources_anomaly = ['src/anomaly.cpp', 'src/anomaly/ls1980.cpp']
+dependencies_anomaly = [dependency('openmp'), dependency('boost')]
+
+libanomaly = static_library(
+    'anomaly', sources_anomaly,
+    dependencies : dependencies_anomaly,
+    include_directories : include
+)
+
+
+
 python = import('python').find_installation()
 dep_py = python.dependency()
 
@@ -62,4 +77,12 @@ python.extension_module('rdisks',
                         include_directories : [include, incdir_np],
                         override_options : ['cython_language=cpp'],
                         #link_with : libgcp
+                        )
+
+python.extension_module('anomaly',
+                        'reheatfunq/anomaly/anomaly.pyx',
+                        dependencies : [dep_py],
+                        include_directories : [include],
+                        override_options : ['cython_language=cpp'],
+                        link_with : libanomaly
                         )

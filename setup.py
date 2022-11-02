@@ -10,6 +10,7 @@ from mebuex import MesonExtension, build_ext
 
 regional_backend = MesonExtension('reheatfunq.regional.backend')
 anomaly_bayes    = MesonExtension('reheatfunq.anomaly.bayes')
+anomaly_anomaly  = MesonExtension('reheatfunq.anomaly.anomaly')
 coverings_rdisks = MesonExtension('reheatfunq.coverings.rdisks')
 
 
@@ -19,7 +20,8 @@ setup(name='REHEATFUNQ',
       description='',
       packages = ['reheatfunq','reheatfunq.regional','reheatfunq.anomaly',
                   'reheatfunq.data', 'reheatfunq.coverings'],
-      ext_modules=[regional_backend, anomaly_bayes, coverings_rdisks],
+      ext_modules=[regional_backend, anomaly_bayes, coverings_rdisks,
+                   anomaly_anomaly],
       cmdclass={'build_ext' : build_ext}
 )
 
