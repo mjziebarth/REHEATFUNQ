@@ -36,24 +36,20 @@ from libcpp.memory cimport unique_ptr, shared_ptr, make_shared
 from cython.operator cimport dereference as deref
 from cython.parallel cimport prange
 
-cdef extern from "ll_gamma_conjugate_prior.hpp" namespace "pdtoolbox" nogil:
+cdef extern from "gamma_conjugate_prior.hpp" namespace "pdtoolbox" nogil:
     """
     namespace pdtoolbox {
     double _gcp_ln_Phi(double lp, double ls, double n, double v,
                        double amin, double epsrel=1e-10)
     {
-        return GammaConjugatePriorLogLikelihood::ln_Phi(lp, ls, n, v, amin, 0.0,
-                                                        epsrel);
+        return GammaConjugatePriorBase::ln_Phi(lp, ls, n, v, amin, 0.0, epsrel);
     }
     }
     """
-    cdef cppclass GammaConjugatePriorLogLikelihood:
-        @staticmethod
-        unique_ptr[GammaConjugatePriorLogLikelihood] \
-           make_unique(double p, double s, double n, double v, const double* a,
-                       const double* b, size_t Nab, double nv_surplus_min,
-                       double vmin, double amin, double epsabs,
-                       double epsrel) except+
+    cdef cppclass GammaConjugatePriorBase:
+        GammaConjugatePriorBase(double lp, double s, double n, double v,
+                                double amin = 1.0, double epsabs=0,
+                                double epsrel=1e-10);
 
         @staticmethod
         double ln_Phi(double lp, double ls, double n, double v, double amin,
@@ -66,10 +62,47 @@ cdef extern from "ll_gamma_conjugate_prior.hpp" namespace "pdtoolbox" nogil:
                                 double epsrel) except+
 
         @staticmethod
+        void posterior_predictive_pdf(size_t Nq, const double* q, double* out,
+                                      double lp, double s, double n, double v,
+                                      double amin, double epsabs,
+                                      double epsrel) except+
+
+        @staticmethod
+        void posterior_predictive_pdf_batch(size_t Nq, const double* q,
+                                double* out, size_t Mparam, const double* lp,
+                                const double* s, const double* n,
+                                const double* v, double amin, double epsabs,
+                                double epsrel) except+
+
+        @staticmethod
         void posterior_predictive_cdf(size_t Nq, const double* q, double* out,
                                       double lp, double s, double n, double v,
                                       double amin, double epsabs,
                                       double epsrel) except+
+
+        @staticmethod
+        void posterior_predictive_cdf_batch(size_t Nq, const double* q,
+                                double* out, size_t Mparam, const double* lp,
+                                const double* s, const double* n,
+                                const double* v, double amin, double epsabs,
+                                double epsrel) except+
+
+    cdef double _gcp_ln_Phi(double lp, double ls, double n, double v,
+                            double amin, double epsrel) except+
+
+    cdef double _gcp_ln_Phi(double lp, double ls, double n, double v,
+                            double amin) except+
+
+
+
+cdef extern from "ll_gamma_conjugate_prior.hpp" namespace "pdtoolbox" nogil:
+    cdef cppclass GammaConjugatePriorLogLikelihood:
+        @staticmethod
+        unique_ptr[GammaConjugatePriorLogLikelihood] \
+           make_unique(double p, double s, double n, double v, const double* a,
+                       const double* b, size_t Nab, double nv_surplus_min,
+                       double vmin, double amin, double epsabs,
+                       double epsrel) except+
 
         bool optimize() except+
 
@@ -77,12 +110,6 @@ cdef extern from "ll_gamma_conjugate_prior.hpp" namespace "pdtoolbox" nogil:
         double s() const
         double n() const
         double v() const
-
-    cdef double _gcp_ln_Phi(double lp, double ls, double n, double v,
-                            double amin, double epsrel) except+
-
-    cdef double _gcp_ln_Phi(double lp, double ls, double n, double v,
-                            double amin) except+
 
 
 cdef extern from "gamma.hpp" namespace "pdtoolbox" nogil:
@@ -214,20 +241,40 @@ def gamma_conjugate_prior_predictive(double[::1] q, double lp, double s,
 
     cdef size_t i
     with nogil:
-        # Compute the normalization:
-        lnPhi = _gcp_ln_Phi(lp, log(s), n, v, amin)
+        GammaConjugatePriorBase\
+            .posterior_predictive_pdf(N, &q[0], &out[0], lp, s, n, v, amin, 0.0,
+                                      1e-10)
 
-        # Compute the shifted normalization that occurs in the
-        # posterior predictive:
-        for i in prange(N):
-            # Although not strictly defined, be gracious and
-            # assign p(q<=0) = 0.0
-            if q[i] <= 0:
-                out[i] = 0.0
-            else:
-                out[i] = exp(_gcp_ln_Phi(lp + log(q[i]), log(s+q[i]), n+1, v+1,
-                                         amin)
-                             - lnPhi)
+    return out.base
+
+
+@cython.boundscheck(False)
+def gamma_conjugate_prior_predictive_batch(const double[::1] q,
+        const double[::1] lp, const double[::1] s, const double[::1] n,
+        const double[::1] v, double amin, double epsabs = 0.0,
+        double epsrel = 1e-10, out = None):
+    # Sanity:
+    cdef size_t N = q.shape[0]
+    cdef size_t M = lp.shape[0]
+    if s.shape[0] != M:
+        raise RuntimeError("`lp` and `s` need to be of same shape.")
+    if n.shape[0] != M:
+        raise RuntimeError("`lp` and `n` need to be of same shape.")
+    if v.shape[0] != M:
+        raise RuntimeError("`lp` and `v` need to be of same shape.")
+
+    cdef double[:,::1] out_buffer
+    if out is None:
+        out_buffer = np.empty((M,N))
+    else:
+        out_buffer = out
+
+    cdef double* out_ptr = &out_buffer[0,0]
+
+    with nogil:
+        GammaConjugatePriorBase\
+            .posterior_predictive_pdf_batch(N, &q[0], out_ptr, M, &lp[0], &s[0],
+                                            &n[0], &v[0], amin, epsabs, epsrel)
 
     return out.base
 
@@ -249,9 +296,43 @@ def gamma_conjugate_prior_predictive_cdf(double[::1] q, double lp, double s,
         out = np.empty(N)
 
     with nogil:
-        GammaConjugatePriorLogLikelihood\
+        GammaConjugatePriorBase\
             .posterior_predictive_cdf(N, &q[0], &out[0], lp, s, n, v, amin,
                                       epsabs, epsrel)
+
+    return out.base
+
+
+@cython.boundscheck(False)
+def gamma_conjugate_prior_predictive_cdf_batch(const double[::1] q,
+        const double[::1] lp, const double[::1] s, const double[::1] n,
+        const double[::1] v, double amin, double epsabs = 0.0,
+        double epsrel = 1e-10, out = None):
+    """
+    Posterior predictive of the gamma conjugate prior.
+    """
+    # Sanity:
+    cdef size_t N = q.shape[0]
+    cdef size_t M = lp.shape[0]
+    if s.shape[0] != M:
+        raise RuntimeError("`lp` and `s` need to be of same shape.")
+    if n.shape[0] != M:
+        raise RuntimeError("`lp` and `n` need to be of same shape.")
+    if v.shape[0] != M:
+        raise RuntimeError("`lp` and `v` need to be of same shape.")
+
+    cdef double[:,::1] out_buffer
+    if out is None:
+        out_buffer = np.empty((M,N))
+    else:
+        out_buffer = out
+
+    cdef double* out_ptr = &out_buffer[0,0]
+
+    with nogil:
+        GammaConjugatePriorBase\
+            .posterior_predictive_cdf_batch(N, &q[0], out_ptr, M, &lp[0], &s[0],
+                                            &n[0], &v[0], amin, epsabs, epsrel)
 
     return out.base
 
@@ -266,9 +347,8 @@ def gamma_conjugate_prior_kullback_leibler(double lp, double s, double n,
     Compute the Kullback-Leibler divergence between a reference
     gamma conjugate prior and another one.
     """
-    return GammaConjugatePriorLogLikelihood.kullback_leibler(lp, s, n, v,
-                                   lp_ref, s_ref, n_ref, v_ref, amin, epsabs,
-                                   epsrel)
+    return GammaConjugatePriorBase.kullback_leibler(lp, s, n, v, lp_ref, s_ref,
+                                   n_ref, v_ref, amin, epsabs, epsrel)
 
 
 @cython.boundscheck(False)

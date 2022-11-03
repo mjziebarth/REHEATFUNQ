@@ -178,12 +178,10 @@ def bootstrap_data_selection(const double[:,::1] xy, double dmin_m, size_t B,
     cdef size_t i,j,n,nsubsel
     cdef uint8_t[::1] mask = np.empty(N, dtype=bool)
     cdef long[::1] newsample
-    #cdef vector[cbool] cppmask = vector[cbool](N)
     cdef unordered_map[vector[cbool],size_t] m2i
     cdef unordered_map[vector[cbool],size_t].iterator it
     cdef pair[vector[cbool], size_t] value
     cdef size_t h
-    #cppmask.resize(N)
     value.first.resize(N)
     nsubsel = 0
     with nogil:

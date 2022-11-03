@@ -27,10 +27,11 @@
 #include <memory>
 #include <eigenwrap.hpp>
 #include <ll_cache.hpp>
+#include <gamma_conjugate_prior.hpp>
 
 namespace pdtoolbox {
 
-class GammaConjugatePriorLogLikelihood
+class GammaConjugatePriorLogLikelihood : public GammaConjugatePriorBase
 {
 	public:
 		typedef std::integral_constant<uint_fast8_t,4> nparams;
@@ -87,41 +88,12 @@ class GammaConjugatePriorLogLikelihood
 
 		size_t data_count() const;
 
-		/*
-		 * (3) Named arameter access:
-		 */
-		double lp() const;
-		double p() const;
-		double s() const;
-		double n() const;
-		double v() const;
-
-		/*
-		 * (4) Static methods:
-		 */
-		static double ln_Phi(double lp, double ls, double n, double v,
-		                     double amin, double epsabs, double epsrel=1e-10);
-
-		static double
-		kullback_leibler(double lp, double s, double n, double v,
-		                 double lp_ref, double s_ref, double n_ref,
-		                 double v_ref, double amin, double epsabs,
-		                 double epsrel=1e-10);
-
-		static void
-		posterior_predictive_cdf(const size_t Nq, const double* q,
-		                         double* out,
-		                         double lp, double s, double n, double v,
-		                         double amin, double epsabs, double epsrel);
-
 	private:
 		constexpr static double delta = 1e-5;
 		const double nv_surplus_min;
 		const double vmin;
-		const double amin;
-		const double epsrel, epsabs;
-		double lp_, p_, ls, s_, v_, nv, n_;
-		double lPhi, albsum, lbsum, asum, bsum, lgasum;
+		double nv;
+		double albsum, lbsum, asum, bsum, lgasum;
 		double forward[4], backward[4];
 		double fw_lp_ls, fw_lp_nv, fw_lp_v, fw_ls_nv, fw_ls_v, fw_nv_v;
 		const std::vector<ab_t> ab;

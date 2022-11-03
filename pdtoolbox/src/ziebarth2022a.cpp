@@ -5,7 +5,8 @@
  *
  * Author: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
  *
- * Copyright (C) 2022 Deutsches GeoForschungsZentrum GFZ
+ * Copyright (C) 2022 Deutsches GeoForschungsZentrum GFZ,
+ *               2022 Malte J. Ziebarth
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,6 +41,7 @@
 #include <algorithm>
 #include <iostream>
 
+#include <ziebarth2022a.hpp>
 #include <quantileinverter.hpp>
 
 
@@ -910,12 +912,8 @@ double a_integral_large_z(const double ym, const double h0, const double h1,
  * Compute the posterior:
  */
 
-enum posterior_t {
-	DENSITY = 0,
-	CUMULATIVE = 1,
-	TAIL = 2,
-	UNNORMED_LOG = 4
-};
+using pdtoolbox::heatflow::posterior_t;
+
 
 static void init_locals(const double* qi, const double* ci, size_t N,
                         double nu, double n, double s, double p,
@@ -998,7 +996,7 @@ static void init_locals(const double* qi, const double* ci, size_t N,
 	full_taylor_integral = std::nan("");
 	norm = std::nan("");
 	ztrans = std::nan("");
-	double ymax, S, error;
+	double ymax, S;
 
 	auto integrand = [&](double z) -> double
 	{
@@ -1351,12 +1349,51 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 /*
  * Template instantiations:
  */
+namespace pdtoolbox {
+namespace heatflow {
+
 void posterior_pdf(const double* x, double* res, size_t Nx, const double* qi,
                    const double* ci, size_t N, double p, double s, double n,
                    double nu, double dest_tol)
 {
 	posterior<DENSITY>(x, res, Nx, qi, ci, N, p, s, n, nu, dest_tol);
 }
+
+
+void posterior_pdf_batch(const double* x, size_t Nx, double* res,
+                         const std::vector<const double*>& qi,
+                         const std::vector<const double*>& ci,
+                         const std::vector<size_t>& N,
+                         double p, double s, double n, double nu,
+                         double dest_tol)
+{
+	/* Sanity: */
+	if (qi.size() != ci.size())
+		throw std::runtime_error("Sizes of `qi` and `ci` do not match.");
+	if (qi.size() != N.size())
+		throw std::runtime_error("Sizes of `qi` and `N` do not match.");
+
+	bool error_flag = false;
+	std::string err_msg;
+
+	#pragma omp parallel for
+	for (size_t i=0; i<qi.size(); ++i){
+		try {
+			posterior_pdf(x, res + Nx*i, Nx, qi[i], ci[i], N[i], p, s, n, nu,
+			              dest_tol);
+		} catch (const std::exception& e){
+			error_flag = true;
+			err_msg = std::string(e.what());
+		}
+	}
+
+	if (error_flag){
+		err_msg = std::string("Error in posterior_pdf_batch: '")
+		          + err_msg + std::string("'.");
+		throw std::runtime_error(err_msg);
+	}
+}
+
 
 void posterior_cdf(const double* x, double* res, size_t Nx, const double* qi,
                    const double* ci, size_t N, double p, double s, double n,
@@ -1365,12 +1402,84 @@ void posterior_cdf(const double* x, double* res, size_t Nx, const double* qi,
 	posterior<CUMULATIVE>(x, res, Nx, qi, ci, N, p, s, n, nu, dest_tol);
 }
 
+
+void posterior_cdf_batch(const double* x, size_t Nx, double* res,
+                         const std::vector<const double*>& qi,
+                         const std::vector<const double*>& ci,
+                         const std::vector<size_t>& N,
+                         double p, double s, double n, double nu,
+                         double dest_tol)
+{
+	/* Sanity: */
+	if (qi.size() != ci.size())
+		throw std::runtime_error("Sizes of `qi` and `ci` do not match.");
+	if (qi.size() != N.size())
+		throw std::runtime_error("Sizes of `qi` and `N` do not match.");
+
+	bool error_flag = false;
+	std::string err_msg;
+
+	#pragma omp parallel for
+	for (size_t i=0; i<qi.size(); ++i){
+		try {
+			posterior_cdf(x, res + Nx*i, Nx, qi[i], ci[i], N[i], p, s, n, nu,
+			              dest_tol);
+		} catch (const std::exception& e){
+			error_flag = true;
+			err_msg = std::string(e.what());
+		}
+	}
+
+	if (error_flag){
+		err_msg = std::string("Error in posterior_cdf_batch: '")
+		          + err_msg + std::string("'.");
+		throw std::runtime_error(err_msg);
+	}
+}
+
+
 void posterior_tail(const double* x, double* res, size_t Nx, const double* qi,
                     const double* ci, size_t N, double p, double s, double n,
                     double nu, double dest_tol)
 {
 	posterior<TAIL>(x, res, Nx, qi, ci, N, p, s, n, nu, dest_tol);
 }
+
+
+void posterior_tail_batch(const double* x, size_t Nx, double* res,
+                          const std::vector<const double*>& qi,
+                          const std::vector<const double*>& ci,
+                          const std::vector<size_t>& N,
+                          double p, double s, double n, double nu,
+                          double dest_tol)
+{
+	/* Sanity: */
+	if (qi.size() != ci.size())
+		throw std::runtime_error("Sizes of `qi` and `ci` do not match.");
+	if (qi.size() != N.size())
+		throw std::runtime_error("Sizes of `qi` and `N` do not match.");
+
+	bool error_flag = false;
+	std::string err_msg;
+
+	#pragma omp parallel for
+	for (size_t i=0; i<qi.size(); ++i){
+		try {
+			posterior_tail(x, res + Nx*i, Nx, qi[i], ci[i], N[i], p, s, n, nu,
+			               dest_tol);
+		} catch (const std::exception& e){
+			error_flag = true;
+			err_msg = std::string(e.what());
+		}
+	}
+
+	if (error_flag){
+		err_msg = std::string("Error in posterior_tail_batch: '")
+		          + err_msg + std::string("'.");
+		throw std::runtime_error(err_msg);
+	}
+}
+
 
 void posterior_log_unnormed(const double* x, double* res, size_t Nx,
                             const double* qi, const double* ci, size_t N,
@@ -1473,84 +1582,6 @@ void tail_quantiles(const double* quantiles, double* res, const size_t Nquant,
 }
 
 
-
-
-#ifdef LOG_POSTERIOR_DEBUG
-// TODO
-/*
- * A debug version for inspecting the semi-full posterior (both in z and a):
- */
-//void log_posterior_debug(const double* x, const double* a, double* res,
-//                         size_t Nax, const double* qi, const double* ci,
-//                         const size_t N, const double p, const double s,
-//                         const double n, const double nu,
-//                         const size_t workspace_size, double epsabs,
-//                         double epsrel)
-//{
-//	// Create workspaces and GSL communication:
-//	Workspace ws0(workspace_size);
-//	Workspace ws1(workspace_size);
-//	gsl_function integrand;
-//	gsl_error_handler_t* error_handler;
-//	param2_t params;
-//
-//	/* Step 1: Use the common parameter initialization routine which
-//	 *         mainly determines the normalization constant: */
-//	const posterior_params_t post_params
-//	   = init_locals(qi, ci, N, nu, n, s, p, workspace_size,
-//	                 epsabs, epsrel,
-//	                 /* References to the local variables: */
-//	                 ws0, ws1, integrand, error_handler, params);
-//
-//	// /* Step 2: Compute the values: */
-//	param1_t inner_params;
-//	inner_params.v = params.nu_new;
-//	inner_params.lp_tilde = params.lp_tilde;
-//	inner_params.ls_tilde = params.ls_tilde;
-//	inner_params.log_scale = params.log_scale;
-//	inner_params.n_new = params.n_new;
-//
-//	std::cout << "Calling posterior_debug. Parameters:\n"
-//	          << "lpt: " << params.lp_tilde << "\nlst: " << params.ls_tilde
-//	          << "\nnt:  " << params.n_new << "\nvt:  " << params.nu_new << "\n"
-//	          << "log_scale: " << params.log_scale << "\nQmax: "
-//	          << post_params.Qmax << "\n";
-//
-//	// Use a minimum precision in the inner integrand:
-//	epsrel = std::min(epsrel, 1e-9);
-//
-//	for (size_t i=0; i<Nax; ++i){
-//		// Set the inner parameters:
-//		const double z = x[i] / post_params.Qmax;
-//		inner_params.z = z;
-//		inner_params.l1p_kiz_sum = 0.0;
-//		for (size_t j=0; j<N; ++j)
-//			inner_params.l1p_kiz_sum += std::log1p(-params.ki[j] * z);
-//		inner_params.l1p_wz = std::log1p(-params.w*z);
-//
-//		if (params.n_new > params.nu_new){
-//			/* The non-degenerate case: */
-//			res[i] = inner_integrand_template<true>(a[i], &inner_params);
-//		} else {
-//			throw std::runtime_error("n_new > nu_new not implemented in "
-//			                         "posterior_debug.");
-//		}
-//
-//		//std::cout << "z[" << i << "]=" << z << " -> log1p(-kiz)="
-//		//          << inner_params.l1p_kiz_sum << ", log1p(-wz)="
-//		//          << inner_params.l1p_wz << "\n";
-//	}
-//
-//	// Reset error handler:
-//	if (error_handler)
-//		gsl_set_error_handler(error_handler);
-//}
-#endif
-
-
-
-
-
 /*
  *
  *   Tail quantiles.
@@ -1594,4 +1625,7 @@ int tail_quantiles_intcode(const double* quantiles, double* res,
 	}
 	// All went well.
 	return 0;
+}
+
+}
 }

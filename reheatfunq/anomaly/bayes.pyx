@@ -30,6 +30,63 @@
 cimport cython
 import numpy as np
 from libcpp cimport bool
+from libcpp.vector cimport vector
+
+cdef extern from "ziebarth2022a.hpp" namespace "pdtoolbox::heatflow" nogil:
+    void posterior_pdf(const double* x, double* res, size_t Nx,
+                       const double* qi, const double* ci, size_t N, double p,
+                       double s, double n, double nu, double dest_tol)
+
+    void posterior_pdf_batch(const double* x, size_t Nx, double* res,
+                             const vector[const double*]& qi,
+                             const vector[const double*]& ci,
+                             const vector[size_t]& N,
+                             double p, double s, double n, double nu,
+                             double dest_tol)
+
+    void posterior_cdf(const double* x, double* res, size_t Nx,
+                       const double* qi, const double* ci, size_t N, double p,
+                       double s, double n, double nu, double dest_tol)
+
+    void posterior_cdf_batch(const double* x, size_t Nx, double* res,
+                             const vector[const double*]& qi,
+                             const vector[const double*]& ci,
+                             const vector[size_t]& N,
+                             double p, double s, double n, double nu,
+                             double dest_tol)
+
+    void posterior_tail(const double* x, double* res, size_t Nx,
+                        const double* qi, const double* ci, size_t N, double p,
+                        double s, double n, double nu, double dest_tol);
+
+    void posterior_tail_batch(const double* x, size_t Nx, double* res,
+                              const vector[const double*]& qi,
+                              const vector[const double*]& ci,
+                              const vector[size_t]& N,
+                              double p, double s, double n, double nu,
+                              double dest_tol)
+
+    void posterior_log_unnormed(const double* x, double* res, size_t Nx,
+                                const double* qi, const double* ci, size_t N,
+                                double p, double s, double n, double nu,
+                                double dest_tol)
+
+#    void posterior_silent(const double* x, double* res, size_t Nx,
+#                          const double* qi, const double* ci, size_t N,
+#                          double p, double s, double n, double nu,
+#                          double dest_tol, posterior_t type);
+
+    void tail_quantiles(const double* quantiles, double* res,
+                        const size_t Nquant, const double* qi, const double* ci,
+                        const size_t N, const double p, const double s,
+                        const double n, const double nu, const double dest_tol)
+
+    int tail_quantiles_intcode(const double* quantiles, double* res,
+                               const size_t Nquant, const double* qi,
+                               const double* ci, const size_t N, const double p,
+                               const double s, const double n, const double nu,
+                               const double dest_tol,
+                               short print)
 
 
 
@@ -64,6 +121,44 @@ def marginal_posterior_pdf(double[::1] P_H, double p, double s, double n,
 
 
 @cython.boundscheck(False)
+def marginal_posterior_pdf_batch(const double[::1] P_H, double p, double s,
+                                 double n, double v, list Qi, list Ci,
+                                 double dest_tol = 1e-8):
+    """
+    ...
+    """
+    cdef size_t Nx = P_H.shape[0]
+    cdef size_t Nqc = len(Qi)
+    if len(Ci) != Nqc:
+        raise RuntimeError("Length of `Qi` and `Ci` needs to match!")
+
+    # Copy references to all the arrays in Qi and Ci:
+    cdef const double[::1] qi, ci
+    cdef vector[const double*] qi_vec, ci_vec
+    cdef vector[size_t] Nqc_i
+    qi_vec.resize(Nqc)
+    ci_vec.resize(Nqc)
+    Nqc_i.resize(Nqc)
+    for i in range(Nqc):
+        qi = Qi[i]
+        ci = Ci[i]
+        qi_vec[i] = &qi[0]
+        ci_vec[i] = &ci[0]
+        Nqc_i[i] = qi.shape[0]
+        if ci.shape[0] != Nqc_i[i]:
+            raise RuntimeError("In one sample, the shape of `qi` and `ci` do "
+                               "not match.")
+
+    cdef double[:,::1] res = np.empty((Nqc, Nx))
+    with nogil:
+        posterior_pdf_batch(&P_H[0], Nx, &res[0,0], qi_vec, ci_vec, Nqc_i,
+                            p, s, n, v, dest_tol)
+
+    return res.base
+
+
+
+@cython.boundscheck(False)
 def marginal_posterior_cdf(double[::1] P_H, double p, double s, double n,
                            double v, const double[::1] qi, const double[::1] ci,
                            double dest_tol=1e-8, bool inplace=False):
@@ -92,6 +187,43 @@ def marginal_posterior_cdf(double[::1] P_H, double p, double s, double n,
                       dest_tol)
 
     return z.base
+
+
+@cython.boundscheck(False)
+def marginal_posterior_cdf_batch(const double[::1] P_H, double p, double s,
+                                 double n, double v, list Qi, list Ci,
+                                 double dest_tol = 1e-8):
+    """
+    ...
+    """
+    cdef size_t Nx = P_H.shape[0]
+    cdef size_t Nqc = len(Qi)
+    if len(Ci) != Nqc:
+        raise RuntimeError("Length of `Qi` and `Ci` needs to match!")
+
+    # Copy references to all the arrays in Qi and Ci:
+    cdef const double[::1] qi, ci
+    cdef vector[const double*] qi_vec, ci_vec
+    cdef vector[size_t] Nqc_i
+    qi_vec.resize(Nqc)
+    ci_vec.resize(Nqc)
+    Nqc_i.resize(Nqc)
+    for i in range(Nqc):
+        qi = Qi[i]
+        ci = Ci[i]
+        qi_vec[i] = &qi[0]
+        ci_vec[i] = &ci[0]
+        Nqc_i[i] = qi.shape[0]
+        if ci.shape[0] != Nqc_i[i]:
+            raise RuntimeError("In one sample, the shape of `qi` and `ci` do "
+                               "not match.")
+
+    cdef double[:,::1] res = np.empty((Nqc, Nx))
+    with nogil:
+        posterior_cdf_batch(&P_H[0], Nx, &res[0,0], qi_vec, ci_vec, Nqc_i,
+                            p, s, n, v, dest_tol)
+
+    return res.base
 
 
 @cython.boundscheck(False)
@@ -124,6 +256,43 @@ def marginal_posterior_tail(double[::1] P_H, double p, double s, double n,
                        dest_tol)
 
     return z.base
+
+
+@cython.boundscheck(False)
+def marginal_posterior_tail_batch(const double[::1] P_H, double p, double s,
+                                  double n, double v, list Qi, list Ci,
+                                  double dest_tol = 1e-8):
+    """
+    ...
+    """
+    cdef size_t Nx = P_H.shape[0]
+    cdef size_t Nqc = len(Qi)
+    if len(Ci) != Nqc:
+        raise RuntimeError("Length of `Qi` and `Ci` needs to match!")
+
+    # Copy references to all the arrays in Qi and Ci:
+    cdef const double[::1] qi, ci
+    cdef vector[const double*] qi_vec, ci_vec
+    cdef vector[size_t] Nqc_i
+    qi_vec.resize(Nqc)
+    ci_vec.resize(Nqc)
+    Nqc_i.resize(Nqc)
+    for i in range(Nqc):
+        qi = Qi[i]
+        ci = Ci[i]
+        qi_vec[i] = &qi[0]
+        ci_vec[i] = &ci[0]
+        Nqc_i[i] = qi.shape[0]
+        if ci.shape[0] != Nqc_i[i]:
+            raise RuntimeError("In one sample, the shape of `qi` and `ci` do "
+                               "not match.")
+
+    cdef double[:,::1] res = np.empty((Nqc, Nx))
+    with nogil:
+        posterior_tail_batch(&P_H[0], Nx, &res[0,0], qi_vec, ci_vec, Nqc_i,
+                             p, s, n, v, dest_tol)
+
+    return res.base
 
 
 

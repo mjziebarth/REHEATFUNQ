@@ -18,11 +18,14 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import numpy as np
+from math import exp
 from typing import Union
 from numpy.typing import ArrayLike
 from .anomaly import Anomaly
 from ..regional import GammaConjugatePrior
 from ..coverings.rdisks import bootstrap_data_selection
+from .bayes import marginal_posterior_pdf_batch, marginal_posterior_cdf_batch, \
+                   marginal_posterior_tail_batch
 
 
 class HeatFlowAnomalyPosterior:
@@ -78,6 +81,8 @@ class HeatFlowAnomalyPosterior:
         cmask = self.c > 0.0
         if not np.any(cmask):
             raise RuntimeError("No data point is affected by the anomaly!")
+
+        # TODO WARNING: NEEDS TO TAKE INTO CONSIDERATION THE UNITS!
         self.PHmax = np.min(self.q[cmask] / self.c[cmask])
 
         # Perform the bootstrap:
@@ -89,10 +94,51 @@ class HeatFlowAnomalyPosterior:
         """
         Evaluate the posterior distribution.
         """
-        # Here we have to iterate over all the bootstrap samples, compose the
-        # sample qi and ci for each bootstrap sample, and then evaluate
-        # the posterior for each qi and ci at the requested P_H.
-        # Finally, sum the results at each P_H according to the weight in the
-        # bootstrap.
-        raise NotImplementedError()
-    
+        # Make sure that P_H is C-contiguous:
+        P_H = np.ascontiguousarray(P_H)
+
+        # Prepare:
+        p = exp(self.gcp.lp)
+        Qi = [self.q[ids] for w,ids in self.bootstrap]
+        Ci = [self.c[ids] for w,ids in self.bootstrap]
+
+        # Heavy lifting:
+        return marginal_posterior_pdf_batch(P_H, p, self.gcp.s, self.gcp.n,
+                                            self.gcp.v, Qi, Ci).mean(axis=0)
+
+
+    def cdf(self, P_H: ArrayLike):
+        """
+        Evaluate the posterior cumulative distribution.
+        """
+        # Make sure that P_H is C-contiguous:
+        P_H = np.ascontiguousarray(P_H)
+
+        # Prepare:
+        p = exp(self.gcp.lp)
+        Qi = [self.q[ids] for w,ids in self.bootstrap]
+        Ci = [self.c[ids] for w,ids in self.bootstrap]
+
+        # Heavy lifting:
+        return marginal_posterior_cdf_batch(P_H, p, self.gcp.s, self.gcp.n,
+                                            self.gcp.v, Qi, Ci).mean(axis=0)
+
+
+    def tail(self, P_H: ArrayLike):
+        """
+        Evaluate the posterior tail distribution (complementary cumulative
+        distribution).
+        """
+        # Make sure that P_H is C-contiguous:
+        P_H = np.ascontiguousarray(P_H)
+
+        # Prepare:
+        p = exp(self.gcp.lp)
+        Qi = [self.q[ids] for w,ids in self.bootstrap]
+        Ci = [self.c[ids] for w,ids in self.bootstrap]
+
+        # Heavy lifting:
+        return marginal_posterior_tail_batch(P_H, p, self.gcp.s, self.gcp.n,
+                                             self.gcp.v, Qi, Ci).mean(axis=0)
+
+
