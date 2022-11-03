@@ -74,15 +74,17 @@ class HeatFlowPredictive:
         # index lists, each associated with a multiplicity that determines
         # how often the data set has been generated.
         #    bootstrap = [[m0, [i00, i01, ...]], [m1, [i10, i11, ...]], ...]
-        bootstrap = bootstrap_data_selection(xy, self.dmin, int(n_bootstrap))
+        self.bootstrap = bootstrap_data_selection(xy, self.dmin,
+                                                  int(n_bootstrap))
 
         # Ensure that the bootstrap samples all data points:
-        if set(int(s) for S in bootstrap for s in S[1]) != set(range(q.size)):
+        if set(int(s) for S in self.bootstrap for s in S[1]) \
+           != set(range(q.size)):
             warn("The bootstrap did not sample all heat flow data points in "
                  "the area.")
 
         # Compute the Bayesian update for each bootstrap sample:
-        updated = [gcp.updated(q[sample[1]]) for sample in bootstrap]
+        updated = [gcp.updated(q[sample[1]]) for sample in self.bootstrap]
         self.lp = np.array([u.lp for u in updated])
         self.s = np.array([u.s for u in updated])
         self.n = np.array([u.n for u in updated])

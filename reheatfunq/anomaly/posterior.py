@@ -83,11 +83,15 @@ class HeatFlowAnomalyPosterior:
             raise RuntimeError("No data point is affected by the anomaly!")
 
         # TODO WARNING: NEEDS TO TAKE INTO CONSIDERATION THE UNITS!
-        self.PHmax = np.min(self.q[cmask] / self.c[cmask])
+        self.PHmax_global = np.min(self.q[cmask] / self.c[cmask])
 
         # Perform the bootstrap:
         self.bootstrap = bootstrap_data_selection(xy, self.dmin,
                                                   int(n_bootstrap))
+
+        self.PHmax = max(min(self.q[i]/self.c[i] for i in sample
+                             if self.c[i] > 0.0)
+                         for w,sample in self.bootstrap)
 
 
     def pdf(self, P_H: ArrayLike):
