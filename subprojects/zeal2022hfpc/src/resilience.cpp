@@ -19,7 +19,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 #include <../include/resilience.hpp>
+#include <ziebarth2022a.hpp>
 #include <cmath>
 #include <type_traits>
 #include <array>
@@ -212,8 +214,6 @@ void get_synthetic_dataset_mW_m2(dvec_t& x_i, dvec_t& c_i, dvec_t& q_i,
 
 	/* Get the gamma random variables: */
 	dist.generate_heat_flow(q_i, rng);
-//	for (size_t i=0; i<x_i.size(); ++i)
-//		q_i[i] = std::gamma_distribution(K,T)(rng);
 
 	/* Get the anomaly: */
 	LS_anomaly_power_scaled_infty_W_m2(x_i, c_i, P_MW, L_km, d_km);
