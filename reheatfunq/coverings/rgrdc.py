@@ -43,12 +43,15 @@ def random_global_R_disk_coverings(R: float, min_points: int, hf: ArrayLike,
     rng = np.random.default_rng(seed)
 
     distributions = []
+    distribution_indices = []
     n_draw = 0
     valid_points = []
     lolas = []
 
     if used_points is None:
-        used_points = []
+        used_points = set()
+    else:
+        used_points = set(used_points)
 
     print("Area of a disk:          ", round(np.pi*R**2 * 1e-6), "km²")
 
@@ -157,15 +160,17 @@ def random_global_R_disk_coverings(R: float, min_points: int, hf: ArrayLike,
             break
 
         # Remember the data points that we have already drawn:
-        used_points += list(neighbors)
+        neighbors = list(neighbors)
+        used_points.update(neighbors)
 
         # Add the point to the valid points:
         valid_points.append(point)
 
         # Obtain the heat flow distribution:
         distributions.append(np.sort(hfn).reshape(-1))
+        distribution_indices.append(neighbors)
         lolas.append(lola)
 
     print("Disk rejection rate:     ", 100.*(n_draw-N) / n_draw)
 
-    return valid_points, used_points, distributions, lolas
+    return valid_points, used_points, distributions, lolas, distribution_indices
