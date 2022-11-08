@@ -29,23 +29,11 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
-
+#include <ziebarth2022a.hpp>
 
 #ifndef PAPER_HEATFLOW_RESILIENCE_HPP
 #define PAPER_HEATFLOW_RESILIENCE_HPP
 
-
-/* The import from pdtoolbox: */
-void tail_quantiles(const double* quantiles, double* res, const size_t Nquant,
-                    const double* qi, const double* ci, const size_t N,
-                    const double p, const double s, const double n,
-                    const double nu, const double dest_tol);
-
-int tail_quantiles_intcode(const double* quantiles, double* res,
-                    const size_t Nquant, const double* qi, const double* ci,
-                    const size_t N, const double p, const double s,
-                    const double n, const double nu, const double dest_tol,
-                    short print);
 
 namespace heatflowpaper {
 

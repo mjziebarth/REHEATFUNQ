@@ -20,7 +20,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <../include/resilience.hpp>
+#include <resilience.hpp>
 #include <ziebarth2022a.hpp>
 #include <cmath>
 #include <type_traits>
@@ -28,6 +28,9 @@
 #include <omp.h>
 #include <stdexcept>
 
+/* The import from pdtoolbox code: */
+using pdtoolbox::heatflow::tail_quantiles;
+using pdtoolbox::heatflow::tail_quantiles_intcode;
 
 using heatflowpaper::quantiles_t;
 
