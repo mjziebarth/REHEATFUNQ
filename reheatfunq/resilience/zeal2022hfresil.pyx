@@ -27,6 +27,15 @@ import numpy as np
 from libcpp cimport bool as cbool
 from libcpp.vector cimport vector
 
+
+################################################################################
+#                                                                              #
+#             Resilience of the Bayesian analysis to different                 #
+#             probability distributions on a sample level.                     #
+#                                                                              #
+################################################################################
+
+
 cdef extern from "<array>" namespace "std" nogil:
     cdef cppclass array_d1 "std::array<double,1>":
         double& operator[](size_t)
@@ -214,3 +223,110 @@ def test_performance_mixture_cython(long[:] Nset, size_t M, double P_MW,
         raise RuntimeError("Nq = " + str(Nq))
 
     return res.base
+
+
+
+################################################################################
+#                                                                              #
+#         Synthetic Random Global R-Disk Covering Generation Code              #
+#                                                                              #
+################################################################################
+
+cdef extern from "synthetic_covering.hpp" namespace "paperheatflow" nogil:
+
+    struct gamma_params:
+        double k
+        double t
+
+    struct sample_params_t:
+        size_t N
+        gamma_params kt
+
+    vector[vector[vector[double]]] \
+    generate_synthetic_heat_flow_coverings_mixture(
+        const vector[sample_params_t]&, size_t N, double hf_max, double w0,
+        double x00, double s0, double x10, double s1, size_t seed,
+        unsigned short nthread
+    )
+
+
+@cython.boundscheck(False)
+@cython.embedsignature(True)
+def generate_synthetic_heat_flow_coverings(double[:] k, double[:] t,
+                                           long[:] N, long M, double hf_max,
+                                           double w0, double x00, double s0,
+                                           double x10, double s1, size_t seed,
+                                           unsigned short nthread):
+    """
+    Generate synthetic heat flow coverings.
+
+    Parameters:
+       k      : Array of gamma distribution parameters `k`.
+                shape: (N,)
+                dtype: float
+       k      : Array of gamma distribution parameters `θ`.
+                shape (N,)
+                dtype: float
+       N      : Array of sample sizes to draw from the corresponding
+                gamma distributions.
+                shape: (N,)
+                dtype: float
+       M      : Number of coverings to generate.
+                type: int
+       hf_max : Threshold below which to accept heat flow values.
+                type: float
+       w0     : Weight of the first normal distribution describing
+                the error mixture distribution.
+                type: float
+       x00    : Location of the first normal distribution.
+                type: float
+       s0     : Standard deviation of the first normal distribution.
+                type: float
+       x10    : Location of the second normal distribution.
+                type: float
+       s1     : Standard deviation of the second normal distribution.
+                type: float
+       seed   : Seed by which to initialize the random number generation.
+                type:  int
+       nthread: Number of threads to use. In combination with seed, this
+                fixes the sequence of random number generation used in this
+                run. Keep both values the same to obtain reproducible
+                results.
+                type: int
+    """
+    cdef size_t n = k.size
+    if k.size != t.size:
+        raise RuntimeError("k and t have to have the same size.")
+    if k.size != N.size:
+        raise RuntimeError("k and N have to have the same size.")
+
+    # Copy to C++:
+    cdef vector[sample_params_t] params
+    cdef size_t i
+    cdef vector[vector[vector[double]]] res_cpp
+    with nogil:
+        params.resize(n)
+        for i in range(n):
+            params[i].N = N[i]
+            params[i].kt.k = k[i]
+            params[i].kt.t = t[i]
+
+        res_cpp = generate_synthetic_heat_flow_coverings_mixture(params, M,
+                                    hf_max, w0, x00, s0, x10, s1, seed, nthread)
+
+        params.clear()
+
+    # Copy to Python:
+    cdef double[:] resij
+    cdef list res = [[] for i in range(M)]
+    cdef size_t j,l,L
+    for i in range(M):
+        for j in range(n):
+            L = res_cpp[i][j].size()
+            resij = np.empty(L)
+            with nogil:
+                for l in range(L):
+                    resij[l] = res_cpp[i][j][l]
+            res[i].append(resij.base)
+
+    return res
