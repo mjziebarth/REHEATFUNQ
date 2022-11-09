@@ -13,6 +13,7 @@ anomaly_bayes       = MesonExtension('reheatfunq.anomaly.bayes')
 anomaly_anomaly     = MesonExtension('reheatfunq.anomaly.anomaly')
 coverings_rdisks    = MesonExtension('reheatfunq.coverings.rdisks')
 resilience_zeal2022 = MesonExtension('reheatfunq.resilience.zeal2022hfresil')
+data_distancedist   = MesonExtension('reheatfunq.data.distancedistribution')
 
 
 setup(name='REHEATFUNQ',
@@ -23,7 +24,7 @@ setup(name='REHEATFUNQ',
                   'reheatfunq.data', 'reheatfunq.coverings',
                   'reheatfunq.resilience'],
       ext_modules=[regional_backend, anomaly_bayes, coverings_rdisks,
-                   anomaly_anomaly, resilience_zeal2022],
+                   anomaly_anomaly, resilience_zeal2022, data_distancedist],
       cmdclass={'build_ext' : build_ext}
 )
 
