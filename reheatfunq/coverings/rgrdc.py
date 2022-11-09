@@ -150,7 +150,10 @@ def random_global_R_disk_coverings(R: float, min_points: int, hf: ArrayLike,
                 mask = conforming_data_selection(xyn, dmin, rng=rng)
                 # Apply the mask if needed:
                 m = np.count_nonzero(mask)
-                if m != neighbors.size:
+                if m == neighbors.size:
+                    lola = hfn[:,1:3]
+                    hfn = hfn[:,0]
+                else:
                     neighbors = neighbors[mask]
                     lola = hfn[mask,1:3]
                     hfn = hfn[mask,0]
