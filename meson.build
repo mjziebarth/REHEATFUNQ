@@ -8,6 +8,7 @@ include = include_directories('include','pdtoolbox/include')
 eigen_dep = dependency('eigen3')
 boost_dep = dependency('boost')
 openmp_dep = dependency('openmp')
+geographiclib_dep = dependency('GeographicLib')
 
 
 #
@@ -50,6 +51,21 @@ libhfp = static_library(
     'hfp', sources_hfp,
     dependencies : dependencies_hfp,
     include_directories : include
+)
+
+
+#
+# Resilience:
+#
+include_resilience =  [include, 'external/zeal2022hfpc/include']
+sources_resilience = ['external/zeal2022hfpc/src/resilience.cpp',
+                      'external/zeal2022hfpc/src/synthetic_covering.cpp']
+dependencies_resilience = [openmp_dep, boost_dep]
+
+libresilience = static_library(
+    'resilience', sources_resilience,
+    dependencies : dependencies_resilience,
+    include_directories : include_resilience
 )
 
 
@@ -105,4 +121,18 @@ python.extension_module('anomaly',
                         include_directories : [include],
                         override_options : ['cython_language=cpp'],
                         link_with : libanomaly
+                        )
+
+python.extension_module('zeal2022hfresil',
+                        'reheatfunq/resilience/zeal2022hfresil.pyx',
+                        dependencies : [dep_py],
+                        include_directories : include_resilience,
+                        override_options : ['cython_language=cpp'],
+                        link_with : [libhfp, libresilience, ]
+                        )
+
+python.extension_module('distancedistribution',
+                        'reheatfunq/data/distancedistribution.pyx',
+                        dependencies : [dep_py, geographiclib_dep],
+                        override_options : ['cython_language=cpp'],
                         )

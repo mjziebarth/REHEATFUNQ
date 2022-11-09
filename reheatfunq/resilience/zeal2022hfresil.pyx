@@ -6,7 +6,8 @@
 #
 # Authors: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
 #
-# Copyright (C) 2022 Deutsches GeoForschungsZentrum Potsdam
+# Copyright (C) 2022 Deutsches GeoForschungsZentrum Potsdam,
+#                    Malte J. Ziebarth
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -249,16 +250,27 @@ cdef extern from "synthetic_covering.hpp" namespace "paperheatflow" nogil:
         unsigned short nthread
     )
 
+    vector[vector[vector[double]]] \
+    generate_synthetic_heat_flow_coverings_mixture(
+        const vector[vector[sample_params_t]]&, double hf_max,
+        double w0, double x00, double s0, double w1, double x10, double s1,
+        double x20, double s2, size_t seed, unsigned short nthread
+    )
+
+    vector[double] \
+    mixture_normal_3(size_t N, double w0, double x00, double s0, double w1,
+                     double x10, double s1, double x20, double s2, size_t seed
+    )
+
 
 @cython.boundscheck(False)
-@cython.embedsignature(True)
-def generate_synthetic_heat_flow_coverings(double[:] k, double[:] t,
-                                           long[:] N, long M, double hf_max,
-                                           double w0, double x00, double s0,
-                                           double x10, double s1, size_t seed,
-                                           unsigned short nthread):
+def generate_synthetic_heat_flow_coverings_mix2(
+         const double[:] k, const double[:] t, const long[:] N, long M,
+         double hf_max, double w0, double x00, double s0, double x10, double s1,
+         size_t seed, unsigned short nthread):
     """
-    Generate synthetic heat flow coverings.
+    Generate synthetic heat flow coverings using a two component
+    normal mixture distribution as an error distribution.
 
     Parameters:
        k      : Array of gamma distribution parameters `k`.
@@ -330,3 +342,136 @@ def generate_synthetic_heat_flow_coverings(double[:] k, double[:] t,
             res[i].append(resij.base)
 
     return res
+
+
+@cython.boundscheck(False)
+def generate_synthetic_heat_flow_coverings_mix3(
+         list k, list t, list N,
+         double hf_max,
+         double w0, double x00, double s0,
+         double w1, double x10, double s1,
+         double x20, double s2,
+         size_t seed, unsigned short nthread):
+    """
+    Generate synthetic heat flow coverings using a three component
+    normal mixture distribution as an error distribution.
+
+    Parameters:
+       k      : Array of gamma distribution parameters `k`.
+                shape: (N,)
+                dtype: float
+       k      : Array of gamma distribution parameters `θ`.
+                shape (N,)
+                dtype: float
+       N      : Array of sample sizes to draw from the corresponding
+                gamma distributions.
+                shape: (N,)
+                dtype: float
+       M      : Number of coverings to generate.
+                type: int
+       hf_max : Threshold below which to accept heat flow values.
+                type: float
+       w0     : Weight of the first normal distribution describing
+                the error mixture distribution.
+                type: float
+       x00    : Location of the first normal distribution.
+                type: float
+       s0     : Standard deviation of the first normal distribution.
+                type: float
+       w1     : Weight of the second normal distribution describing
+                the error mixture distribution.
+                type: float
+       x10    : Location of the second normal distribution.
+                type: float
+       s1     : Standard deviation of the second normal distribution.
+                type: float
+       x20    : Location of the third normal distribution.
+                type: float
+       s2     : Standard deviation of the third normal distribution.
+                type: float
+       seed   : Seed by which to initialize the random number generation.
+                type:  int
+       nthread: Number of threads to use. In combination with seed, this
+                fixes the sequence of random number generation used in this
+                run. Keep both values the same to obtain reproducible
+                results.
+                type: int
+    """
+
+    cdef size_t M = len(k)
+    if len(t) != M:
+        raise RuntimeError("k and t have to have the same size.")
+    if len(N) != M:
+        raise RuntimeError("k and N have to have the same size.")
+
+
+    # Copy to C++:
+    cdef vector[vector[sample_params_t]] params
+    cdef size_t i, j
+    cdef vector[vector[vector[double]]] res_cpp
+
+    cdef size_t n
+    cdef const double[:] ki
+    cdef const double[:] ti
+    cdef const long[:] Ni
+    params.resize(M)
+    for i in range(M):
+        ki = k[i]
+        ti = t[i]
+        Ni = N[i]
+        n = ki.shape[0]
+        if ti.shape[0] != n:
+            raise RuntimeError("k and t have to have the same size.")
+        if Ni.shape[0] != n:
+            raise RuntimeError("k and N have to have the same size.")
+
+        with nogil:
+            params[i].resize(n)
+            for j in range(n):
+                params[i][j].N = Ni[j]
+                params[i][j].kt.k = ki[j]
+                params[i][j].kt.t = ti[j]
+
+
+    with nogil:
+        res_cpp = generate_synthetic_heat_flow_coverings_mixture(params, hf_max,
+                                    w0, x00, s0, w1, x10, s1, x20, s2, seed,
+                                    nthread)
+
+        params.clear()
+
+    # Copy to Python:
+    cdef double[:] resij
+    cdef list res = [[] for i in range(M)]
+    cdef size_t l,L
+    for i in range(M):
+        n = k[i].shape[0]
+        for j in range(n):
+            L = res_cpp[i][j].size()
+            resij = np.empty(L)
+            with nogil:
+                for l in range(L):
+                    resij[l] = res_cpp[i][j][l]
+            res[i].append(resij.base)
+
+    return res
+
+@cython.boundscheck(False)
+def generate_normal_mixture_errors_3(size_t N,
+         double w0, double x00, double s0,
+         double w1, double x10, double s1,
+         double x20, double s2, size_t seed):
+    """
+    Draw random numbers from the three-component normal mixture
+    distribution.
+    """
+    cdef size_t i
+    cdef double[::1] X = np.empty(N)
+    cdef vector[double] res
+
+    with nogil:
+        res = mixture_normal_3(N, w0, x00, s0, w1, x10, s1, x20, s2, seed)
+        for i in range(N):
+            X[i] = res[i]
+
+    return X.base

@@ -115,7 +115,7 @@ paperheatflow::generate_synthetic_heat_flow_coverings_mixture(
 	seq.generate(seeds.begin(), seeds.end());
 
 	/* Generate the coverings: */
-	mixture_t error_params(w0, x00, s0, x10, s1);
+	mixture_t<2> error_params({w0}, {x00, x10}, {s0, s1});
 	std::vector<covering_t> res(N);
 	#pragma omp parallel num_threads(nthread)
 	{
@@ -132,10 +132,71 @@ paperheatflow::generate_synthetic_heat_flow_coverings_mixture(
 		for (size_t i=0; i<N; ++i){
 			/* Generate the random number generator for this covering: */
 			res[i] = generate_synthetic_heat_flow_covering
-			            <MixtureErrorGenerator>(sample_params, hf_max,
-			                                    error_params, gen);
+			            <MixtureErrorGenerator<2>>(sample_params, hf_max,
+			                                       error_params, gen);
+		}
+	}
+
+	return res;
+}
+
+
+std::vector<covering_t>
+paperheatflow::generate_synthetic_heat_flow_coverings_mixture(
+     const std::vector<std::vector<sample_params_t>>& sample_params, double hf_max,
+     double w0, double x00, double s0, double w1, double x10, double s1,
+     double x20, double s2, size_t seed, unsigned short nthread)
+{
+	/* Each  */
+	const size_t N = sample_params.size();
+	/* Generate the seed sequence: */
+	std::seed_seq seq{seed};
+	std::vector<size_t> seeds(nthread);
+	seq.generate(seeds.begin(), seeds.end());
+
+	/* Generate the coverings: */
+	mixture_t<3> error_params({w0, w1}, {x00, x10, x20}, {s0, s1, s2});
+	std::vector<covering_t> res(N);
+	#pragma omp parallel num_threads(nthread)
+	{
+		/* Generate the random number generator local to this thread: */
+		const int threadid = omp_get_thread_num();
+		if (threadid < 0 || static_cast<size_t>(threadid) > seeds.size())
+			throw std::runtime_error("Thread number wrong!");
+		const size_t seedi = seeds[threadid];
+		std::shared_ptr<std::mt19937_64>
+		    gen(std::make_shared<std::mt19937_64>(seedi));
+
+		/* Perform the generation of the converings: */
+		#pragma omp for schedule(static)
+		for (size_t i=0; i<N; ++i){
+			/* Generate the random number generator for this covering: */
+			res[i] = generate_synthetic_heat_flow_covering
+			            <MixtureErrorGenerator<3>>(sample_params[i], hf_max,
+			                                       error_params, gen);
 		}
 	}
 	
 	return res;
+}
+
+
+std::vector<double>
+paperheatflow::mixture_normal_3(size_t N, double w0, double x00, double s0,
+                                double w1, double x10, double s1, double x20,
+                                double s2, size_t seed)
+{
+	/* RNG: */
+	std::shared_ptr<std::mt19937_64> rng
+	   = std::make_shared<std::mt19937_64>(seed);
+	MixtureErrorGenerator<3> gen(mixture_t<3>({w0, w1}, {x00, x10, x20},
+	                                          {s0, s1, s2}),
+	                             rng);
+	std::vector<double> X(N);
+
+	for (size_t i=0; i<N; ++i){
+		X[i] = gen();
+	}
+
+	return X;
 }

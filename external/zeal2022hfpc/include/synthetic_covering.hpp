@@ -27,11 +27,32 @@
 
 namespace paperheatflow {
 
+/*
+ * Mixture of 2 normal distributions.
+ */
 std::vector<covering_t>
 generate_synthetic_heat_flow_coverings_mixture(
      const std::vector<sample_params_t>& sample_params, size_t N, double hf_max,
      double w0, double x00, double s0, double x10, double s1,
      size_t seed, unsigned short nthread);
+
+/*
+ * Mixture of 3 normal distributions.
+ */
+std::vector<covering_t>
+generate_synthetic_heat_flow_coverings_mixture(
+     const std::vector<std::vector<sample_params_t>>& sample_params,
+     double hf_max, double w0, double x00, double s0,
+     double w1, double x10, double s1, double x20, double s2,
+     size_t seed, unsigned short nthread);
+
+/*
+ * Generate random numbers:
+ */
+std::vector<double>
+mixture_normal_3(size_t N, double w0, double x00, double s0, double w1,
+                 double x10, double s1, double x20, double s2, size_t seed);
+
 
 }
 
