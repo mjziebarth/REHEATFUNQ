@@ -19,7 +19,7 @@
 
 import numpy as np
 from math import exp
-from typing import Union
+from typing import Union, Literal
 from numpy.typing import ArrayLike
 from .anomaly import Anomaly
 from ..regional import GammaConjugatePrior
@@ -42,7 +42,8 @@ class HeatFlowAnomalyPosterior:
                  anomaly: Anomaly,
                  gcp: Union[GammaConjugatePrior,tuple],
                  dmin: float = 20e3,
-                 n_bootstrap: int = 1000
+                 n_bootstrap: int = 1000,
+                 heat_flow_unit: Literal['mW/m²','W/m²'] = 'mW/m²'
         ):
         # Ensure that heat flow is contiguous:
         q = np.ascontiguousarray(np.array(q,copy=False).reshape(-1))
@@ -69,12 +70,17 @@ class HeatFlowAnomalyPosterior:
         if not isinstance(anomaly, Anomaly):
             raise TypeError("`anomaly` needs to be an Anomaly instance.")
 
+        if heat_flow_unit not in ('mW/m²', 'W/m²'):
+            raise TypeError("`heat_flow_unit` must be one of 'mW/m²' or "
+                            "'W/m²'.")
+
         # Set all pre-defined attributes:
         self.q = q
         self.xy = xy
         self.gcp = gcp
         self.dmin = float(dmin)
         self.anomaly = anomaly
+        self.heat_flow_unit = heat_flow_unit
 
         # Derived quantities:
         self.c = anomaly(xy)
@@ -82,7 +88,13 @@ class HeatFlowAnomalyPosterior:
         if not np.any(cmask):
             raise RuntimeError("No data point is affected by the anomaly!")
 
-        # TODO WARNING: NEEDS TO TAKE INTO CONSIDERATION THE UNITS!
+        # Handle the unit:
+        if heat_flow_unit == "mW/m²":
+            self.c *= 1e3
+
+        # Compute the maximum power, defined by that heat flow
+        # data point which is the first to be reduced to zero by
+        # subtracting the anomaly signature:
         self.PHmax_global = np.min(self.q[cmask] / self.c[cmask])
 
         # Perform the bootstrap:
