@@ -401,4 +401,7 @@ def default_prior() -> GammaConjugatePrior:
 
     Ziebarth, M. J. and ....
     """
-    return GammaConjugatePrior()
+    return GammaConjugatePrior(p = 2.522017292522833465,
+                               s = 15.37301672440559130,
+                               n = 0.2184765374862465137,
+                               v = 0.2184765374862465137)
