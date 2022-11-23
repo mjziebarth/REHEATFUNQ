@@ -3,7 +3,7 @@ project('REHEATFUNQ','cpp','cython',
 add_project_arguments(['-march=native','-mtune=native',
                        '-std=c++20'], language : 'cpp')
 
-include = include_directories('include','pdtoolbox/include')
+include = include_directories('include','external/pdtoolbox/include')
 
 eigen_dep = dependency('eigen3')
 boost_dep = dependency('boost')
@@ -14,9 +14,10 @@ geographiclib_dep = dependency('GeographicLib')
 #
 # Conjugate prior:
 #
-sources = ['pdtoolbox/src/ll_gamma_conjugate_prior.cpp',
-           'pdtoolbox/src/optimize.cpp', 'pdtoolbox/src/gamma.cpp',
-           'pdtoolbox/src/gamma_conjugate_prior.cpp']
+sources = ['external/pdtoolbox/src/ll_gamma_conjugate_prior.cpp',
+           'external/pdtoolbox/src/optimize.cpp',
+           'external/pdtoolbox/src/gamma.cpp',
+           'external/pdtoolbox/src/gamma_conjugate_prior.cpp']
 
 dependencies = [openmp_dep, eigen_dep]
 
@@ -43,8 +44,8 @@ libanomaly = static_library(
 #
 # Heat flow posterior:
 #
-sources_hfp = ['pdtoolbox/src/ziebarth2022a.cpp',
-               'pdtoolbox/src/quantileinverter.cpp']
+sources_hfp = ['external/pdtoolbox/src/ziebarth2022a.cpp',
+               'external/pdtoolbox/src/quantileinverter.cpp']
 dependencies_hfp = [openmp_dep, boost_dep]
 
 libhfp = static_library(
