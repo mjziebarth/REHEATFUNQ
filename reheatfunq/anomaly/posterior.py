@@ -34,6 +34,34 @@ class HeatFlowAnomalyPosterior:
     strength of a heat flow anomaly, expressed by the frictional
     power :math:`P_H` on the fault, using the REHEATFUNQ model
     of regional heat flow and a set of regional heat flow data.
+
+    Parameters
+    ----------
+    q : array_like
+        The heat flow data of shape :python:`(N,)`.
+    x : array_like
+        The :math:`x` locations of the heat flow data.
+        Also shape :python:`(N,)`.
+    y : array_like
+        The :math:`y` locations of the heat flow data.
+        Also shape :python:`(N,)`.
+    anomaly : reheatfunq.anomaly.Anomaly
+        The model of the heat flow anomaly that can be evaluated at
+        the data locations.
+    gcp : reheatfunq.regional.GammaConjugatePrior
+        The prior for the regional aggregate heat flow distribution.
+    dmin : float
+        The minimum distance between data points (in m). If data
+        points closer than this distance exist in the heat flow
+        data, they are not considered independent and are alternated
+        in the bootstrap.
+    n_bootstrap : int
+        The number of permuted heat flow data sets to generate.
+        If no pair of data points is closer than the minimum
+        distance :math:`d_\mathrm{min}`, this parameter has no
+        effect.
+    heat_flow_unit : 'mW/m²' | 'W/m²'
+        The unit in which the heat flow data :python:`q` are given.
     """
     def __init__(self,
                  q: ArrayLike,
@@ -108,7 +136,22 @@ class HeatFlowAnomalyPosterior:
 
     def pdf(self, P_H: ArrayLike):
         """
-        Evaluate the posterior distribution.
+        Evaluate the marginal posterior distribution in
+        heat-generating power :math:`P_H`.
+
+        Parameters
+        ----------
+
+        P_H : array_like
+              The powers (in W) at which to evaluate the
+              marginal posterior density.
+
+        Returns
+        -------
+        pdf : array_like
+              The marginal posterior probability density of
+              heat-generating power :math:`P_H` evaluated at
+              the given :python:`P_H`.
         """
         # Make sure that P_H is C-contiguous:
         P_H = np.ascontiguousarray(P_H)
@@ -125,7 +168,22 @@ class HeatFlowAnomalyPosterior:
 
     def cdf(self, P_H: ArrayLike):
         """
-        Evaluate the posterior cumulative distribution.
+        Evaluate the marginal posterior cumulative distribution
+        of heat-generating power :math:`P_H`.
+
+        Parameters
+        ----------
+
+        P_H : array_like
+              The powers (in W) at which to evaluate the
+              marginal posterior cumulative distribution.
+
+        Returns
+        -------
+        cdf : array_like
+              The marginal posterior cumulative distribution
+              of heat-generating power :math:`P_H` evaluated
+              at the given :python:`P_H`.
         """
         # Make sure that P_H is C-contiguous:
         P_H = np.ascontiguousarray(P_H)
@@ -142,8 +200,23 @@ class HeatFlowAnomalyPosterior:
 
     def tail(self, P_H: ArrayLike):
         """
-        Evaluate the posterior tail distribution (complementary cumulative
-        distribution).
+        Evaluate the posterior tail distribution (complementary
+        cumulative distribution) of heat-generating power
+        :math:`P_H`.
+
+        Parameters
+        ----------
+
+        P_H : array_like
+              The powers (in W) at which to evaluate the
+              marginal posterior tail distribution.
+
+        Returns
+        -------
+        tail : array_like
+              The marginal posterior tail distribution
+              of heat-generating power :math:`P_H` evaluated
+              at the given :code:`P_H`.
         """
         # Make sure that P_H is C-contiguous:
         P_H = np.ascontiguousarray(P_H)

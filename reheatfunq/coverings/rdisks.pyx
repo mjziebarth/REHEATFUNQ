@@ -121,6 +121,7 @@ cdef void restricted_sample(const double[:,:] xy, double dmin, uint8_t[::1] out,
         out[i] = not out[i]
 
 
+@cython.embedsignature(True)
 def conforming_data_selection(const double[:,:] xy, double dmin_m, rng=128):
     """
     This methods applies the spatial data filtering technique
@@ -130,8 +131,22 @@ def conforming_data_selection(const double[:,:] xy, double dmin_m, rng=128):
     The selection process for non-conforming data pairs is stochastic
     but reproducible with identical random number generator `rng`.
 
-    Returns:
-       mask : A mask filtering out non-conforming data points.
+    Parameters
+    ----------
+    xy : array_like
+        :python:`(N,2)` array of data points in a projected
+        Euclidean coordinate system (in m).
+    dmin_m : float
+        Minimum inter-point distance for the conforming
+        selection criterion (in m).
+    rng : int | numpy.random.Generator
+        A seed or random generator to draw from for
+        reproducibility.
+
+    Returns
+    -------
+    mask : numpy.ndarray
+       A mask filtering out non-conforming data points.
     """
     if xy.shape[1] != 2:
         raise RuntimeError("xy has to be shape (N,2).")
@@ -150,19 +165,35 @@ def conforming_data_selection(const double[:,:] xy, double dmin_m, rng=128):
 
 
 @cython.boundscheck(False)
+@cython.embedsignature(True)
 def bootstrap_data_selection(const double[:,::1] xy, double dmin_m, size_t B,
                              rng=127):
     """
     Computes a set of bootstrap samples of heat flow data points
     conforming to the data selection criterion.
 
-    Parameters:
-       xy     : (N,2) array of data points in a projected
-                Euclidean coordinate system.
-                Given in [m].
-       dmin_m : Minimum inter-point distance for the
-                conforming selection criterion.
-       B      : Number of bootstrap samples.
+    Parameters
+    ----------
+    xy : array_like
+        :python:`(N,2)` array of data points in a projected
+        Euclidean coordinate system (in m).
+    dmin_m : float
+        Minimum inter-point distance for the conforming
+        selection criterion (in m).
+    B : int
+        Number of bootstrap samples to draw.
+    rng : int | numpy.random.Generator
+        A seed or random generator to draw from for
+        reproducibility.
+
+    Returns
+    -------
+    subselections : list
+       A list of index arrays. Each index array lists the indices
+       of a conforming data selection within the data array
+       :python:`xy`. The number of index arrays is at most
+       :python:`B`. Duplicate data selections are returned only
+       once.
     """
     # Sanity:
     if xy.shape[1] != 2:

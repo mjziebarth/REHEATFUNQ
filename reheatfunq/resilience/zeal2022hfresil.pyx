@@ -95,6 +95,7 @@ cdef extern from "resilience.hpp" namespace "heatflowpaper" nogil:
 
 
 @cython.boundscheck(False)
+@cython.embedsignature(True)
 def test_performance_cython(long[:] Nset, size_t M, double P_MW, double K,
                             double T, double[:] quantile, double PRIOR_P,
                             double PRIOR_S, double PRIOR_N, double PRIOR_V,
@@ -103,7 +104,50 @@ def test_performance_cython(long[:] Nset, size_t M, double P_MW, double K,
                             double tol=1e-3, unsigned char nthread=0):
     """
     Tests the performance of the gamma model (with and without prior) for
-    synthetic data sets that do not stem from a gamma distribution.
+    synthetic data sets that do not stem from a gamma distribution. The
+    analysis is performed for synthetic data randomly distributed within
+    an :math:`80\,\mathrm{km}` radius disk with a straight-line fault
+    passing through its center.
+
+    Parameters
+    ----------
+    Nset : array_like
+        Sample sizes :math:`\{N_i\}` for which to perform the test.
+    M : int
+        Number of repetition per sample size.
+    P_MW : float
+        Power of the anomaly.
+    K : float
+        Gamma distribution shape parameter :math:`k`.
+    T : float
+        Gamma distribution scale parameter :math:`\\theta`.
+    quantile : array_like
+        Array of anomaly P_H posterior quantiles to evaluate. The
+        array must be either 4 or 41 elements in size.
+    PRIOR_P : float
+        Parameter :math:`p` of the gamma conjugate prior.
+    PRIOR_s : float
+        Parameter :math:`s` of the gamma conjugate prior.
+    PRIOR_N : float
+        Parameter :math:`n` of the gamma conjugate prior.
+    PRIOR_V : float
+        Parameter :math:`\\nu` of the gamma conjugate prior.
+    verbose : bool, optional
+        If :python:`True`, print some progress information.
+    show_failures : bool, optional
+        Currently without effect.
+    seed : int, optional
+        Random number generator seed for reproduciblity.
+    use_cpp_quantiles : bool, optional
+        Currently without effect.
+    tol : float, optional
+        Quantile inversion tolerance passed to the algorithms.
+
+    Returns
+    -------
+    res : numpy.ndarray
+       Quantiles of the :math:`P_H` posteriors. The array has
+       the shape :python:`(2, len(Nset), len(quantile), M)`.
     """
     cdef size_t i,l,j
 
@@ -156,6 +200,7 @@ def test_performance_cython(long[:] Nset, size_t M, double P_MW, double K,
 
 
 @cython.boundscheck(False)
+@cython.embedsignature(True)
 def test_performance_mixture_cython(long[:] Nset, size_t M, double P_MW,
                             double x0, double s0, double a0, double x1,
                             double s1, double a1, double[:] quantile,
@@ -166,7 +211,59 @@ def test_performance_mixture_cython(long[:] Nset, size_t M, double P_MW,
                             double tol=1e-3):
     """
     Tests the performance of the gamma model (with and without prior) for
-    synthetic data sets that do not stem from a gamma distribution.
+    synthetic data sets that do not stem from a gamma distribution. The
+    analysis is performed for synthetic data randomly distributed within
+    an :math:`80\,\mathrm{km}` radius disk with a straight-line fault
+    passing through its center.
+
+    Quantiles are computed both for the prior with the supplied parameters
+    and for the "uninformed" prior (:math:`p=1`, :math:`s=n=\\nu=0`).
+
+    Parameters
+    ----------
+    Nset : array_like
+        Sample sizes :math:`\{N_i\}` for which to perform the test.
+    M : int
+        Number of repetition per sample size.
+    P_MW : float
+        Power of the anomaly.
+    x0 : float
+        Location of the first normal mixture component.
+    s0 : float
+        Standard deviation of the first normal mixture component.
+    a0 : float
+        Weight of the first normal mixture component.
+    x1 : float
+        Location of the second normal mixture component.
+    s1 : float
+        Standard deviation of the second normal mixture component.
+    quantile : array_like
+        Array of anomaly P_H posterior quantiles to evaluate. The
+        array must be either 4 or 41 elements in size.
+    PRIOR_P : float
+        Parameter :math:`p` of the gamma conjugate prior.
+    PRIOR_s : float
+        Parameter :math:`s` of the gamma conjugate prior.
+    PRIOR_N : float
+        Parameter :math:`n` of the gamma conjugate prior.
+    PRIOR_V : float
+        Parameter :math:`\\nu` of the gamma conjugate prior.
+    verbose : bool, optional
+        If :python:`True`, print some progress information.
+    show_failures : bool, optional
+        Currently without effect.
+    seed : int, optional
+        Random number generator seed for reproduciblity.
+    use_cpp_quantiles : bool, optional
+        Currently without effect.
+    tol : float, optional
+        Quantile inversion tolerance passed to the algorithms.
+
+    Returns
+    -------
+    res : numpy.ndarray
+       Quantiles of the :math:`P_H` posteriors. The array has
+       the shape :python:`(2, len(Nset), len(quantile), M)`.
     """
     cdef size_t i,l,j
 
@@ -264,6 +361,7 @@ cdef extern from "synthetic_covering.hpp" namespace "paperheatflow" nogil:
 
 
 @cython.boundscheck(False)
+@cython.embedsignature(True)
 def generate_synthetic_heat_flow_coverings_mix2(
          const double[:] k, const double[:] t, const long[:] N, long M,
          double hf_max, double w0, double x00, double s0, double x10, double s1,
@@ -272,39 +370,43 @@ def generate_synthetic_heat_flow_coverings_mix2(
     Generate synthetic heat flow coverings using a two component
     normal mixture distribution as an error distribution.
 
-    Parameters:
-       k      : Array of gamma distribution parameters `k`.
-                shape: (N,)
-                dtype: float
-       k      : Array of gamma distribution parameters `θ`.
-                shape (N,)
-                dtype: float
-       N      : Array of sample sizes to draw from the corresponding
-                gamma distributions.
-                shape: (N,)
-                dtype: float
-       M      : Number of coverings to generate.
-                type: int
-       hf_max : Threshold below which to accept heat flow values.
-                type: float
-       w0     : Weight of the first normal distribution describing
-                the error mixture distribution.
-                type: float
-       x00    : Location of the first normal distribution.
-                type: float
-       s0     : Standard deviation of the first normal distribution.
-                type: float
-       x10    : Location of the second normal distribution.
-                type: float
-       s1     : Standard deviation of the second normal distribution.
-                type: float
-       seed   : Seed by which to initialize the random number generation.
-                type:  int
-       nthread: Number of threads to use. In combination with seed, this
-                fixes the sequence of random number generation used in this
-                run. Keep both values the same to obtain reproducible
-                results.
-                type: int
+    Parameters
+    ----------
+    k : array_like
+        :python:`M` gamma distribution shape parameters :math:`k`.
+    t : array_like
+        :python:`M` gamma distribution scale parameters
+        :math:`\\theta`.
+    N : array_like
+        :code:`M` sample sizes to draw from the corresponding
+        gamma distributions.
+    M : int
+        Number of RGRDCs to draw.
+    hf_max : float
+        Threshold below which to accept heat flow values.
+    w0 : float
+        Weight of the first normal distribution describing the
+        error mixture distribution.
+    x00 : float
+        Location of the first normal distribution.
+    s0 : float
+        Standard deviation of the first normal distribution.
+    x10 : float
+        Location of the second normal distribution.
+    s1 : float
+        Standard deviation of the second normal distribution.
+    seed : int
+        Seed by which to initialize the random number generation.
+    nthread : int
+        Number of threads to use. In combination with seed, this
+        fixes the sequence of random number generation used in this
+        run. Keep both values the same to obtain reproducible
+        results.
+
+    Returns
+    -------
+    res : list[list]
+       List of lists distributions forming the RGRDCs.
     """
     cdef size_t n = k.size
     if k.size != t.size:
@@ -345,6 +447,7 @@ def generate_synthetic_heat_flow_coverings_mix2(
 
 
 @cython.boundscheck(False)
+@cython.embedsignature(True)
 def generate_synthetic_heat_flow_coverings_mix3(
          list k, list t, list N,
          double hf_max,
@@ -356,46 +459,49 @@ def generate_synthetic_heat_flow_coverings_mix3(
     Generate synthetic heat flow coverings using a three component
     normal mixture distribution as an error distribution.
 
-    Parameters:
-       k      : Array of gamma distribution parameters `k`.
-                shape: (N,)
-                dtype: float
-       k      : Array of gamma distribution parameters `θ`.
-                shape (N,)
-                dtype: float
-       N      : Array of sample sizes to draw from the corresponding
-                gamma distributions.
-                shape: (N,)
-                dtype: float
-       M      : Number of coverings to generate.
-                type: int
-       hf_max : Threshold below which to accept heat flow values.
-                type: float
-       w0     : Weight of the first normal distribution describing
-                the error mixture distribution.
-                type: float
-       x00    : Location of the first normal distribution.
-                type: float
-       s0     : Standard deviation of the first normal distribution.
-                type: float
-       w1     : Weight of the second normal distribution describing
-                the error mixture distribution.
-                type: float
-       x10    : Location of the second normal distribution.
-                type: float
-       s1     : Standard deviation of the second normal distribution.
-                type: float
-       x20    : Location of the third normal distribution.
-                type: float
-       s2     : Standard deviation of the third normal distribution.
-                type: float
-       seed   : Seed by which to initialize the random number generation.
-                type:  int
-       nthread: Number of threads to use. In combination with seed, this
-                fixes the sequence of random number generation used in this
-                run. Keep both values the same to obtain reproducible
-                results.
-                type: int
+    Parameters
+    ----------
+    k : list[array_like]
+        :math:`M` arrays of gamma distribution shape parameters
+        :math:`k`.
+    t : list
+        :math:`M` arrays of gamma distribution scale parameters
+        :math:`\\theta`.
+    N : list
+        :math:`M` arrays of sample sizes to draw from the
+        corresponding gamma distributions.
+    hf_max : float
+        Threshold below which to accept heat flow values.
+    w0 : float
+        Weight of the first normal distribution describing the
+        error mixture distribution.
+    x00 : float
+        Location of the first normal distribution.
+    s0 : float
+        Standard deviation of the first normal distribution.
+    w1 : float
+        Weight of the second normal distribution describing
+        the error mixture distribution.
+    x10 : float
+        Location of the second normal distribution.
+    s1 : float
+        Standard deviation of the second normal distribution.
+    x20 : float
+        Location of the third normal distribution.
+    s2 : float
+        Standard deviation of the third normal distribution.
+    seed : int
+        Seed by which to initialize the random number generation.
+    nthread : int
+        Number of threads to use. In combination with seed, this
+        fixes the sequence of random number generation used in this
+        run. Keep both values the same to obtain reproducible
+        results.
+
+    Returns
+    -------
+    res : list[list]
+       List of lists of distributions forming the RGRDCs.
     """
 
     cdef size_t M = len(k)
@@ -457,6 +563,7 @@ def generate_synthetic_heat_flow_coverings_mix3(
     return res
 
 @cython.boundscheck(False)
+@cython.embedsignature(True)
 def generate_normal_mixture_errors_3(size_t N,
          double w0, double x00, double s0,
          double w1, double x10, double s1,
@@ -464,6 +571,34 @@ def generate_normal_mixture_errors_3(size_t N,
     """
     Draw random numbers from the three-component normal mixture
     distribution.
+
+    Parameters
+    ----------
+    N : int
+        Number of random numbers to generate.
+    w0 : float
+        Weight of the first mixture component.
+    x00 : float
+        Center of the first mixture component.
+    s0 : float
+        Standard deviation of the first mixture component.
+    w1 : float
+        Weight of the second mixture component.
+    x10 : float
+        Center of the second mixture component.
+    s1 : float
+        Standard deviation of the second mixture component.
+    x20 : float
+        Center of the third mixture component.
+    s2 : float
+        Standard deviation of the third mixture component.
+    seed : int
+        Random number generator seed for reproducibility.
+
+    Returns
+    -------
+    X : numpy.ndarray
+        Random values.
     """
     cdef size_t i
     cdef double[::1] X = np.empty(N)

@@ -71,11 +71,6 @@ cdef extern from "ziebarth2022a.hpp" namespace "pdtoolbox::heatflow" nogil:
                                 double p, double s, double n, double nu,
                                 double dest_tol)
 
-#    void posterior_silent(const double* x, double* res, size_t Nx,
-#                          const double* qi, const double* ci, size_t N,
-#                          double p, double s, double n, double nu,
-#                          double dest_tol, posterior_t type);
-
     void tail_quantiles(const double* quantiles, double* res,
                         const size_t Nquant, const double* qi, const double* ci,
                         const size_t N, const double p, const double s,

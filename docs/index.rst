@@ -3,8 +3,12 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to REHEATFUNQ's documentation!
-======================================
+REHEATFUNQ
+==========
+
+REHEATFUNQ is a Python package for the analysis of regional aggregate heat
+flow distributions, and the quantification of heat flow anomalies superposing
+data drawn from these distributions.
 
 .. toctree::
    :maxdepth: 3

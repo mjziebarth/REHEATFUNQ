@@ -17,8 +17,10 @@ The function :py:func:`read_nghf` can be used as follows:
 
    from reheatfunq.data import read_nghf
 
-   nghf_lon, nghf_lat, nghf_hf, nghf_quality, nghf_yr, nghf_type, \
-   nghf_max_depth, nghf_uncertainty, indexmap \
+   nghf_file = 'path/to/NGHF.csv'
+
+   nghf_lon, nghf_lat, nghf_hf, nghf_quality, nghf_yr, \
+   nghf_type, nghf_max_depth, nghf_uncertainty, indexmap \
       = read_nghf(nghf_file)
 
 

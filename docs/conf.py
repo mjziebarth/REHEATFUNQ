@@ -18,6 +18,7 @@ extensions = ['sphinx.ext.autodoc',
 ]
 
 autodoc_typehints = "none"
+add_module_names = False
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
@@ -29,3 +30,9 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 html_theme = 'alabaster'
 html_static_path = ['_static']
+html_css_files = [
+    'css/custom.css',
+]
+html_theme_options = {
+    "sidebar_width" : "7cm",
+}

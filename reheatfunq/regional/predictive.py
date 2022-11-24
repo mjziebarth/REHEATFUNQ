@@ -32,6 +32,25 @@ class HeatFlowPredictive:
     Posterior predictive distribution of regional heat flow taking
     into account spatial constraints (i.e. minimum distance) of the
     heat flow values.
+
+    Parameters
+    ----------
+    q : array_like
+        Regional distribution of :math:`N` heat flow values. Has
+        to have the unit that the
+        gamma conjugate prior :python:`gcp` is optimized for.
+    x : array_like
+        :math:`x` coordinates of the heat flow values.
+    y : array_like
+        :math:`y` coordinates of the heat flow values.
+    gcp : reheatfunq.regional.GammaConjugatePrior
+        Gamma conjugate prior.
+    dmin : float, optional
+        Minimum distance to be enforced between heat flow values of
+        one independent sample (in m).
+    n_bootstrap : int, optional
+        Number of randomized selections of :python:`q` subsets
+        adhering to the :math:`d_\\mathrm{min}` criterion.
     """
 
     def __init__(self,
@@ -95,6 +114,27 @@ class HeatFlowPredictive:
             epsrel: float = 1e-10):
         """
         Computes the cumulative distribution function.
+
+        Parameters
+        ----------
+        q : array_like
+            Heat flow :math:`q` at which to evaluate the CDF.
+        batch_size : int, optional
+            Size of the batches in which to perform the
+            :python:`n_bootstrap` randomized subselection
+            evaluations.
+        epsabs : float, optional
+            Absolute tolerance parameter passed to the
+            quadrature engines.
+        epsrel : float, optional
+            Relative tolerance parameter passed to the
+            quadrature engines.
+
+        Returns
+        -------
+        cdf : array_like
+           Posterior predictive cumulative distribution of
+           regional heat flow.
         """
         # Make sure that q is C-contiguous:
         q = np.ascontiguousarray(q)
@@ -124,7 +164,28 @@ class HeatFlowPredictive:
     def pdf(self, q: ArrayLike, batch_size: int = 100, epsabs: float = 0.0,
             epsrel: float = 1e-10):
         """
-        Computes the cumulative distribution function.
+        Computes the probability distribution function.
+
+        Parameters
+        ----------
+        q : array_like
+            Heat flow :math:`q` at which to evaluate the CDF.
+        batch_size : int, optional
+            Size of the batches in which to perform the
+            :python:`n_bootstrap` randomized subselection
+            evaluations.
+        epsabs : float, optional
+            Absolute tolerance parameter passed to the
+            quadrature engines.
+        epsrel : float, optional
+            Relative tolerance parameter passed to the
+            quadrature engines.
+
+        Returns
+        -------
+        pdf : array_like
+           Posterior predictive probability distribution of
+           regional heat flow.
         """
         # Make sure that q is C-contiguous:
         q = np.ascontiguousarray(q)

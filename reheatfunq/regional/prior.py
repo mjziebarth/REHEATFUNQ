@@ -37,7 +37,31 @@ from .backend import gamma_conjugate_prior_logL, \
 
 class GammaConjugatePrior:
     """
-    Gamma conjugate prior.
+    Gamma conjugate prior by Miller [Miller1980]_.
+
+    Parameters
+    ----------
+    p : float | None
+        The parameter :math:`p` of the gamma conjugate prior.
+        Can be seen as the initial product of heat flow values.
+        Alternatively, :math:`\ln p` can be specified through
+        the :code:`lp` parameter when passing :code:`None` as
+        argument for :code:`p`..
+    s : float
+        The parameter :math:`s` of the gamma conjugate prior.
+        Can be seen as the initial sum of heat flow values.
+    n : float
+        The parameter :math:`n` of the gamma conjugate prior.
+        For normalization, :math:`n \geq v` needs to be fulfilled.
+    v : float
+        The parameter :math:`v` of the gamma conjugate prior.
+        For normalization, :math:`n \geq v` needs to be fulfilled.
+    lp : float | None
+        The natural logarithm of the parameter :math:`p`. An
+        alternative way to specify :math:`p`.
+    amin : float
+        The minimum :math:`\\alpha` for which the prior is defined.
+        Has to be non-negative.
     """
     lp : float
     s : float
@@ -65,7 +89,24 @@ class GammaConjugatePrior:
 
     def updated(self, q: ArrayLike):
         """
-        Perform a Bayesian update.
+        Perform a Bayesian update given a heat flow data set.
+
+        Parameters
+        ----------
+        q : array_like
+            Set of heat flow values.
+
+        Returns
+        -------
+        gcp : GammaConjugatePrior
+           An updated prior.
+
+        Notes
+        -----
+        The prior is agnostic to the physical unit of the heat
+        flow values. However, to remain consistent, all successive
+        updates and the posterior predictive have to be performed
+        with the same heat flow unit.
         """
         q = np.array(q, copy=True)
         s  = self.s + q.sum()
@@ -77,7 +118,23 @@ class GammaConjugatePrior:
 
     def log_likelihood(self, a: ArrayLike, b: ArrayLike) -> float:
         """
-        Evaluate the log-likelihood at a parameter point.
+        Evaluate the log-likelihood given a set of gamma parameters
+        :math:`\{(\\alpha_i, \\beta_i) : i = 1,...,N\}`.
+
+        Parameters
+        ----------
+        a : array_like
+            Set of gamma distribution shape parameters :math:`a`.
+            Has to be of the same shape as :code:`b`.
+        b : array_like
+            Set of gamma distribution scale parameters :math:`b`.
+            Has to be of the same shape as :code:`a`.
+
+        Returns
+        -------
+        p : array_like
+           The logarithm of the evaluated prior probability of the
+           parameter pairs :math:`\{(\\alpha_i, \\beta_i)\}`.
         """
         return gamma_conjugate_prior_logL(a, b, self.lp, self.s, self.n, self.v,
                                           self.amin)
@@ -86,6 +143,21 @@ class GammaConjugatePrior:
     def log_probability(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
         """
         Evaluate the logarithm of the probability at parameter points.
+
+        Parameters
+        ----------
+        a : array_like
+            Set of gamma distribution shape parameters :math:`a`.
+            Has to be of the same shape as :code:`b`.
+        b : array_like
+            Set of gamma distribution scale parameters :math:`b`.
+            Has to be of the same shape as :code:`a`.
+
+        Returns
+        -------
+        p : array_like
+           The logarithm of the evaluated prior probability of the
+           parameter pairs :math:`\{(\\alpha_i, \\beta_i)\}`.
         """
         return gamma_conjugate_prior_bulk_log_p(a, b, self.lp, self.s, self.n,
                                                 self.v, self.amin)
@@ -94,6 +166,21 @@ class GammaConjugatePrior:
     def probability(self, a: ArrayLike, b: ArrayLike) -> ArrayLike:
         """
         Evaluate the probability at parameter points.
+
+        Parameters
+        ----------
+        a : array_like
+            Set of gamma distribution shape parameters :math:`a`.
+            Has to be of the same shape as :code:`b`.
+        b : array_like
+            Set of gamma distribution scale parameters :math:`b`.
+            Has to be of the same shape as :code:`a`.
+
+        Returns
+        -------
+        p : array_like
+           The evaluated prior probability of the parameter pairs
+           :math:`\{(\\alpha_i, \\beta_i)\}`.
         """
         log_p = self.log_probability(a, b)
         return np.exp(log_p, out=log_p)
@@ -103,7 +190,27 @@ class GammaConjugatePrior:
                              inplace: bool = False) -> ArrayLike:
         """
         Evaluate the posterior predictive distribution for given heat
-        flow `q`.
+        flow data set :math:`\{q_i\}`.
+
+        Parameters
+        ----------
+        q : array_like
+            Set of heat flow values.
+        inplace : bool, optional
+            If :python:`True`, overwrite the input array. Works only
+            if the input is a :python:`numpy.ndarray` instance.
+
+        Returns
+        -------
+        pdf : array_like
+           The evaluated posterior predictive PDF of heat flow.
+
+        Notes
+        -----
+        The prior is agnostic to the physical unit of the heat
+        flow values. However, to remain consistent, the posterior
+        predictive and all successive Bayesian updates have to be
+        performed with the same heat flow unit.
         """
         return gamma_conjugate_prior_predictive(q, self.lp, self.s, self.n,
                                                 self.v, self.amin, inplace)
@@ -113,7 +220,27 @@ class GammaConjugatePrior:
                                  inplace: bool = False) -> ArrayLike:
         """
         Evaluate the posterior predictive distribution for given heat
-        flow `q`.
+        flow data set :math:`\{q_i\}`.
+
+        Parameters
+        ----------
+        q : array_like
+            Set of heat flow values.
+        inplace : bool, optional
+            If :python:`True`, overwrite the input array. Works only
+            if the input is a :code:`numpy.ndarray` instance.
+
+        Returns
+        -------
+        cdf : array_like
+           The evaluated posterior predictive CDF of heat flow.
+
+        Notes
+        -----
+        The prior is agnostic to the physical unit of the heat
+        flow values. However, to remain consistent, the posterior
+        predictive and all successive Bayesian updates have to be
+        performed with the same heat flow unit.
         """
         q = np.ascontiguousarray(q)
         return gamma_conjugate_prior_predictive_cdf(q, self.lp, self.s, self.n,
@@ -124,6 +251,17 @@ class GammaConjugatePrior:
         """
         Compute the Kullback-Leibler divergence to another gamma
         conjugate prior.
+
+        Parameters
+        ----------
+        other : GammaConjugatePrior
+            Another gamma conjugate prior.
+
+        Returns
+        -------
+        KL : float
+           The Kullback-Leibler divergence from this reference
+           prior PDF to ther :code:`other` PDF.
         """
         return gamma_conjugate_prior_kullback_leibler(other.lp, other.s,
                                                       other.n, other.v,
@@ -141,7 +279,42 @@ class GammaConjugatePrior:
                                     epsrel: float = 1e-10
         ) -> GammaConjugatePrior:
         """
-        Compute the maximum likelihood estimate.
+        Compute the maximum likelihood estimate of the gamma conjugate
+        prior (GCP) given a set of gamma distribution parameters
+        :math:`\{(\\alpha_i, \\beta_i) : i = 1,...,N\}`.
+
+        Parameters
+        ----------
+        a : array_like
+            Set of gamma distribution shape parameters :math:`a`.
+            Has to be of the same shape as :code:`b`.
+        b : array_like
+            Set of gamma distribution scale parameters :math:`b`.
+            Has to be of the same shape as :code:`a`.
+        p0 : float, optional
+            Initial guess for the GCP parameter :math:`p`.
+        s0 : float, optional
+            Initial guess for the GCP parameter :math:`s`.
+        n0 : float, optional
+            Initial guess for the GCP parameter :math:`n`.
+        v0 : float, optional
+            Initial guess for the GCP parameter :math:`v`.
+        nv_surplus_min : float, optional
+            Ensures that :python:`n >= v * (1 + nv_surplus_min)`.
+        amin : float, optional
+            The minimum :math:`\\alpha` for which the prior is defined.
+            Has to be non-negative.
+        epsabs : float, optional
+            Absolute tolerance parameter passed to the optimization
+            algorithm.
+        epsrel : float, optional
+            Relative tolerance parameter passed to the optimization
+            algorithm.
+
+        Returns
+        -------
+        gcp : GammaConjugatePrior
+           The gamma conjugate prior with optimized parameters.
         """
         a = np.ascontiguousarray(a)
         b = np.ascontiguousarray(b)
@@ -161,13 +334,48 @@ class GammaConjugatePrior:
                                   nv_surplus_min: float = 1e-8,
                                   nv_surplus_max: float = 2.0,
                                   amin: float = 1.0,
-                                  epsabs: float = 0.0, epsrel: float = 1e-10,
                                   verbose: bool = False
         ) -> GammaConjugatePrior:
         """
-        Compute the estimate that minimizes the maximum Kullback-Leibler
-        divergence between then conjugate prior and any of the likelihoods
+        Compute the parameter estimate of the gamma conjugate prior (GCP)
+        that minimizes the maximum Kullback-Leibler divergence between
+        the GCP and any of the gamma distribution likelihood computed over
+        a set of heat flow data sets.
 
+        Parameters
+        ----------
+        hf_samples : list[array_like]
+            A set of heat flow data sets.
+        pmin : float, optional
+            Minimum value for the GCP :math:`p` parameter.
+        pmax : float, optional
+            Maximum value for the GCP :math:`p` parameter.
+        smin : float, optional
+            Minimum value for the GCP :math:`s` parameter.
+        smax : float, optional
+            Maximum value for the GCP :math:`s` parameter.
+        vmin : float, optional
+            Minimum value for the GCP :math:`v` parameter.
+        vmax : float, optional
+            Maximum value for the GCP :math:`v` parameter.
+        nv_surplus_min : float, optional
+            Lower bound for the GCP :math:`n` parameter depending on the
+            :math:`v` parameter. Ensures that
+            :python:`n >= v * (1 + nv_surplus_min)`.
+        nv_surplus_max : float, optional
+            Upper bound for the GCP :math:`n` parameter depending on the
+            :math:`v` parameter. Ensures that
+            :python:`n <= v * (1 + nv_surplus_max)`.
+        amin : float, optional
+            The minimum :math:`\\alpha` for which the prior is defined.
+            Has to be non-negative.
+        verbose : bool, optional
+            If :code:`True`, print some additional progress information.
+
+        Returns
+        -------
+        gcp : GammaConjugatePrior
+           The gamma conjugate prior with optimized parameters.
         """
         # Sanity:
         qset = [np.ascontiguousarray(q) for q in hf_samples]
@@ -251,7 +459,7 @@ class GammaConjugatePrior:
         cax : matplotlib.axes.Axes, optional
            The :class:`matplotlib.axes.Axes` for plotting a color bar.
         log_axes : bool, optional
-           If **True**, set the axes scale to logarithmic, else use
+           If :python:`True`, set the axes scale to logarithmic, else use
            linear axes.
         cmap : str or matplotlib.colors.Colormap, optional
            Which color map to use for the background probability
@@ -400,6 +608,10 @@ def default_prior() -> GammaConjugatePrior:
     model description paper (Ziebarth *et al.*, 2022a).
 
     Ziebarth, M. J. and ....
+
+    Notes
+    -----
+    This prior is designed for heat flow data in mW/m².
     """
     return GammaConjugatePrior(p = 2.522017292522833465,
                                s = 15.37301672440559130,

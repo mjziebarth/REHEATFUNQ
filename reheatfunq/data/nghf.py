@@ -25,6 +25,43 @@ from csv import reader
 def read_nghf(f):
     """
     This function reads the NGHF data base.
+
+    Parameters
+    ----------
+    f : str | pathlib.Path
+        The file path to the ``NGHF.csv`` file of Lucazeau [L2019]_.
+
+    Returns
+    -------
+    nghf_lon : list
+       Longitudes of the data points. This field is mandatory.
+    nghf_lat : list
+       Latitudes of the data points. This field is mandatory.
+    nghf_hf : list
+       Heat flow of the data points in :math:`\mathrm{mWm}^{-2}`.
+       This field is mandatory.
+    nghf_quality : list
+       Quality of the data points. If defined, one of 'A', 'B', 'C',
+       'D' or 'Z'.
+    nghf_yr : list
+       Measurement year of the data points. This field is
+       mandatory.
+    nghf_type : list
+       Whether the heat flow data point is continental or oceanic.
+       If defined, one of 'land' or 'ocean'. This field is
+       mandatory.
+    nghf_max_depth : list
+       Maximum depth used in estimating the temperature gradient.
+       If the field is empty, returns -9999999.
+    nghf_uncertainty : list
+       Relative uncertainty of the data points. Returns 0.1 for
+       'A' quality, 0.2 for 'B' quality, 0.3 for 'C' quality,
+       and infinity otherwise.
+    indexmap : dict
+       Maps indices within the returned arrays to lines in the
+       ``NGHF.csv`` table. If :code:`i` was an index within the
+       returned arrays, then :code:`j = indexmap[i]` is the row
+       within the NGHF table.
     """
     # Create the data containers:
     nghf_names = []

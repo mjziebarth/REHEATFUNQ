@@ -44,8 +44,9 @@ from this data:
 
 .. code :: python
 
-   from reheatfunq.regional import (GammaConjugatePrior, default_prior,
-                                 HeatFlowPredictive)
+   from reheatfunq.regional import (GammaConjugatePrior,
+                                    default_prior,
+                                    HeatFlowPredictive)
    gcp = default_prior()
    predictive = HeatFlowPredictive(q, x, y, gcp, dmin=20e3)
 
@@ -68,12 +69,16 @@ be found in the Jupyter notebook
 
 |
 
+.. role:: python(code)
+   :language: python
+
 .. autoclass:: reheatfunq.regional.GammaConjugatePrior
    :members:
 
 |
 
 .. autoclass:: reheatfunq.regional.HeatFlowPredictive
+   :members:
 
 |
 

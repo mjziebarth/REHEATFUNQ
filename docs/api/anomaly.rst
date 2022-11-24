@@ -9,7 +9,7 @@ Anomaly quantification
 
 The :mod:`reheatfunq.anomaly` module contains functionality to analyze the
 strength of heat flow anomalies using the
-:class:`reheatfunq.regional.GammaConjugatePrior` model of regional aggregate
+:class:`~reheatfunq.regional.GammaConjugatePrior` model of regional aggregate
 heat flow distributions. The module contains the workhorse
 :py:class:`HeatFlowAnomalyPosterior` for Bayesian heat flow anomaly strength
 quantification and :py:class:`AnomalyLS1980` class to model a fault-generated
@@ -19,8 +19,10 @@ following steps:
 
 1. Define the :math:`d_\mathrm{min}`
    (e.g. :math:`{d_\mathrm{min} = 20\,\mathrm{km}}`)
-2. Define the conjugate prior to use. Obtain a :py:class:`GammaConjugatePrior`
-   instance (e.g. using the REHEATFUNQ default from :py:func:`default_prior`).
+2. Define the conjugate prior to use. Obtain a
+   :py:class:`~reheatfunq.regional.GammaConjugatePrior`
+   instance (e.g. using the REHEATFUNQ default from
+   :py:func:`~reheatfunq.regional.default_prior`).
 3. Model the fault-generated heat flow anomaly. So far, the
    :py:class:`AnomalyLS1980` is available for this purpose.
 4. Compute the marginal posterior in :math:`P_H` using the
@@ -83,10 +85,35 @@ notebook
 
 |
 
+.. role:: python(code)
+   :language: python
+
 .. autoclass:: reheatfunq.anomaly.HeatFlowAnomalyPosterior
    :members:
 
 |
 
+.. autoclass:: reheatfunq.anomaly.anomaly.Anomaly
+   :members:
+
+   .. method:: __call__(xy, P_H = 1.0)
+
+      Evaluate the heat flow anomaly at a set of points for
+      a given heat-generating power :python:`P_H`.
+
+      :param double[:,:] xy: Locations at which to evaluate the
+                             heat flow anomaly.
+      :param float P_H: The heat-generating power (in W).
+      :return: The anomalous heat flow evaluated at the locations,
+               :math:`\{\Delta q_i\} = \{c_i P_H \}`.
+      :rtype: :class:`numpy.ndarray`
+
+|
+
 .. autoclass:: reheatfunq.anomaly.AnomalyLS1980
    :members:
+   :show-inheritance:
+
+   .. method:: __call__(xy, P_H = 1.0)
+
+      See :class:`~reheatfunq.anomaly.anomaly.Anomaly`.

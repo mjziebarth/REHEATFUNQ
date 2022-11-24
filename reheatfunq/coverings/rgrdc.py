@@ -39,6 +39,81 @@ def random_global_R_disk_coverings(R: float, min_points: int, hf: ArrayLike,
     """
     Uses rejection sampling to draw a number of exclusive regional
     distributions.
+
+    Parameters
+    ----------
+    R : float
+        Radius :math:`R` of the RGRDC (in m).
+    min_points : int
+        Minimum number of points within a distribution after all
+        other conditions are met. If the number of data points is
+        less, the proposed disk is rejected.
+    hf : array_like
+        Array of heat flow data points of shape :python:`(N,3)`,
+        where :python:`N` is the number of data points. The second
+        dimension must contain a tuple
+        :math:`(q_i, \\lambda_i, \\phi_i)` for each data point,
+        where :math:`q_i` is the heat flow, :math:`\\lambda_i`
+        the longitude in degrees, and :math:`\\phi_i` the latitude
+        in degrees.
+    buffered_poly_xy : list[array_like]
+        List of polygons which will reject disks if their centers
+        fall within one of the polygons. Each element of the list
+        must be a :python:`(M[i],2)`-shaped numpy array where
+        :math:`M[i]` is the number of points composing the `i` th
+        polygon and the second dimension iterates the coordinates
+        :math:`x` and :math:`y`. The coordinates are interpreted
+        within the coordinate system described by the
+        :python:`proj_str` parameter.
+    proj_str : str
+        A PROJ string describing a projected coordinate system
+        within which the polygons supplied in the
+        :python:`buffered_poly_xy` parameter are interpreted.
+    N : int, optional
+        Target number of accepted disks. Might not be reached
+        but can lead to an early exit. The default is high enough
+        that likely :python:`MAX_DRAW` is saturated before.
+    MAX_DRAW : int, optional
+        Maximum number of disk centers to generate. Might not
+        be reached if :python:`N` is small.
+    dmin : float, optional
+        Minimum inter-point distance for the conforming
+        selection criterion (in m).
+    seed : int, optional
+        Seed passed to :py:func:`np.random.default_rng`.
+    used_points : list[int], optional
+        A list of data point indices that can be marked as used
+        *a priori*.
+    a : float, optional
+        Large half axis of the sphere used. This parameter
+        is used for a :py:class:`scipy.spatial.KDTree`-based
+        fast data point query before computing geodesic
+        distances between data points.
+
+    Returns
+    -------
+    valid_points : list
+       A list of :math:`v` centroids of the accepted disks.
+    used_points : set
+       A set of all points which are part of an accepted heat
+       flow distribution.
+    distributions : list
+       The list of :math:`v` distributions, each a one-dimensional
+       numpy array of sorted heat flow values.
+    lolas : list
+       The list of data point coordinates corresponding to the heat
+       flow data within :python:`distributions`. Each is a
+       two-dimensional numpy array in which the second dimension
+       iterates a tuple :math:`(\\lambda,\\phi)` of geographic
+       coordinates.
+    distribution_indices : list
+       The list of index lists of the data points used in the
+       :python:`distributions`. Each is a one-dimensional array of
+       integer indices into the input data set that compose the
+       corresponding entry of :python:`distributions`. The indices
+       :python:`distribution_indices[i]` are generally not in the
+       same order as the heat flow values in
+       :python:`distributions[i]`.
     """
     rng = np.random.default_rng(seed)
 
