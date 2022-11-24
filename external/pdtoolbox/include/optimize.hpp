@@ -1,6 +1,8 @@
 /*
  * Gradient descend for likelihood optimization.
  *
+ * Author: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
+ *
  * Copyright (C) 2021 Deutsches GeoForschungsZentrum GFZ
  *
  * This program is free software: you can redistribute it and/or modify

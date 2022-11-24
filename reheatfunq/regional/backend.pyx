@@ -1,4 +1,5 @@
-# Maximum likelihood estimators for various probability distributions.
+# Maximum likelihood estimators, log-likelihoods, Kullback-Leibler divergence,
+# PDFs & CDFs for the gamma conjugate prior and some for the gamma distribution.
 #
 # Authors: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
 #

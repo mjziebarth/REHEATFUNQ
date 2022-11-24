@@ -1,6 +1,8 @@
 /*
  * Conjugate prior of the gamma distribution due to Miller (1980).
  *
+ * Author: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
+ *
  * Copyright (C) 2021 Deutsches GeoForschungsZentrum GFZ
  *
  * This program is free software: you can redistribute it and/or modify
