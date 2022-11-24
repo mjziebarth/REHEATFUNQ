@@ -74,6 +74,19 @@ power:
 Now compute the marginalized posterior distribution of the heat-generating power
 :math:`P_H` for the data superposed with the three anomalies:
 
+.. code :: python
+
+   from reheatfunq.anomaly import HeatFlowAnomalyPosterior
+   post1 = HeatFlowAnomalyPosterior(q1, x, y, anomaly, gcp)
+   post2 = HeatFlowAnomalyPosterior(q2, x, y, anomaly, gcp)
+   post3 = HeatFlowAnomalyPosterior(q3, x, y, anomaly, gcp)
+
+   P_H = np.linspace(0, 600e6, 200)
+   pdf1 = post1.pdf(P_H)
+   pdf2 = post2.pdf(P_H)
+   pdf3 = post3.pdf(P_H)
+
+
 .. image:: ../_images/example-posterior_P_H-anomaly.svg
 
 The vertical dashed lines indicate the true anomaly powers.
