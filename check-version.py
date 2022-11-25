@@ -35,19 +35,19 @@ with open('README.md','r') as f:
                 version_readme = line[5:].split(']')[0]
                 break
 
-# Version in pyproject.toml:
+# Version in setup.py:
 version_toml = None
-with open('pyproject.toml','r') as f:
+with open('setup.py','r') as f:
     state = 0
     for line in f:
         if state == 0:
             # Find the [project] tag:
-            if line[:-1] == "[project]":
+            if line[:6] == "setup(":
                 state = 1
         elif state == 1:
             stripped = line.strip()
-            if stripped[:10] == "version = ":
-                quote = stripped[10]
+            if stripped[:8] == "version=":
+                quote = stripped[8]
                 version_toml = stripped.split(quote)[1]
                 break
 
