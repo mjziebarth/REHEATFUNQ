@@ -78,5 +78,4 @@ if version_readme != version_sphinx:
                        "differ.")
 
 print("All three versions agree:", version_readme)
-Footer
 
