@@ -13,7 +13,7 @@ CMAKE_VERSION_REDUX=$MAJOR.$MINOR
 echo $CMAKE_VERSION_REDUX
 
 # Find the relevant directory:
-if [ -d /usr/share/cmake-$(CMAKE_VERSION_REDUX) ]; then
+if [ -d /usr/share/cmake-$CMAKE_VERSION_REDUX ]; then
     ln -s /usr/share/cmake/geographiclib/FindGeographicLib.cmake \
-          /usr/share/cmake-$(CMAKE_VERSION_REDUX)/Modules/
+          /usr/share/cmake-$CMAKE_VERSION_REDUX/Modules/
 fi
