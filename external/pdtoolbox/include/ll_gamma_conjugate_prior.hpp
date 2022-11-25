@@ -1,6 +1,8 @@
 /*
  * Conjugate prior of the gamma distribution due to Miller (1980).
  *
+ * Author: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
+ *
  * Copyright (C) 2021 Deutsches GeoForschungsZentrum GFZ
  *
  * This program is free software: you can redistribute it and/or modify
@@ -24,15 +26,18 @@
 
 #include <vector>
 #include <array>
-#include <matrix.hpp>
 #include <memory>
+#include <eigenwrap.hpp>
 #include <ll_cache.hpp>
+#include <gamma_conjugate_prior.hpp>
 
 namespace pdtoolbox {
 
-class GammaConjugatePriorLogLikelihood
+class GammaConjugatePriorLogLikelihood : public GammaConjugatePriorBase
 {
 	public:
+		typedef std::integral_constant<uint_fast8_t,4> nparams;
+
 		struct ab_t {
 			double a;
 			double b;
@@ -43,78 +48,56 @@ class GammaConjugatePriorLogLikelihood
 		GammaConjugatePriorLogLikelihood(double p, double s, double n,
 		                                 double v, const double* a,
 		                                 const double* b, size_t Nab,
-		                                 const double* w, size_t Nw,
 		                                 double nv_surplus_min=1e-3,
-		                                 double vmin = 0.1, double epsabs=0,
-		                                 double epsrel=1e-10);
+		                                 double vmin = 0.1, double amin = 1.0,
+		                                 double epsabs=0, double epsrel=1e-10);
 
 		GammaConjugatePriorLogLikelihood(double p, double s, double n,
 		                                 double v, const std::vector<ab_t>& ab,
-		                                 const std::vector<double>& w
-		                                       = std::vector<double>(),
 		                                 double nv_surplus_min=1e-3,
-		                                 double vmin = 0.1, double epsabs=0,
-		                                 double epsrel=1e-10);
+		                                 double vmin = 0.1, double amin = 1.0,
+		                                 double epsabs=0, double epsrel=1e-10);
 
 		/* Create a unique ptr (for Cython): */
 		static std::unique_ptr<GammaConjugatePriorLogLikelihood>
 		    make_unique(double p, double s, double n, double v,
 			            const double* a, const double* b, size_t Nab,
-			            const double* w, size_t Nw,
 			            double nv_surplus_min=1e-3, double vmin = 0.1,
-			            double epsabs=0, double epsrel = 1e-10);
+			            double amin = 1.0, double epsabs=0,
+			            double epsrel = 1e-10);
 
 		/*
 		 * (2) The optimization interface:
 		 */
 		double operator()() const;
 
-		Vector<D4> gradient() const;
-
-		ColumnSpecifiedMatrix<D4> jacobian() const;
+		ColumnVector gradient() const;
 
 		constexpr static bool use_hessian = true;
 		constexpr static bool boundary_traversal = true;
 
-		SquareMatrix<D4> hessian() const;
+		SquareMatrix hessian() const;
 
-		Vector<D4> parameters() const;
+		ColumnVector parameters() const;
 
-		Vector<D4> lower_bound() const;
+		ColumnVector lower_bound() const;
 
-		Vector<D4> upper_bound() const;
+		ColumnVector upper_bound() const;
 
-		void update(const Vector<D4>&);
+		void update(const ColumnVector&);
 
 		void optimize();
 
 		size_t data_count() const;
 
-		/*
-		 * (3) Named arameter access:
-		 */
-		double p() const;
-		double s() const;
-		double n() const;
-		double v() const;
-
-		/*
-		 * (4) Static methods:
-		 */
-		static double ln_Phi(double lp, double ls, double n, double v,
-		                     double epsabs, double epsrel=1e-10,
-		                     size_t workspace_size=200);
-
 	private:
 		constexpr static double delta = 1e-5;
 		const double nv_surplus_min;
 		const double vmin;
-		const double epsrel, epsabs;
-		double lp, p_, ls, s_, v_, nv, n_;
-		double lPhi, albsum, lbsum, asum, bsum, lgasum;
+		double nv;
+		double albsum, lbsum, asum, bsum, lgasum;
 		double forward[4], backward[4];
 		double fw_lp_ls, fw_lp_nv, fw_lp_v, fw_ls_nv, fw_ls_v, fw_nv_v;
-		const std::vector<double> w;
 		const std::vector<ab_t> ab;
 		const double W;
 
@@ -133,7 +116,7 @@ class GammaConjugatePriorLogLikelihood
 		integrals_t integrals() const;
 
 		integrals_t _ints;
-		LinearCache<D4, integrals_t, 3> integrals_cache;
+		LinearCache<integrals_t, 3> integrals_cache;
 
 };
 

@@ -1,6 +1,8 @@
 /*
  * Cache for log-likelihood computations.
  *
+ * Author: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
+ *
  * Copyright (C) 2021 Deutsches GeoForschungsZentrum GFZ
  *
  * This program is free software: you can redistribute it and/or modify
@@ -22,42 +24,42 @@
 
 #include <array>
 #include <algorithm>
-#include <vector.hpp>
+#include <eigenwrap.hpp>
 
 namespace pdtoolbox {
 
 
-template<typename D, typename T, unsigned int size>
+template<typename T, unsigned int size>
 class LinearCache
 {
 	public:
-		typedef std::array<T, size>::const_iterator iterator;
+		typedef typename std::array<T, size>::const_iterator iterator;
 
 		LinearCache();
 
-		iterator find(const Vector<D>& param);
+		iterator find(const ColumnVector& param);
 
 		iterator end() const;
 
-		void put(const Vector<D>& param, const T& val);
+		void put(const ColumnVector& param, const T& val);
 
 	private:
 		unsigned int circular_index;
-		std::array<Vector<D>, size> keys;
-		std::array<Vector<D>, size>::const_iterator last_key;
+		std::array<ColumnVector, size> keys;
+		typename std::array<ColumnVector, size>::const_iterator last_key;
 		std::array<T,size> values;
 };
 
 
-template<typename D, typename T, unsigned int size>
-LinearCache<D,T,size>::LinearCache() : circular_index(0),
+template<typename T, unsigned int size>
+LinearCache<T,size>::LinearCache() : circular_index(0),
     last_key(keys.cbegin())
 {}
 
 
-template<typename D, typename T, unsigned int size>
-LinearCache<D,T,size>::iterator
-LinearCache<D,T,size>::find(const Vector<D>& param)
+template<typename T, unsigned int size>
+typename LinearCache<T,size>::iterator
+LinearCache<T,size>::find(const ColumnVector& param)
 {
 	/* Obtain the index (its value is <size>, when nothing is found): */
 	size_t index = (std::find(keys.cbegin(), last_key, param) - keys.cbegin());
@@ -69,9 +71,9 @@ LinearCache<D,T,size>::find(const Vector<D>& param)
 	return values.begin() + index;
 }
 
-template<typename D, typename T, unsigned int size>
-LinearCache<D,T,size>::iterator
-LinearCache<D,T,size>::end() const
+template<typename T, unsigned int size>
+typename LinearCache<T,size>::iterator
+LinearCache<T,size>::end() const
 {
 	if (last_key == keys.cend())
 		return values.cend();
@@ -79,8 +81,8 @@ LinearCache<D,T,size>::end() const
 	return values.cbegin() + (last_key - keys.cbegin());
 }
 
-template<typename D, typename T, unsigned int size>
-void LinearCache<D,T,size>::put(const Vector<D>& param, const T& val)
+template<typename T, unsigned int size>
+void LinearCache<T,size>::put(const ColumnVector& param, const T& val)
 {
 	/* Check whether the key is already in the cache: */
 	auto it = std::find(keys.cbegin(), last_key, param);

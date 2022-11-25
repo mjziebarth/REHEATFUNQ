@@ -1,0 +1,19 @@
+.method {
+    padding-bottom: 15pt;
+    padding-top: 15pt;
+}
+
+.class {
+    padding-bottom: 10pt;
+    background-color: #f5f5f5;
+}
+
+.function {
+    padding-bottom: 10pt;
+    background-color: #f5f5f5;
+}
+
+.sphinxsidebarwrapper {
+    overflow-x: scroll;
+}
+
