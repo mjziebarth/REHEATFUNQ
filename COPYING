@@ -1,0 +1,30 @@
+REHEATFUNQ: A Python module for regional aggregate heat flow analysis and
+the quantification of heat flow anomalies and their uncertainty.
+=========================================================================
+
+LICENSE:
+
+GNU General Public License, Version 3, 29 June 2007
+
+Copyright © 2021-2022 Helmholtz Centre Potsdam GFZ German Research Centre for
+                      Geosciences, Potsdam, Germany
+                 2022 Malte J. Ziebarth (contributions after June, 2022)
+
+REHEATFUNQ is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. REHEATFUNQ is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE.
+See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <http://www.gnu.org/licenses/>.
+
+=======================================================
+
+CITATION:
+(This is TODO)
+Ziebarth, M. J. (202x): The REHEATFUNQ Python package for regional aggregate
+heat flow analysis and the quantification of heat flow anomalies.
+GFZ Data Services. https://doi.org/XXX
