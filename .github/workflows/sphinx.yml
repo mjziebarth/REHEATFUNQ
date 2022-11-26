@@ -20,16 +20,20 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v3
     - name: Build REHEATFUNQ
       run: |
           sudo apt-get install -y libproj-dev libboost-dev libeigen3-dev \
                                   libcgal-dev libgeographic-dev build-essential\
-                                  git openssh-client ssh cython \
-                                  python3-sphinx ninja-build
-          pip install numpy matplotlib pyproj meson
+                                  git openssh-client ssh cython3 \
+                                  python3-sphinx ninja-build cmake-data \
+                                  cmake-extras extra-cmake-modules \
+                                  python3-numpy
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
+          pip install matplotlib pyproj meson
           pip install 'mebuex @ git+https://github.com/mjziebarth/Mebuex'
           pip install 'loaducerf3 @ git+https://git.gfz-potsdam.de/ziebarth/loaducerf3'
           bash compile.sh

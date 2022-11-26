@@ -8,7 +8,16 @@ include = include_directories('include','external/pdtoolbox/include')
 eigen_dep = dependency('eigen3')
 boost_dep = dependency('boost')
 openmp_dep = dependency('openmp')
-geographiclib_dep = dependency('GeographicLib')
+geographiclib_dep = dependency('GeographicLib', required : false)
+if not geographiclib_dep.found()
+    # This is a potential patch for Ubuntu systems where
+    # the FindGeographicLib.cmake is located wrongly:
+    geographiclib_dep = dependency(
+        'GeographicLib',
+        method : 'cmake',
+        cmake_module_path : '/usr/share/cmake/geographiclib/'
+    )
+endif
 
 
 #

@@ -8,8 +8,9 @@ Installing REHEATFUNQ requires a number of common scientific computing packages.
 See [Dependencies](#dependencies) below for a list of dependencies that need to
 be installed to build REHEATFUNQ. Two uncommon packages that the REHEATFUNQ
 installation requires are the [Mebuex](https://github.com/mjziebarth/Mebuex) and
-the [loaducerf3]() Python package. Both packages can be installed with the
-following commands after all other dependencies have been installed:
+the [loaducerf3](https://git.gfz-potsdam.de/ziebarth/loaducerf3) Python package.
+Both packages can be installed with the following commands after all other
+dependencies have been installed:
 ```bash
 pip install 'mebuex @ git+https://github.com/mjziebarth/Mebuex'
 pip install 'loaducerf3 @ git+https://git.gfz-potsdam.de/ziebarth/loaducerf3'
@@ -21,9 +22,17 @@ pip install --user .
 ```
 
 ## Usage
-Visit the [REHEATFUNQ documentation]() for usage instructions. A number of
-Jupyter notebooks are bundled in the [`jupyter`]() directory of the REHEATFUNQ
-source distribution.
+Visit the [REHEATFUNQ documentation](https://mjziebarth.github.io/REHEATFUNQ/)
+for usage instructions. A number of Jupyter notebooks are bundled in the
+[`jupyter`](jupyter/) directory of the REHEATFUNQ source distribution.
+
+In case that visiting the website is not an option, the documentation can be
+built locally by running
+```bash
+make html
+```
+from within the `docs` subdirectory. This requires Sphinx with Autodoc and
+Napoleon to be installed.
 
 ## Citation
 If you use REHEATFUNQ, please cite the following paper:
@@ -76,6 +85,15 @@ packages, both licensed under the `GPL-3.0-or-later`, are included in the
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+
+### [0.1.1-p1] - 2022-11-25
+#### Added
+- Install fix for Debian-based Github actions
+
+### [0.1.1] - 2022-11-25
+#### Added
+- Install fix for Debian-based Github actions
 
 ### [0.1.0] - 2022-11-25
 #### Added
