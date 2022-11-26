@@ -77,8 +77,8 @@ marginal posterior density and tail distribution, respectively, of the heat
 production power :math:`P_H`.
 
 A readymade Jupyter notebook for this analysis can be found in
-`jupyter/REHEATFUNQ/Quickstart.ipynb
-<https://github.com/mjziebarth/REHEATFUNQ/blob/master/jupyter/REHEATFUNQ/Quickstart.ipynb>`_.
+`jupyter/Quickstart.ipynb
+<https://github.com/mjziebarth/REHEATFUNQ/blob/master/jupyter/Quickstart.ipynb>`_.
 
 
 REHEATFUNQ Paper
