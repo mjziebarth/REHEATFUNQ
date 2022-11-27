@@ -369,7 +369,7 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 	double res = 0.0 ;
 	constexpr double term = std::sqrt(std::numeric_limits<double>::epsilon());
 
-	auto integrand1 = [&](double a) -> double {
+	auto integrand1 = [&](double a, double distance_to_next_bound) -> double {
 		double lF = ln_F(a, P.lp, P.ls, P.n, P.v);
 		if (isinf(exp(lF - P.lFmax)))
 			std::cerr << "Found inf result in integrand for amax = "
