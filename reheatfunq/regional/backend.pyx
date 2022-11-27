@@ -45,6 +45,12 @@ cdef extern from "gamma_conjugate_prior.hpp" namespace "pdtoolbox" nogil:
     {
         return GammaConjugatePriorBase::ln_Phi(lp, ls, n, v, amin, 0.0, epsrel);
     }
+
+    double _log_gamma_function(double x)
+    {
+        return std::lgamma(x);
+    }
+
     }
     """
     cdef cppclass GammaConjugatePriorBase:
@@ -93,6 +99,8 @@ cdef extern from "gamma_conjugate_prior.hpp" namespace "pdtoolbox" nogil:
 
     cdef double _gcp_ln_Phi(double lp, double ls, double n, double v,
                             double amin) except+
+
+    cdef double _log_gamma_function(double x) except+
 
 
 
@@ -375,3 +383,10 @@ def gamma_mle(const double[:] x, double amin = 1.0):
         mle = compute_gamma_mle(xm, lxm, amin)
 
     return mle.a, mle.b
+
+
+def _log_gamma(double x):
+    """
+    Test exposition of the gamma function in use.
+    """
+    return _log_gamma_function(x)
