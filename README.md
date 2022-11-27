@@ -64,15 +64,21 @@ to run:
 
 | Language | Packages |
 | :------: | :------: |
-| Python   | pdtoolbox, cmcrameri, cmocean, matplotlib, shapely, flottekarte, cmasher, sklearn, joblib |
+| Python   | pdtoolbox, cmcrameri, cmocean, matplotlib, shapely, flottekarte, cmasher, scikit-learn, joblib, requests |
 
-The packages `pdtoolbox`, `flottekarte`, and `loaducerf3` can be installed with
-the following commands:
+The package `pdtoolbox` can be installed with the following command:
 ```bash
 pip install 'pdtoolbox @ git+https://git.gfz-potsdam.de/ziebarth/pdtoolbox'
-pip install 'flottekarte @ git+https://github.com/mjziebarth/FlotteKarte'
 ```
-
+The package `flottekarte` can currently be installed with the following
+commands (executed in a directory where a `FlotteKarte` subfolder can be
+created):
+```bash
+git clone https://github.com/mjziebarth/FlotteKarte.git
+cd FlotteKarte
+bash compile.sh
+pip install --user .
+```
 
 Furthermore, parts of the [pdtoolbox](https://doi.org/10.5880/GFZ.2.6.2022.002)
 and

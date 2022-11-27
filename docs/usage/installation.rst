@@ -4,6 +4,11 @@ Installation
 
 Local Install
 ^^^^^^^^^^^^^
+First, make sure that the libraries and packages listed in **Dependencies**
+within `README.md <https://github.com/mjziebarth/REHEATFUNQ/blob/main/README.md>`__
+are installed. Installation might differ per operating system. Most of the
+Python packages should be available from PyPI.
+
 A local install of REHEATFUNQ requires the
 `Mebuex <https://github.com/mjziebarth/Mebuex>`__ package. This package can
 be installed using the following command:
@@ -26,3 +31,61 @@ following command:
 .. code :: bash
 
    pip install 'reheatfunq @ git+https://github.com/mjziebarth/REHEATFUNQ'
+
+Two missing packages for the REHEATFUNQ Jupyter notebooks can be installed with
+the following commands (executed in a directory where a :code:`FlotteKarte`
+subfolder can be created):
+
+.. code :: bash
+
+   pip install 'pdtoolbox @ git+https://git.gfz-potsdam.de/ziebarth/pdtoolbox'
+   git clone https://github.com/mjziebarth/FlotteKarte.git
+   cd FlotteKarte
+   bash compile.sh
+   pip install --user .
+
+
+Docker
+^^^^^^
+REHEATFUNQ can also be used within the provided Docker image. The image contains
+a Jupyter notebook server running as user :code:`reheatfunq`, and all required
+packages are installed.
+
+To build the Docker file, run
+
+.. code :: bash
+
+   sudo docker build -t 'reheatfunq' .
+
+within the repository's root directory (:code:`sudo` may or may not be required
+depending on the Docker setup).
+
+The Jupyter notebook server is exposed at the container's 8888 port. This port
+may or may not be free on your system. To run REHEATFUNQ in the Docker
+container, first identify a free port :code:`XXXX` on your machine. Then, run
+
+.. code :: bash
+
+   sudo docker run -p XXXX:8888 reheatfunq
+
+The name of the running Docker container (e.g. :code:`hungry_stonebraker`) can
+be queried from another terminal with the following command:
+
+.. code :: bash
+
+   sudo docker ps
+
+
+The Docker image does not contain all required data to run the analysis of the
+REHEATFUNQ paper. Most prominently, that includes the :code:`NGHF.csv` of
+Lucazeau [L2019]_. To copy this (or other files you wish to copy) to the running
+docker container (here named :code:`hungry_stonebraker`) you can use
+:code:`docker cp`:
+
+.. code :: bash
+
+   sudo docker cp /path/to/NGHF.csv hungry_stonebraker:/home/reheatfunq/jupyter/REHEATFUNQ/data/
+
+This copies the file to the directory :code:`REHEATFUNQ/data/` accessible from
+the Jupyter notebook. The Jupyter server runs within the directory
+:code:`/home/reheatfunq/jupyter/` on the docker image.
