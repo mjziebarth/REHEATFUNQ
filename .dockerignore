@@ -1,9 +1,11 @@
 # Excluding output of Jupyter notebooks:
 jupyter/data
+!jupyter/data/example-heatflow.json
 jupyter/.ipynb_checkpoints
 jupyter/.geoplot
 jupyter/*.svg
 jupyter/REHEATFUNQ/data
+!jupyter/REHEATFUNQ/data/SoCal-Regions.gpkg
 jupyter/REHEATFUNQ/figures
 jupyter/REHEATFUNQ/intermediate/*.npy
 jupyter/REHEATFUNQ/intermediate/*.pickle
@@ -11,3 +13,8 @@ jupyter/REHEATFUNQ/__pycache__
 jupyter/REHEATFUNQ/.cache
 jupyter/REHEATFUNQ/.ipynb_checkpoints
 jupyter/REHEATFUNQ/results
+
+# Exclude some development code:
+jupyter/dev
+jupyter/REHEATFUNQ/*.py
+!jupyter/REHEATFUNQ/cache.py

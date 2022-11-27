@@ -64,7 +64,7 @@ to run:
 
 | Language | Packages |
 | :------: | :------: |
-| Python   | pdtoolbox, cmcrameri, cmocean, matplotlib, shapely, flottekarte, cmasher, sklearn, joblib |
+| Python   | pdtoolbox, cmcrameri, cmocean, matplotlib, shapely, flottekarte, cmasher, scikit-learn, joblib, requests |
 
 The packages `pdtoolbox`, `flottekarte`, and `loaducerf3` can be installed with
 the following commands:
