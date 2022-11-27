@@ -4,6 +4,11 @@ Installation
 
 Local Install
 ^^^^^^^^^^^^^
+First, make sure that the libraries and packages listed in **Dependencies**
+within `README.md <https://github.com/mjziebarth/REHEATFUNQ/blob/main/README.md>`__
+are installed. Installation might differ per operating system. Most of the
+Python packages should be available from PyPI.
+
 A local install of REHEATFUNQ requires the
 `Mebuex <https://github.com/mjziebarth/Mebuex>`__ package. This package can
 be installed using the following command:
@@ -26,6 +31,18 @@ following command:
 .. code :: bash
 
    pip install 'reheatfunq @ git+https://github.com/mjziebarth/REHEATFUNQ'
+
+Two missing packages for the REHEATFUNQ Jupyter notebooks can be installed with
+the following commands (executed in a directory where a :code:`FlotteKarte`
+subfolder can be created):
+
+.. code :: bash
+
+   pip install 'pdtoolbox @ git+https://git.gfz-potsdam.de/ziebarth/pdtoolbox'
+   git clone https://github.com/mjziebarth/FlotteKarte.git
+   cd FlotteKarte
+   bash compile.sh
+   pip install --user .
 
 
 Docker
