@@ -96,6 +96,8 @@ and this project adheres to
 #### Changed
 - Fix a C++ standard incompatibility that is compatible with g++ but
   not with clang++.
+- Relax some typing requirements and make typing information compatible with
+  Python 3.8.
 
 ### [1.0.0] - 2022-11-27
 #### Added
