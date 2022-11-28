@@ -814,7 +814,7 @@ double a_integral_large_z(const double ym, const double h0, const double h1,
                  const double l1p_w, const double w)
 {
 	/* exp_sinh tolerance: */
-	constexpr double tol = std::sqrt(std::numeric_limits<double>::epsilon());
+	constexpr double tol = cnst_sqrt(std::numeric_limits<double>::epsilon());
 
 	/* Set the integrand's non-varying parameters: */
 	const double ly = std::log(ym);
