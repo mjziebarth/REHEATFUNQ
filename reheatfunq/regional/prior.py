@@ -327,7 +327,7 @@ class GammaConjugatePrior:
 
 
     @staticmethod
-    def minimum_surprise_estimate(hf_samples: list[ArrayLike],
+    def minimum_surprise_estimate(hf_samples: Iterable[ArrayLike],
                                   pmin: float = 1.0, pmax: float = 1e5,
                                   smin: float = 0.0, smax: float = 1e3,
                                   vmin: float = 0.02, vmax: float = 1.0,
@@ -344,7 +344,7 @@ class GammaConjugatePrior:
 
         Parameters
         ----------
-        hf_samples : list[array_like]
+        hf_samples : Iterable[array_like]
             A set of heat flow data sets.
         pmin : float, optional
             Minimum value for the GCP :math:`p` parameter.
@@ -435,12 +435,13 @@ class GammaConjugatePrior:
         return GammaConjugatePrior(None, s, n, v, lp, amin)
 
 
-    def visualize(self, ax, distributions: Optional[list[ArrayLike]] = None,
+    def visualize(self, ax, distributions: Optional[Iterable[ArrayLike]] = None,
                   cax: Optional[object] = None, log_axes: bool = True,
                   cmap='inferno', color_scale: Literal['log','lin'] = 'log',
                   plot_mean: bool = True, q_mean: float = 68.3,
-                  q_plot: list[tuple[float,float,float,str] | float] = [],
-                  qstd_plot: list[tuple[float,float,float,str] | float] = []):
+                  q_plot: Iterable[Tuple[float,float,float,str] | float] = [],
+                  qstd_plot: Iterable[Tuple[float,float,float,str] | float] = []
+        ):
         """
         Visualize this GammaConjugatePrior instance on an axis.
 
@@ -448,7 +449,7 @@ class GammaConjugatePrior:
         ----------
         ax : matplotlib.axes.Axes
            The :class:`matplotlib.axes.Axes` to visualize on.
-        distributions : list[array_like], optional
+        distributions : Iterable[array_like], optional
            A set of aggregate heat flow distributions, each given
            as a one-dimensional :class:`numpy.ndarray` of heat flow
            values in :math:`\\mathrm{mW}/\\mathrm{m}^2`. Each
@@ -472,16 +473,16 @@ class GammaConjugatePrior:
         q_mean : float, optional
            The global mean heat flow in :math:`\\mathrm{mW}/\\mathrm{m}^2`.
            The default value is 68.3 from Lucazeau (2019).
-        q_plot : list[tuple[float,float,float,str] | float], optional
-           A list of additional average heat flow values to display.
+        q_plot : Iterable[Tuple[float,float,float,str] | float], optional
+           A set of additional average heat flow values to display.
            For each *q* a line through the :math:`(\\alpha,\\beta)` parameter
            space, enumerating parameter combinations whose distributions
            average to the given *q*. Each entry in `q_plot` needs to be
            either a float *q* or a tuple (*q*,*amin*,*amax*,*c*), where *amin*
            and *amax* denote the :math:`\\alpha`-interval within which the
            line should be plotted, and *c* is the color.
-        qstd_plot : list[tuple[float,float,float,str] | float], optional
-           A list of additional heat flow standard deviations to display.
+        qstd_plot : Iterable[Tuple[float,float,float,str] | float], optional
+           A set of additional heat flow standard deviations to display.
            For each *qstd* a line through the :math:`(\\alpha,\\beta)` parameter
            space, enumerating parameter combinations whose distributions
            are quantified by a standard deviation *qstd*. Each entry in
