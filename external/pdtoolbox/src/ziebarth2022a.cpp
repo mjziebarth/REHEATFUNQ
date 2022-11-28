@@ -41,6 +41,7 @@
 #include <algorithm>
 #include <iostream>
 
+#include <constexpr.hpp>
 #include <ziebarth2022a.hpp>
 #include <quantileinverter.hpp>
 
@@ -57,6 +58,7 @@ using boost::math::tools::eps_tolerance;
 using pdtoolbox::QuantileInverter;
 using pdtoolbox::OR;
 using pdtoolbox::AND;
+using pdtoolbox::cnst_sqrt;
 
 typedef gauss_kronrod<double, 15> GK;
 
@@ -244,7 +246,7 @@ static double outer_integrand(double z, const double lp,
                               const double w, const double log_scale)
 {
 	/* exp_sinh tolerance: */
-	constexpr double tol = std::sqrt(std::numeric_limits<double>::epsilon());
+	constexpr double tol = cnst_sqrt(std::numeric_limits<double>::epsilon());
 
 	// Set the inner parameters:
 	double l1p_kiz_sum = 0.0;
@@ -812,7 +814,7 @@ double a_integral_large_z(const double ym, const double h0, const double h1,
                  const double l1p_w, const double w)
 {
 	/* exp_sinh tolerance: */
-	constexpr double tol = std::sqrt(std::numeric_limits<double>::epsilon());
+	constexpr double tol = cnst_sqrt(std::numeric_limits<double>::epsilon());
 
 	/* Set the integrand's non-varying parameters: */
 	const double ly = std::log(ym);

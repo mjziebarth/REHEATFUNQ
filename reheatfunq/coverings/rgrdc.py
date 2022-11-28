@@ -21,7 +21,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import numpy as np
-from typing import Optional
+from typing import Optional, List, Sequence, Iterable
 from numpy.typing import ArrayLike
 from pyproj import Proj, Geod
 from scipy.spatial import KDTree
@@ -30,11 +30,11 @@ from .rdisks import conforming_data_selection
 
 
 def random_global_R_disk_coverings(R: float, min_points: int, hf: ArrayLike,
-                                   buffered_poly_xy: list[ArrayLike],
+                                   buffered_poly_xy: Sequence[ArrayLike],
                                    proj_str: str,  N: int = 10000,
                                    MAX_DRAW: int = 100000, dmin: float = 0.0,
                                    seed: int = 982981,
-                                   used_points: Optional[list[int]] = None,
+                                   used_points: Optional[Iterable[int]] = None,
                                    a: float = 6378137.0):
     """
     Uses rejection sampling to draw a number of exclusive regional

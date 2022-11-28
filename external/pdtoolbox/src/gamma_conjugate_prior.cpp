@@ -22,6 +22,7 @@
  * Miller (1980):
  */
 
+#include <constexpr.hpp>
 #include <gamma_conjugate_prior.hpp>
 #include <cmath>
 #include <boost/math/special_functions/digamma.hpp>
@@ -31,7 +32,8 @@
 #include <boost/math/quadrature/tanh_sinh.hpp>
 #include <boost/math/quadrature/exp_sinh.hpp>
 
-using pdtoolbox::GammaConjugatePriorBase;
+using pdtoolbox::GammaConjugatePriorBase,
+      pdtoolbox::cnst_sqrt;
 
 
 using std::abs, std::max, std::min, std::log, std::exp, std::sqrt, std::log1p,
@@ -289,7 +291,6 @@ static bool condition_warn(double S, double err, double L1, int where,
 
 
 
-
 /*
  * Compute the natural logarithm of the integration constant:
  */
@@ -367,7 +368,7 @@ static double ln_Phi_backend(double lp, double ls, double n, double v,
 	 * integration techniques: */
 	double err, L1;
 	double res = 0.0 ;
-	constexpr double term = std::sqrt(std::numeric_limits<double>::epsilon());
+	constexpr double term = cnst_sqrt(std::numeric_limits<double>::epsilon());
 
 	auto integrand1 = [&](double a, double distance_to_next_bound) -> double {
 		double lF = ln_F(a, P.lp, P.ls, P.n, P.v);
@@ -521,7 +522,7 @@ double GammaConjugatePriorBase::kullback_leibler(
 	};
 
 	exp_sinh<double> es;
-	constexpr double term = std::sqrt(std::numeric_limits<double>::epsilon());
+	constexpr double term = cnst_sqrt(std::numeric_limits<double>::epsilon());
 	double err, L1;
 	const double I = es.integrate(integrand, term, &err, &L1);
 
