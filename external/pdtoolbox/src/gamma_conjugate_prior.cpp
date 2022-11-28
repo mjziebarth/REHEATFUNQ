@@ -22,6 +22,7 @@
  * Miller (1980):
  */
 
+#include <constexpr.hpp>
 #include <gamma_conjugate_prior.hpp>
 #include <cmath>
 #include <boost/math/special_functions/digamma.hpp>
@@ -31,7 +32,8 @@
 #include <boost/math/quadrature/tanh_sinh.hpp>
 #include <boost/math/quadrature/exp_sinh.hpp>
 
-using pdtoolbox::GammaConjugatePriorBase;
+using pdtoolbox::GammaConjugatePriorBase,
+      pdtoolbox::cnst_sqrt;
 
 
 using std::abs, std::max, std::min, std::log, std::exp, std::sqrt, std::log1p,
@@ -289,33 +291,6 @@ static bool condition_warn(double S, double err, double L1, int where,
 
 
 
-constexpr double const_sqrt_iter(const double S, const double d)
-{
-	/* A very hacky static assert, rasing a recursion depth error: */
-	if (S < 0)
-		return const_sqrt_iter(S,d);
-
-	double Snext = (S + d/S) / 2;
-	if (Snext == S)
-		return S;
-	return const_sqrt_iter(Snext, d);
-}
-
-constexpr double cnst_sqrt(const double d)
-{
-	/* Babylon: */
-	double S = const_sqrt_iter(d,d);
-
-	/* "static_assert" */
-	if (std::abs(S*S - d) > 1e-14*d)
-		return cnst_sqrt(d);
-
-	return S;
-}
-
-
-
-
 /*
  * Compute the natural logarithm of the integration constant:
  */
@@ -547,7 +522,7 @@ double GammaConjugatePriorBase::kullback_leibler(
 	};
 
 	exp_sinh<double> es;
-	constexpr double term = std::sqrt(std::numeric_limits<double>::epsilon());
+	constexpr double term = cnst_sqrt(std::numeric_limits<double>::epsilon());
 	double err, L1;
 	const double I = es.integrate(integrand, term, &err, &L1);
 
