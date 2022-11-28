@@ -1584,6 +1584,138 @@ void tail_quantiles(const double* quantiles, double* res, const size_t Nquant,
 }
 
 
+void posterior_tail_quantiles_batch(
+                     const double* quantiles, double* res, const size_t Nquant,
+                     const std::vector<const double*>& qi,
+                     const std::vector<const double*>& ci,
+                     const std::vector<size_t>& N,
+                     double p, double s, double n, double nu,
+                     double dest_tol)
+{
+	/* Sanity: */
+	if (qi.size() != ci.size())
+		throw std::runtime_error("Sizes of `qi` and `ci` do not match.");
+	if (qi.size() != N.size())
+		throw std::runtime_error("Sizes of `qi` and `N` do not match.");
+
+	/* Capturing exceptions in OMP sections: */
+	bool error_flag = false;
+	std::string err_msg;
+
+	/* Step 1: Use the common parameter initialization routine which
+	 *         mainly determines the normalization constants.
+	 *         Do so in parallel since we need one set of parameters per
+	 *         (qi,ci) sample.
+	 */
+	struct locals_t {
+		double lp_tilde;
+		double ls_tilde;
+		double nu_new;
+		double n_new;
+		double Qmax;
+		double h0;
+		double h1;
+		double h2;
+		double h3;
+		double w;
+		double l1p_w;
+		double ztrans;
+		double log_scale;
+		double norm;
+		double full_taylor_integral;
+		std::vector<double> ki;
+	};
+	std::vector<locals_t> locals(qi.size());
+	#pragma omp parallel for
+	for (size_t i=0; i<qi.size(); ++i){
+		size_t imax;
+		try {
+			locals[i].ki.resize(N[i]);
+			init_locals(qi[i], ci[i], N[i], nu, n, s, p, locals[i].lp_tilde,
+			            locals[i].ls_tilde, locals[i].nu_new, locals[i].n_new,
+			            locals[i].Qmax, locals[i].h0, locals[i].h1,
+			            locals[i].h2, locals[i].h3, locals[i].w,
+			            locals[i].l1p_w, locals[i].ztrans, locals[i].log_scale,
+			            locals[i].norm, locals[i].ki,
+			            locals[i].full_taylor_integral, imax);
+		} catch (const std::exception& e){
+			error_flag = true;
+			err_msg = std::string(e.what());
+		}
+	}
+
+	if (error_flag){
+		err_msg = std::string("Error in posterior_tail_batch: '")
+		          + err_msg + std::string("'.");
+		throw std::runtime_error(err_msg);
+	}
+
+	/* The overall maximum frictional power: */
+	double Qmax = 0.0;
+	for (size_t i=0; i<qi.size(); ++i){
+		Qmax = std::max(Qmax, locals[i].Qmax);
+
+		/* The 'norm' parameter is calculated for z in the range [0,1].
+		 * To be able to integrate over the full frictional power space,
+		 * need to renorm:
+		 */
+		locals[i].norm *= locals[i].Qmax;
+	}
+
+	auto integrand = [&](double P_H) -> double {
+		double result = 0.0;
+		for (size_t i=0; i<qi.size(); ++i){
+			if (P_H >= locals[i].Qmax)
+				continue;
+			const double z = P_H / locals[i].Qmax;
+			if (z <= locals[i].ztrans)
+				result += outer_integrand(z, locals[i].lp_tilde,
+				                          locals[i].ls_tilde, locals[i].n_new,
+				                          locals[i].nu_new, locals[i].ki,
+				                          locals[i].w, locals[i].log_scale)
+				          / locals[i].norm;
+			else if (z < 1)
+				result += a_integral_large_z<false>(1.0-z, locals[i].h0,
+				                           locals[i].h1, locals[i].h2,
+				                           locals[i].h3, locals[i].nu_new,
+				                           locals[i].lp_tilde, locals[i].n_new,
+				                           locals[i].log_scale,
+				                           locals[i].ls_tilde, locals[i].l1p_w,
+				                           locals[i].w) / locals[i].norm;
+		}
+
+		return result / qi.size();
+	};
+
+	size_t i=0;
+	try {
+		/* Initialize the quantile inverter: */
+		QuantileInverter qinv(integrand, 0.0, Qmax, dest_tol, dest_tol, OR);
+
+		/* Now invert: */
+		for (; i<Nquant; ++i){
+			res[i] = qinv.invert(1.0 - quantiles[i]);
+		}
+	} catch (...) {
+		tanh_sinh<double> integrator;
+		for (; i<Nquant; ++i){
+			auto rootfun = [&](double P_H){
+				return integrator.integrate(integrand, P_H, Qmax)
+				       - quantiles[i];
+			};
+			auto tolerance = [&](double a, double b) -> bool {
+				return std::fabs(a-b) <= dest_tol;
+			};
+			std::uintmax_t maxiter = 50;
+			std::pair<double,double> bracket
+			   = toms748_solve(rootfun, 0.0, Qmax, 1.0-quantiles[i],
+			                   -quantiles[i], tolerance, maxiter);
+			res[i] = 0.5 * (bracket.first + bracket.second);
+		}
+	}
+}
+
+
 /*
  *
  *   Tail quantiles.

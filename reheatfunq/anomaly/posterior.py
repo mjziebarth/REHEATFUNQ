@@ -25,7 +25,8 @@ from .anomaly import Anomaly
 from ..regional import GammaConjugatePrior
 from ..coverings.rdisks import bootstrap_data_selection
 from .bayes import marginal_posterior_pdf_batch, marginal_posterior_cdf_batch, \
-                   marginal_posterior_tail_batch
+                   marginal_posterior_tail_batch, \
+                   marginal_posterior_tail_quantiles_batch
 
 
 class HeatFlowAnomalyPosterior:
@@ -134,7 +135,7 @@ class HeatFlowAnomalyPosterior:
                          for w,sample in self.bootstrap)
 
 
-    def pdf(self, P_H: ArrayLike):
+    def pdf(self, P_H: ArrayLike) -> np.ndarray:
         """
         Evaluate the marginal posterior distribution in
         heat-generating power :math:`P_H`.
@@ -166,7 +167,7 @@ class HeatFlowAnomalyPosterior:
                                             self.gcp.v, Qi, Ci).mean(axis=0)
 
 
-    def cdf(self, P_H: ArrayLike):
+    def cdf(self, P_H: ArrayLike) -> np.ndarray:
         """
         Evaluate the marginal posterior cumulative distribution
         of heat-generating power :math:`P_H`.
@@ -198,7 +199,7 @@ class HeatFlowAnomalyPosterior:
                                             self.gcp.v, Qi, Ci).mean(axis=0)
 
 
-    def tail(self, P_H: ArrayLike):
+    def tail(self, P_H: ArrayLike) -> np.ndarray:
         """
         Evaluate the posterior tail distribution (complementary
         cumulative distribution) of heat-generating power
@@ -230,4 +231,37 @@ class HeatFlowAnomalyPosterior:
         return marginal_posterior_tail_batch(P_H, p, self.gcp.s, self.gcp.n,
                                              self.gcp.v, Qi, Ci).mean(axis=0)
 
+
+    def tail_quantiles(self, quantiles: ArrayLike,
+                       dest_tol: float = 1e-3) -> np.ndarray:
+        """
+        Compute posterior tail quantiles, that is, heat-generating
+        powers :math:`P_H` at which the complementary cumulative
+        distribution of :math:`P_H` has fallen to level :math:`x`.
+
+        Parameters
+        ----------
+        quantiles : array_like
+            The tail quantiles to compute.
+        dest_tol : float, optional
+            The tolerance to which to compute the powers
+            :math:`P_H`.
+
+        Returns
+        -------
+        P_H : array_like
+              The heat-generating power :math:`P_H` at which the
+              posterior tail distribution evaluates to :code:`x`.
+        """
+        # Make sure that quantiles is C-contiguous:
+        quantiles = np.array(quantiles, float, copy=True, order='C', ndmin=1)
+
+        # Prepare:
+        p = exp(self.gcp.lp)
+        Qi = [self.q[ids] for w,ids in self.bootstrap]
+        Ci = [self.c[ids] for w,ids in self.bootstrap]
+        return marginal_posterior_tail_quantiles_batch(quantiles, p, self.gcp.s,
+                                                       self.gcp.n, self.gcp.v,
+                                                       Qi, Ci, float(dest_tol),
+                                                       inplace = True)
 
