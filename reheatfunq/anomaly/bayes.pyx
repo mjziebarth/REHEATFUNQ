@@ -76,6 +76,14 @@ cdef extern from "ziebarth2022a.hpp" namespace "pdtoolbox::heatflow" nogil:
                         const size_t N, const double p, const double s,
                         const double n, const double nu, const double dest_tol)
 
+    void posterior_tail_quantiles_batch(
+                     const double* quantiles, double* res, const size_t Nquant,
+                     const vector[const double*]& qi,
+                     const vector[const double*]& ci,
+                     const vector[size_t]& N,
+                     double p, double s, double n, double nu,
+                     double dest_tol)
+
     int tail_quantiles_intcode(const double* quantiles, double* res,
                                const size_t Nquant, const double* qi,
                                const double* ci, const size_t N, const double p,
@@ -365,3 +373,48 @@ def marginal_posterior_tail_quantiles(double[::1] quantiles, double p, double s,
         raise RuntimeError("Error estimating tail_quantiles.")
 
     return P_H.base
+
+
+@cython.boundscheck(False)
+def marginal_posterior_tail_quantiles_batch(double[::1] quantiles, double p,
+                                            double s, double n, double v,
+                                            list Qi, list Ci,
+                                            double dest_tol,
+                                            bool inplace = False,
+                                            bool print_to_cerr = False):
+    """
+    Computes the tail quantiles of the marginal posterior in total power P_H
+    for a given set (p, s, n, v=ν) of prior parameters, heat flow measurements
+    qi, and anomaly scalings ci.
+
+    Returns the total powers P_H[i] at which the complementary CDF has fallen
+    to a value quantiles[i].
+    """
+    cdef size_t Nquant = quantiles.shape[0]
+    cdef size_t Nqc = len(Qi)
+    if len(Ci) != Nqc:
+        raise RuntimeError("Length of `Qi` and `Ci` needs to match!")
+
+    # Copy references to all the arrays in Qi and Ci:
+    cdef const double[::1] qi, ci
+    cdef vector[const double*] qi_vec, ci_vec
+    cdef vector[size_t] Nqc_i
+    qi_vec.resize(Nqc)
+    ci_vec.resize(Nqc)
+    Nqc_i.resize(Nqc)
+    for i in range(Nqc):
+        qi = Qi[i]
+        ci = Ci[i]
+        qi_vec[i] = &qi[0]
+        ci_vec[i] = &ci[0]
+        Nqc_i[i] = qi.shape[0]
+        if ci.shape[0] != Nqc_i[i]:
+            raise RuntimeError("In one sample, the shape of `qi` and `ci` do "
+                               "not match.")
+
+    cdef double[::1] res = quantiles if inplace else np.empty(Nqc)
+    with nogil:
+        posterior_tail_quantiles_batch(&quantiles[0], &res[0], Nquant, qi_vec,
+                                       ci_vec, Nqc_i, p, s, n, v, dest_tol)
+
+    return res.base

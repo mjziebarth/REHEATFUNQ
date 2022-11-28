@@ -3,7 +3,8 @@
  *
  * Author: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
  *
- * Copyright (C) 2021-2022 Deutsches GeoForschungsZentrum GFZ
+ * Copyright (C) 2021-2022 Deutsches GeoForschungsZentrum GFZ,
+ *                    2022 Malte J. Ziebarth
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -82,6 +83,14 @@ void tail_quantiles(const double* quantiles, double* res, const size_t Nquant,
                     const double* qi, const double* ci, const size_t N,
                     const double p, const double s, const double n,
                     const double nu, const double dest_tol);
+
+void posterior_tail_quantiles_batch(
+                    const double* quantiles, double* res, const size_t Nquant,
+                    const std::vector<const double*>& qi,
+                    const std::vector<const double*>& ci,
+                    const std::vector<size_t>& N,
+                    double p, double s, double n, double nu,
+                    double dest_tol);
 
 int tail_quantiles_intcode(const double* quantiles, double* res,
                            const size_t Nquant, const double* qi,
