@@ -41,7 +41,7 @@ of the regional aggregate heat flow distribution:
    cdf = predictive.cdf(qplt)
 
 Now :python:`qplt` is a range of heat flow values from
-:math:`30\,\mathrm{mWm}^{-2}` to :math:`30\,\mathrm{mWm}^{-2}`, and
+:math:`30\,\mathrm{mWm}^{-2}` to :math:`90\,\mathrm{mWm}^{-2}`, and
 :python:`cdf` holds the corresponding values of the estimated heat flow CDF.
 
 Fault-generated heat flow anomaly
