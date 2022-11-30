@@ -86,6 +86,18 @@ and
 packages, both licensed under the `GPL-3.0-or-later`, are included in the
 `external` folder.
 
+## Citation
+If you use REHEATFUNQ, please consider citing the model description paper:
+
+> ... in progress ...
+
+The archived REHEATFUNQ software package can be cited as follows:
+
+> Ziebarth, Malte Jörn (2022): REHEATFUNQ: A Python package for the inference of
+> regional aggregate heat flow distributions and heat flow anomalies. V. 1.0.0.
+> GFZ Data Services. https://doi.org/10.5880/GFZ.2.6.2022.005
+
+You can also consider changing the version tag to the one you used.
 
 ## Changelog
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
