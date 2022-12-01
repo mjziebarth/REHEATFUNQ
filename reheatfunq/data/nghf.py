@@ -104,7 +104,7 @@ def read_nghf(f):
 
             # Uncertainty with drop-in:
             try:
-                uncertainty = int(row[20])
+                uncertainty = float(row[20])
             except:
                 uncertainty = inf
 
