@@ -35,46 +35,50 @@ from libcpp.vector cimport vector
 cdef extern from "ziebarth2022a.hpp" namespace "pdtoolbox::heatflow" nogil:
     void posterior_pdf(const double* x, double* res, size_t Nx,
                        const double* qi, const double* ci, size_t N, double p,
-                       double s, double n, double nu, double dest_tol)
+                       double s, double n, double nu, double amin,
+                       double dest_tol) except+
 
     void posterior_pdf_batch(const double* x, size_t Nx, double* res,
                              const vector[const double*]& qi,
                              const vector[const double*]& ci,
                              const vector[size_t]& N,
                              double p, double s, double n, double nu,
-                             double dest_tol)
+                             double amin, double dest_tol) except+
 
     void posterior_cdf(const double* x, double* res, size_t Nx,
                        const double* qi, const double* ci, size_t N, double p,
-                       double s, double n, double nu, double dest_tol)
+                       double s, double n, double nu, double amin,
+                       double dest_tol) except+
 
     void posterior_cdf_batch(const double* x, size_t Nx, double* res,
                              const vector[const double*]& qi,
                              const vector[const double*]& ci,
                              const vector[size_t]& N,
                              double p, double s, double n, double nu,
-                             double dest_tol)
+                             double amin, double dest_tol) except+
 
     void posterior_tail(const double* x, double* res, size_t Nx,
                         const double* qi, const double* ci, size_t N, double p,
-                        double s, double n, double nu, double dest_tol);
+                        double s, double n, double nu, double amin,
+                        double dest_tol) except+
 
     void posterior_tail_batch(const double* x, size_t Nx, double* res,
                               const vector[const double*]& qi,
                               const vector[const double*]& ci,
                               const vector[size_t]& N,
                               double p, double s, double n, double nu,
-                              double dest_tol)
+                              double amin, double dest_tol) except+
 
     void posterior_log_unnormed(const double* x, double* res, size_t Nx,
                                 const double* qi, const double* ci, size_t N,
                                 double p, double s, double n, double nu,
-                                double dest_tol)
+                                double amin, double dest_tol) except+
 
     void tail_quantiles(const double* quantiles, double* res,
                         const size_t Nquant, const double* qi, const double* ci,
                         const size_t N, const double p, const double s,
-                        const double n, const double nu, const double dest_tol)
+                        const double n, const double nu,
+                        const double amin, const double dest_tol) except+
 
     void posterior_tail_quantiles_batch(
                      const double* quantiles, double* res, const size_t Nquant,
@@ -82,21 +86,22 @@ cdef extern from "ziebarth2022a.hpp" namespace "pdtoolbox::heatflow" nogil:
                      const vector[const double*]& ci,
                      const vector[size_t]& N,
                      double p, double s, double n, double nu,
-                     double dest_tol)
+                     double amin, double dest_tol) except+
 
     int tail_quantiles_intcode(const double* quantiles, double* res,
                                const size_t Nquant, const double* qi,
                                const double* ci, const size_t N, const double p,
                                const double s, const double n, const double nu,
-                               const double dest_tol,
-                               short print)
+                               const double amin, const double dest_tol,
+                               short print) except+
 
 
 
 @cython.boundscheck(False)
 def marginal_posterior_pdf(double[::1] P_H, double p, double s, double n,
                            double v, const double[::1] qi, const double[::1] ci,
-                           double dest_tol = 1e-8, bool inplace=False):
+                           double amin = 1.0, double dest_tol = 1e-8,
+                           bool inplace=False):
     """
     Computes the marginal posterior in total power Q̇ for a given set (s,n,v=ν,p)
     of prior parameters, heat flow measurements qi, and anomaly scalings ci.
@@ -117,7 +122,7 @@ def marginal_posterior_pdf(double[::1] P_H, double p, double s, double n,
 
     # Heavy lifting in C++:
     with nogil:
-        posterior_pdf(&P_H[0], &z[0], N, &qi[0], &ci[0], M, p, s, n, v,
+        posterior_pdf(&P_H[0], &z[0], N, &qi[0], &ci[0], M, p, s, n, v, amin,
                       dest_tol)
 
     return z.base
@@ -126,7 +131,7 @@ def marginal_posterior_pdf(double[::1] P_H, double p, double s, double n,
 @cython.boundscheck(False)
 def marginal_posterior_pdf_batch(const double[::1] P_H, double p, double s,
                                  double n, double v, list Qi, list Ci,
-                                 double dest_tol = 1e-8):
+                                 double amin = 1.0, double dest_tol = 1e-8):
     """
     ...
     """
@@ -155,7 +160,7 @@ def marginal_posterior_pdf_batch(const double[::1] P_H, double p, double s,
     cdef double[:,::1] res = np.empty((Nqc, Nx))
     with nogil:
         posterior_pdf_batch(&P_H[0], Nx, &res[0,0], qi_vec, ci_vec, Nqc_i,
-                            p, s, n, v, dest_tol)
+                            p, s, n, v, amin, dest_tol)
 
     return res.base
 
@@ -164,7 +169,8 @@ def marginal_posterior_pdf_batch(const double[::1] P_H, double p, double s,
 @cython.boundscheck(False)
 def marginal_posterior_cdf(double[::1] P_H, double p, double s, double n,
                            double v, const double[::1] qi, const double[::1] ci,
-                           double dest_tol=1e-8, bool inplace=False):
+                           double amin = 1.0, double dest_tol=1e-8,
+                           bool inplace=False):
     """
     Computes the marginal posterior cumulative distribution function in
     dissipated power P_H for a given set (s,n,v=ν,p) of prior parameters,
@@ -187,7 +193,7 @@ def marginal_posterior_cdf(double[::1] P_H, double p, double s, double n,
     # Heavy lifting in C++:
     with nogil:
         posterior_cdf(&P_H[0], &z[0], N, &qi[0], &ci[0], M, p, s, n, v,
-                      dest_tol)
+                      amin, dest_tol)
 
     return z.base
 
@@ -195,7 +201,7 @@ def marginal_posterior_cdf(double[::1] P_H, double p, double s, double n,
 @cython.boundscheck(False)
 def marginal_posterior_cdf_batch(const double[::1] P_H, double p, double s,
                                  double n, double v, list Qi, list Ci,
-                                 double dest_tol = 1e-8):
+                                 double amin = 1.0, double dest_tol = 1e-8):
     """
     ...
     """
@@ -224,16 +230,17 @@ def marginal_posterior_cdf_batch(const double[::1] P_H, double p, double s,
     cdef double[:,::1] res = np.empty((Nqc, Nx))
     with nogil:
         posterior_cdf_batch(&P_H[0], Nx, &res[0,0], qi_vec, ci_vec, Nqc_i,
-                            p, s, n, v, dest_tol)
+                            p, s, n, v, amin, dest_tol)
 
     return res.base
 
 
 @cython.boundscheck(False)
 def marginal_posterior_tail(double[::1] P_H, double p, double s, double n,
-                              double v, const double[::1] qi,
-                              const double[::1] ci,
-                              double dest_tol = 1e-8, bool inplace=False):
+                            double v, const double[::1] qi,
+                            const double[::1] ci,
+                            double amin = 1.0, double dest_tol = 1e-8,
+                            bool inplace=False):
     """
     Computes the marginal posterior cumulative distribution function in
     dissipated power P_H for a given set (s,n,v=ν,p) of prior parameters,
@@ -256,7 +263,7 @@ def marginal_posterior_tail(double[::1] P_H, double p, double s, double n,
     # Heavy lifting in C++:
     with nogil:
         posterior_tail(&P_H[0], &z[0], N, &qi[0], &ci[0], M, p, s, n, v,
-                       dest_tol)
+                       amin, dest_tol)
 
     return z.base
 
@@ -264,7 +271,7 @@ def marginal_posterior_tail(double[::1] P_H, double p, double s, double n,
 @cython.boundscheck(False)
 def marginal_posterior_tail_batch(const double[::1] P_H, double p, double s,
                                   double n, double v, list Qi, list Ci,
-                                  double dest_tol = 1e-8):
+                                  double amin = 1.0, double dest_tol = 1e-8):
     """
     ...
     """
@@ -293,7 +300,7 @@ def marginal_posterior_tail_batch(const double[::1] P_H, double p, double s,
     cdef double[:,::1] res = np.empty((Nqc, Nx))
     with nogil:
         posterior_tail_batch(&P_H[0], Nx, &res[0,0], qi_vec, ci_vec, Nqc_i,
-                             p, s, n, v, dest_tol)
+                             p, s, n, v, amin, dest_tol)
 
     return res.base
 
@@ -303,7 +310,8 @@ def marginal_posterior_tail_batch(const double[::1] P_H, double p, double s,
 def marginal_posterior_log_unnormed(double[::1] P_H, double p, double s,
                                     double n, double v, const double[::1] qi,
                                     const double[::1] ci, double epsabs = 1e-8,
-                                    double dest_tol=1e-10, bool inplace=False):
+                                    double amin = 1.0, double dest_tol=1e-10,
+                                    bool inplace=False):
     """
     Computes the marginal posterior in dissipated power P_H for a given set
     (s,n,v=ν,p) of prior parameters, heat flow measurements qi, and anomaly
@@ -330,7 +338,7 @@ def marginal_posterior_log_unnormed(double[::1] P_H, double p, double s,
     # Heavy lifting in C++:
     with nogil:
         posterior_log_unnormed(&P_H[0], &z[0], N, &qi[0], &ci[0], M, p, s, n, v,
-                               dest_tol)
+                               amin, dest_tol)
 
     return z.base
 
@@ -339,7 +347,7 @@ def marginal_posterior_log_unnormed(double[::1] P_H, double p, double s,
 def marginal_posterior_tail_quantiles(double[::1] quantiles, double p, double s,
                                       double n, double v, const double[::1] qi,
                                       const double[::1] ci,
-                                      double dest_tol = 1e-8,
+                                      double amin = 1.0, double dest_tol = 1e-8,
                                       bool inplace = False,
                                       bool print_to_cerr=False):
     """
@@ -368,7 +376,8 @@ def marginal_posterior_tail_quantiles(double[::1] quantiles, double p, double s,
     cdef int ic
     with nogil:
         ic = tail_quantiles_intcode(&quantiles[0], &P_H[0], N, &qi[0], &ci[0],
-                                   M, p, s, n, v, dest_tol, print_to_cerr)
+                                    M, p, s, n, v, amin, dest_tol,
+                                    print_to_cerr)
     if ic != 0:
         raise RuntimeError("Error estimating tail_quantiles.")
 
@@ -379,7 +388,7 @@ def marginal_posterior_tail_quantiles(double[::1] quantiles, double p, double s,
 def marginal_posterior_tail_quantiles_batch(double[::1] quantiles, double p,
                                             double s, double n, double v,
                                             list Qi, list Ci,
-                                            double dest_tol,
+                                            double amin, double dest_tol,
                                             bool inplace = False,
                                             bool print_to_cerr = False):
     """
@@ -415,6 +424,7 @@ def marginal_posterior_tail_quantiles_batch(double[::1] quantiles, double p,
     cdef double[::1] res = quantiles if inplace else np.empty(Nqc)
     with nogil:
         posterior_tail_quantiles_batch(&quantiles[0], &res[0], Nquant, qi_vec,
-                                       ci_vec, Nqc_i, p, s, n, v, dest_tol)
+                                       ci_vec, Nqc_i, p, s, n, v, amin,
+                                       dest_tol)
 
     return res.base

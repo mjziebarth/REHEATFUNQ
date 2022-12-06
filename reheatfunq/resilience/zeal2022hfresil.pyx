@@ -63,7 +63,7 @@ cdef extern from "resilience.hpp" namespace "heatflowpaper" nogil:
                                  double P_MW, double K, double T,
                                  double quantile, double PRIOR_P,
                                  double PRIOR_S, double PRIOR_N,
-                                 double PRIOR_V, cbool verbose,
+                                 double PRIOR_V, double amin, cbool verbose,
                                  cbool show_failures, size_t seed,
                                  unsigned short nthread, double tol) except+
 
@@ -71,7 +71,7 @@ cdef extern from "resilience.hpp" namespace "heatflowpaper" nogil:
                                  double P_MW, double K, double T,
                                  const array_d41& quantile, double PRIOR_P,
                                  double PRIOR_S, double PRIOR_N,
-                                 double PRIOR_V, cbool verbose,
+                                 double PRIOR_V, double amin, cbool verbose,
                                  cbool show_failures, size_t seed,
                                  unsigned short nthread, double tol) except+
 
@@ -80,7 +80,7 @@ cdef extern from "resilience.hpp" namespace "heatflowpaper" nogil:
                                  double x1, double s1, double a1,
                                  const array_d4& quantile, double PRIOR_P,
                                  double PRIOR_S, double PRIOR_N,
-                                 double PRIOR_V, cbool verbose,
+                                 double PRIOR_V, double amin, cbool verbose,
                                  cbool show_failures, size_t seed,
                                  unsigned short nthread, double tol) except+
 
@@ -89,7 +89,7 @@ cdef extern from "resilience.hpp" namespace "heatflowpaper" nogil:
                                  double x1, double s1, double a1,
                                  const array_d41& quantile, double PRIOR_P,
                                  double PRIOR_S, double PRIOR_N,
-                                 double PRIOR_V, cbool verbose,
+                                 double PRIOR_V, double amin, cbool verbose,
                                  cbool show_failures, size_t seed,
                                  unsigned short nthread, double tol) except+
 
@@ -99,7 +99,8 @@ cdef extern from "resilience.hpp" namespace "heatflowpaper" nogil:
 def test_performance_cython(long[:] Nset, size_t M, double P_MW, double K,
                             double T, double[:] quantile, double PRIOR_P,
                             double PRIOR_S, double PRIOR_N, double PRIOR_V,
-                            short verbose=True, short show_failures=False,
+                            double amin = 1.0, short verbose=True,
+                            short show_failures=False,
                             size_t seed=848782, short use_cpp_quantiles=True,
                             double tol=1e-3, unsigned char nthread=0):
     """
@@ -132,6 +133,9 @@ def test_performance_cython(long[:] Nset, size_t M, double P_MW, double K,
         Parameter :math:`n` of the gamma conjugate prior.
     PRIOR_V : float
         Parameter :math:`\\nu` of the gamma conjugate prior.
+    amin : float
+        The minimum shape parameter :math:`\\alpha` of the gamma
+        distribution. Has to be positive.
     verbose : bool, optional
         If :python:`True`, print some progress information.
     show_failures : bool, optional
@@ -167,7 +171,7 @@ def test_performance_cython(long[:] Nset, size_t M, double P_MW, double K,
             with nogil:
                 result = test_performance_1q(Nset[i], M, P_MW, K,
                                              T, quantile[0], PRIOR_P, PRIOR_S,
-                                             PRIOR_N, PRIOR_V, verbose,
+                                             PRIOR_N, PRIOR_V, amin, verbose,
                                              show_failures, seed, nthread,
                                              tol)
                 for l in range(Nq):
@@ -186,7 +190,7 @@ def test_performance_cython(long[:] Nset, size_t M, double P_MW, double K,
             with nogil:
                 result = test_performance_41q(Nset[i], M, P_MW, K,
                                               T, quant41, PRIOR_P, PRIOR_S,
-                                              PRIOR_N, PRIOR_V, verbose,
+                                              PRIOR_N, PRIOR_V, amin, verbose,
                                               show_failures, seed, nthread,
                                               tol)
                 for l in range(Nq):
@@ -205,7 +209,7 @@ def test_performance_mixture_cython(long[:] Nset, size_t M, double P_MW,
                             double x0, double s0, double a0, double x1,
                             double s1, double a1, double[:] quantile,
                             double PRIOR_P, double PRIOR_S, double PRIOR_N,
-                            double PRIOR_V,  short verbose=True,
+                            double PRIOR_V,  double amin, short verbose=True,
                             short show_failures=False,
                             size_t seed=848782, short use_cpp_quantiles=True,
                             double tol=1e-3):
@@ -248,6 +252,9 @@ def test_performance_mixture_cython(long[:] Nset, size_t M, double P_MW,
         Parameter :math:`n` of the gamma conjugate prior.
     PRIOR_V : float
         Parameter :math:`\\nu` of the gamma conjugate prior.
+    amin : float
+        The minimum shape parameter :math:`\\alpha` of the gamma
+        distribution. Has to be positive.
     verbose : bool, optional
         If :python:`True`, print some progress information.
     show_failures : bool, optional
@@ -294,7 +301,7 @@ def test_performance_mixture_cython(long[:] Nset, size_t M, double P_MW,
             with nogil:
                 result = test_performance_mixture_4q(Nset[i], M, P_MW, x0, s0,
                                  a0, x1, s1, a1, quant4, PRIOR_P, PRIOR_S,
-                                 PRIOR_N, PRIOR_V, verbose, show_failures,
+                                 PRIOR_N, PRIOR_V, amin, verbose, show_failures,
                                  seed, 0, tol)
                 for l in range(Nq):
                     for j in range(M):
@@ -309,7 +316,7 @@ def test_performance_mixture_cython(long[:] Nset, size_t M, double P_MW,
             with nogil:
                 result = test_performance_mixture_41q(Nset[i], M, P_MW, x0,
                                  s0, a0, x1, s1, a1, quant41, PRIOR_P,
-                                 PRIOR_S, PRIOR_N, PRIOR_V, verbose,
+                                 PRIOR_S, PRIOR_N, PRIOR_V, amin, verbose,
                                  show_failures, seed, 0, tol)
                 for l in range(Nq):
                     for j in range(M):
