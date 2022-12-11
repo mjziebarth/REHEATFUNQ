@@ -30,6 +30,8 @@
 #include <string>
 #include <sstream>
 #include <limits>
+#include <optional>
+#include <array>
 #include <boost/math/special_functions/digamma.hpp>
 #include <boost/math/special_functions/trigamma.hpp>
 #include <boost/math/special_functions/gamma.hpp>
@@ -46,6 +48,7 @@
 #include <constexpr.hpp>
 #include <ziebarth2022a.hpp>
 #include <quantileinverter.hpp>
+#include <numerics/cdfeval.hpp>
 
 
 using boost::math::digamma;
@@ -61,6 +64,9 @@ using pdtoolbox::QuantileInverter;
 using pdtoolbox::OR;
 using pdtoolbox::AND;
 using pdtoolbox::cnst_sqrt;
+
+using reheatfunq::CDFEval;
+
 /*
  * Use a high precision floating point format.
  */
@@ -162,6 +168,31 @@ private:
  *                                                           *
  *************************************************************/
 
+template<typename real>
+struct locals_t {
+	/* Prior parameters (potentially updated): */
+	real lp;
+	real ls;
+	real n;
+	real v;
+	real amin;
+	real Qmax;
+	real h0;
+	real h1;
+	real h2;
+	real h3;
+	real w;
+	real lh0;
+	real l1p_w;
+	real log_scale;
+	real ztrans;
+	real norm;
+	real Iref;
+	real full_taylor_integral;
+	std::vector<real> ki;
+	std::optional<CDFEval<real>> cdf_eval;
+};
+
 
 /*
  * Get a scale factor for the integrals by computing an approximate maximum
@@ -170,8 +201,8 @@ private:
  */
 
 template<typename real>
-real log_integrand_amax(const real v, const real lp, const real n,
-                        const real ls, const real l1pwz, const real lkiz_sum)
+real log_integrand_amax(const real& l1pwz, const real& lkiz_sum,
+                        const locals_t<real>& L)
 {
 	using std::abs;
 	using boost::multiprecision::abs;
@@ -180,13 +211,13 @@ real log_integrand_amax(const real v, const real lp, const real n,
 	 * integrand (disregarding the second integral) of the normalization
 	 * of the posterior.
 	 */
-	const real C = lp - v*(ls + l1pwz) + lkiz_sum;
+	const real C = L.lp - L.v*(L.ls + l1pwz) + lkiz_sum;
 	real a = 1.0;
 	real f0, f1, da;
 
 	for (size_t i=0; i<20; ++i){
-		f0 = v * digamma(v*a) - n * digamma(a) + C;
-		f1 = v*v*trigamma(v*a) - n*trigamma(a);
+		f0 = L.v * digamma(L.v * a) - L.n * digamma(a) + C;
+		f1 = L.v * L.v * trigamma(L.v * a) - L.n * trigamma(a);
 		da = f0 / f1;
 		a -= da;
 		a = std::max<real>(a, 1e-8);
@@ -205,18 +236,17 @@ struct itgmax_t {
 
 
 template<typename real>
-itgmax_t<real> log_integrand_maximum(const real v, const real lp, const real n,
-                                     const real ls, const real l1pwz,
-                                     const real lkiz_sum)
+itgmax_t<real> log_integrand_maximum(const real& l1pwz, const real& lkiz_sum,
+                                     const locals_t<real>& L)
 {
 	using std::lgamma;
 	using boost::multiprecision::lgamma;
 
 	itgmax_t<real> res;
-	res.a = log_integrand_amax(v, lp, n, ls, l1pwz, lkiz_sum);
+	res.a = log_integrand_amax(l1pwz, lkiz_sum, L);
 
-	res.logI = lgamma(v*res.a) + (res.a-1.0) * lp - n*lgamma(res.a)
-	           - v*res.a*(ls + l1pwz) + (res.a-1) * lkiz_sum;
+	res.logI = lgamma(L.v * res.a) + (res.a - 1.0) * L.lp - L.n*lgamma(res.a)
+	           - L.v * res.a*(L.ls + l1pwz) + (res.a - 1) * lkiz_sum;
 
 	return res;
 }
@@ -226,11 +256,9 @@ itgmax_t<real> log_integrand_maximum(const real v, const real lp, const real n,
  * The innermost integrand of the double integral; the integrand in `a`.
  */
 template<bool log_integrand, typename real>
-real inner_integrand_template(const real a, const real lp,
-                              const real ls, const real n,
-                              const real v, const real l1p_kiz_sum,
-                              const real l1p_wz, const real log_scale
-                             )
+real inner_integrand_template(const real a, const real& l1p_kiz_sum,
+                              const real& l1p_wz, const real& log_integrand_max,
+                              const locals_t<real>& L)
 {
 	using std::exp;
 	using boost::multiprecision::exp;
@@ -241,7 +269,7 @@ real inner_integrand_template(const real a, const real lp,
 	using std::isnan;
 	using boost::multiprecision::isnan;
 
-	auto va = v * a;
+	auto va = L.v * a;
 
 	/*
 	 * Shortcut for small a
@@ -261,13 +289,13 @@ real inner_integrand_template(const real a, const real lp,
 
 
 	// Term PROD_i{  (1-k[i] * z) ^ (a-1)  }
-	real lS = (a-1) * l1p_kiz_sum;
+	real lS = (a - 1) * l1p_kiz_sum;
 
 	// Term ( 1 / (s_new * (1-w*z))) ^ va
-	lS -= va * (ls + l1p_wz);
+	lS -= va * (L.ls + l1p_wz);
 
 	// Remaining summands:
-	lS += lgva + (a-1.0) * lp - n * lga - log_scale;
+	lS += lgva + (a - 1.0) * L.lp - L.n * lga - log_integrand_max;
 
 	// Shortcut for debugging purposes:
 	if (log_integrand)
@@ -292,10 +320,7 @@ real inner_integrand_template(const real a, const real lp,
 
 
 template<typename real>
-real outer_integrand(const real z, const real lp, const real ls, const real n,
-                     const real v, const std::vector<real>& ki,
-                     const real w, const real log_scale, const real amin,
-                     const real Iref)
+real outer_integrand(const real z, const locals_t<real>& L)
 {
 	/* Automatically choose the right numerical functions: */
 	using std::log1p;
@@ -312,21 +337,19 @@ real outer_integrand(const real z, const real lp, const real ls, const real n,
 
 	// Set the inner parameters:
 	real l1p_kiz_sum = 0.0;
-	for (const real& k : ki)
+	for (const real& k : L.ki)
 		l1p_kiz_sum += log1p(-k * z);
-	const real l1p_wz = log1p(-w * z);
+	const real l1p_wz = log1p(-L.w * z);
 
 	/* The non-degenerate case.
 	 * First compute the maximum of the a integrand at this given z:
 	 */
-	const itgmax_t<real> lImax = log_integrand_maximum(v, lp, n, ls, l1p_wz,
-	                                                   l1p_kiz_sum);
+	const itgmax_t<real> lImax = log_integrand_maximum(l1p_wz, l1p_kiz_sum, L);
 
 	// Integrate:
 	auto integrand = [&](real a) -> real {
-		real result = inner_integrand_template<false>(a, lp, ls, n, v,
-		                                              l1p_kiz_sum, l1p_wz,
-		                                              lImax.logI);
+		real result = inner_integrand_template<false>(a, l1p_kiz_sum, l1p_wz,
+		                                              lImax.logI, L);
 		return result;
 	};
 
@@ -335,12 +358,12 @@ real outer_integrand(const real z, const real lp, const real ls, const real n,
 		/* We wrap the integration into a try-catch to be able to distinguish
 		 * the source of the error if any should be thrown.
 		 */
-		if (lImax.a > amin){
+		if (lImax.a > L.amin){
 			size_t lvl0, lvl1;
 			real error1, L11;
 			tanh_sinh<real> int0;
 			exp_sinh<real> int1;
-			S = int0.integrate(integrand, amin, lImax.a,
+			S = int0.integrate(integrand, L.amin, lImax.a,
 			                   TOL_TANH_SINH, &error, &L1, &lvl0)
 			  + int1.integrate(integrand, lImax.a,
 			                   std::numeric_limits<real>::infinity(),
@@ -350,7 +373,7 @@ real outer_integrand(const real z, const real lp, const real ls, const real n,
 		} else {
 			size_t levels;
 			tanh_sinh<real> integrator;
-			S = integrator.integrate(integrand, amin,
+			S = integrator.integrate(integrand, L.amin,
 			                         std::numeric_limits<real>::infinity(),
 			                         TOL_TANH_SINH, &error, &L1, &levels);
 		}
@@ -363,19 +386,19 @@ real outer_integrand(const real z, const real lp, const real ls, const real n,
 	}
 
 	if (isinf(S)){
-		throw ScaleError<real>("outer_integrand", log_scale);
+		throw ScaleError<real>("outer_integrand", L.log_scale);
 	}
 
 	/* Error checking: */
 	constexpr double ltol = std::log(1e-5);
 	const real cmp_err = std::max<real>(log(L1),
-	                                    log(Iref) + log_scale - lImax.logI);
+	                                    log(L.Iref) + L.log_scale - lImax.logI);
 	if (log(error) > ltol + cmp_err){
 		/* Check if this is relevant: */
 		throw PrecisionError<real>("outer_integrand", error, L1);
 	}
 
-	return S * exp(lImax.logI - log_scale);
+	return S * exp(lImax.logI - L.log_scale);
 }
 
 
@@ -391,9 +414,7 @@ struct az_t {
  * Find the maximum of the inner integrand across all a & z
  */
 template<typename real>
-az_t<real> log_integrand_max(const real lp, const real ls, const real n,
-                             const real v, const real w, const real amin,
-                             const std::vector<real>& ki)
+az_t<real> log_integrand_max(const locals_t<real>& L)
 {
 	using std::log1p;
 	using boost::multiprecision::log1p;
@@ -409,26 +430,24 @@ az_t<real> log_integrand_max(const real lp, const real ls, const real n,
 	for (uint_fast8_t i=0; i<200; ++i){
 		/* Set the new parameters:: */
 		l1p_kiz_sum = 0.0;
-		for (const real& k : ki)
-			l1p_kiz_sum += log1p(-k * z);
-		real l1p_wz = log1p(-w * z);
-
-		/* First and second derivatives of the above by z: */
 		real k_1mkz_sum = 0.0;
 		real k2_1mkz2_sum = 0.0;
-		for (real k : ki){
+		for (const real& k : L.ki){
+			l1p_kiz_sum += log1p(-k * z);
+			/* First and second derivatives of the above by z: */
 			real x = k / (1.0 - k*z);
 			k_1mkz_sum -= x;
 			k2_1mkz2_sum -= x*x;
 		}
-		real w_1mwz = -w / (1.0 - w*z);
+
+		real l1p_wz = log1p(-L.w * z);
+		real w_1mwz = -L.w / (1.0 - L.w*z);
 		real w2_1mwz2 = - w_1mwz * w_1mwz;
 
 
 		/* New amax: */
-		real amax = std::max(log_integrand_amax(v, lp, n, ls, l1p_wz,
-		                                        l1p_kiz_sum),
-		                     amin);
+		real amax = std::max(log_integrand_amax(l1p_wz, l1p_kiz_sum, L),
+		                     L.amin);
 
 		/* Log of integrand:
 		 * f0 =   std::lgamma(v*amax) + (amax - 1.0) * lp
@@ -437,10 +456,10 @@ az_t<real> log_integrand_max(const real lp, const real ls, const real n,
 		 */
 
 		/* Derivative of the log of the integrand by z: */
-		real f1 = - v * amax * w_1mwz + (amax - 1.0) * k_1mkz_sum;
+		real f1 = - L.v * amax * w_1mwz + (amax - 1.0) * k_1mkz_sum;
 
 		/* Second derivative of the log of the integrand by z: */
-		real f2 = - v * amax * w2_1mwz2 + (amax - 1.0) * k2_1mkz2_sum;
+		real f2 = - L.v * amax * w2_1mwz2 + (amax - 1.0) * k2_1mkz2_sum;
 
 		/* Newton step: */
 		real znext = std::min<real>(std::max<real>(z - f1 / f2, 0.0),
@@ -453,15 +472,15 @@ az_t<real> log_integrand_max(const real lp, const real ls, const real n,
 
 	/* Determine amax for the final iteration: */
 	l1p_kiz_sum = 0.0;
-	for (const real& k : ki)
+	for (const real& k : L.ki)
 		l1p_kiz_sum += log1p(-k * z);
-	real l1p_wz = log1p(-w * z);
-	real amax = std::max(log_integrand_amax(v, lp, n, ls, l1p_wz, l1p_kiz_sum),
-	                     amin);
+	real l1p_wz = log1p(-L.w * z);
+	real amax = std::max(log_integrand_amax(l1p_wz, l1p_kiz_sum, L),
+	                     L.amin);
 
 	/* Log of the integrand: */
-	const real f0 = lgamma(v*amax) + (amax - 1.0) * lp
-	                - n*lgamma(amax) - v*amax*(ls + l1p_wz)
+	const real f0 = lgamma(L.v * amax) + (amax - 1.0) * L.lp
+	                - L.n * lgamma(amax) - L.v * amax * (L.ls + l1p_wz)
 	                + (amax - 1.0) * l1p_kiz_sum;
 
 	return {.a=amax, .z=z, .log_integrand=f0};
@@ -490,12 +509,11 @@ struct C1_t {
 	real deriv1;
 	real deriv2;
 
-	C1_t(const real a, const real v, const real w, const real h0,
-	     const real h1)
+	C1_t(const real a, const locals_t<real>& L)
 	{
-		auto h1h0 = h1 / h0;
-		deriv0 = (h1h0 + v*w/(w-1))*a - h1h0;
-		deriv1 = h1h0 + v*w/(w-1);
+		auto h1h0 = L.h1 / L.h0;
+		deriv0 = (h1h0 + L.v * L.w / (L.w - 1)) * a - h1h0;
+		deriv1 = h1h0 + L.v * L.w / (L.w - 1);
 		deriv2 = 0.0;
 	}
 };
@@ -511,17 +529,18 @@ struct C2_t {
 	real deriv1;
 	real deriv2;
 
-	C2_t(const real a, const real v, const real w, const real h0,
-	     const real h1, const real h2)
+	C2_t(const real a, const locals_t<real>& L)
 	{
-		auto h1h0 = h1 / h0;
-		auto h2h0 = h2 / h0;
-		auto nrm = 1.0 / (w*w - 2*w + 1);
-		auto D2 = (v*v*w*w + h1h0 * (2 * v * w * (w - 1)
-		                             +  h1h0 * (1 + w * (w - 2)))
+		auto h1h0 = L.h1 / L.h0;
+		auto h2h0 = L.h2 / L.h0;
+		auto nrm = 1.0 / (L.w * L.w - 2 * L.w + 1);
+		auto D2 = (L.v * L.v * L.w * L.w
+		           + h1h0 * (2 * L.v * L.w * (L.w - 1)
+		                     +  h1h0 * (1 + L.w * (L.w - 2)))
 		          ) * nrm;
-		auto D1 = (v*w*w + 2*h2h0*(w*(w - 2) + 1)
-		           - h1h0 * (2*w*v*(w - 1) + 3 * h1h0*(w*(w-2)+1))) * nrm;
+		auto D1 = (L.v * L.w * L.w + 2 * h2h0 * (L.w * (L.w - 2) + 1)
+		           - h1h0 * (2 * L.w * L.v * (L.w - 1)
+		                     + 3 * h1h0 * (L.w * (L.w - 2) + 1))) * nrm;
 		auto D0 = 2*(h1h0*h1h0 - h2h0);
 		deriv0 = D0 + a * (D1 + a * D2);
 		deriv2 = 2 * D2;
@@ -541,36 +560,34 @@ struct C3_t {
 	real deriv1;
 	real deriv2;
 
-	C3_t(const real a, const real v, const real w,
-	     const real h0, const real h1, const real h2,
-	     const real h3)
+	C3_t(const real a, const locals_t<real>& L)
 	{
-		auto h1h0 = h1 / h0;
-		auto h2h0 = h2 / h0;
-		auto h3h0 = h3 / h0;
-		auto v2 = v*v;
-		auto v3 = v2*v;
-		auto w2 = w*w;
-		auto w3 = w2*w;
-		auto F = w * (w * (w - 3) + 3) - 1; // w3 - 3*w2 + 3*w - 1
+		auto h1h0 = L.h1 / L.h0;
+		auto h2h0 = L.h2 / L.h0;
+		auto h3h0 = L.h3 / L.h0;
+		real v2 = L.v * L.v;
+		auto v3 = v2 * L.v;
+		real w2 = L.w * L.w;
+		auto w3 = w2 * L.w;
+		real F = L.w * (L.w * (L.w - 3) + 3) - 1; // w3 - 3*w2 + 3*w - 1
 		auto nrm = 1/F;
-		auto D3 = (v3*w3
-		           + h1h0 * (3 * v2 * w2 * (w-1)
-		                     + h1h0 * (3 * v*w*(w*(w-2)+1)
-		                               + h1h0*F))
+		auto D3 = (v3 * w3
+		           + h1h0 * (3 * v2 * w2 * (L.w - 1)
+		                     + h1h0 * (3 * L.v * L.w * (L.w * (L.w - 2) + 1)
+		                               + h1h0 * F))
 		          ) * nrm;
 
-		auto D2 = 3 * (v2*w3 + 2 * h2h0 * v * w * (w-1) * (w-1)
-		               + h1h0 * (v * w2 * (v-1) * (1-w)
+		auto D2 = 3 * (v2*w3 + 2 * h2h0 * L.v * L.w * (L.w - 1) * (L.w - 1)
+		               + h1h0 * (L.v * w2 * (L.v - 1) * (1 - L.w)
 		                         + 2 * h2h0 * F
-		                         + h1h0 * (3 * v * w * (w * (2-w) - 1)
+		                         + h1h0 * (3 * L.v * L.w * (L.w * (2 - L.w) - 1)
 		                                   - 2 * h1h0 * F))
 		            ) * nrm;
-		auto D1 = (  2 * v * w3  +  6*h3h0 * F
-		           + 6 * h2h0 * v * w * (w * (2 - w) - 1)
-		           + h1h0 * (3 * v * w2 * (1-w)
+		auto D1 = (  2 * L.v * w3  +  6 * h3h0 * F
+		           + 6 * h2h0 * L.v * L.w * (L.w * (2 - L.w) - 1)
+		           + h1h0 * (3 * L.v * w2 * (1 - L.w)
 		                     - 18 * h2h0 * F
-		                     + h1h0 * (6 * v * w * (w2 - 2*w + 1)
+		                     + h1h0 * (6 * L.v * L.w * (w2 - 2 * L.w + 1)
 		                               + 11 * h1h0*F))
 		          ) * nrm;
 
@@ -584,10 +601,7 @@ struct C3_t {
 
 
 template<typename real, unsigned char order>
-real large_z_amax(const real lp, const real ls, const real n,
-                  const real v, const real h0, const real h1,
-                  const real h2, const real h3, const real w,
-                  const real l1pw, const real ym, const real amin)
+real large_z_amax(const real ym, const locals_t<real>& L)
 {
 	using std::log;
 	using boost::multiprecision::log;
@@ -597,19 +611,22 @@ real large_z_amax(const real lp, const real ls, const real n,
 	/* This method computes max location of the maximum of the four integrals
 	 * used in the Taylor expansion of the double integral for large z. */
 	constexpr double TOL = 1e-14;
-	const real lh0 = log(h0);
+	const real lh0 = log(L.h0);
 	const real lym =  log(ym);
-	real amax = (n > v) ? std::max<real>((lp - v*ls + v*log(v) + lh0 - v * l1pw
-	                                      + lym) / (n - v), 1.0)
+	real amax = (L.n > L.v) ? std::max<real>((L.lp - L.v * L.ls + L.v * log(L.v)
+	                                          + lh0 - L.v * L.l1p_w + lym)
+	                                         / (L.n - L.v),
+	                                         1.0)
 	                    : 1.0;
 
 	/* Recurring terms of the first and second derivatives of the a-integrands:
 	 */
 	auto f0_base = [&](real a) -> real {
-		return v * digamma(v*a) + lp - n*digamma(a) - v*ls + lh0 - v*l1pw;
+		return L.v * digamma(L.v * a) + L.lp - L.n * digamma(a) - L.v * L.ls
+		       + lh0 - L.v * L.l1p_w;
 	};
 	auto f1_base = [&](real a) -> real {
-		return v*v*trigamma(v*a) - n*trigamma(a);
+		return L.v * L.v * trigamma(L.v * a) - L.n * trigamma(a);
 	};
 
 	if (order == 0){
@@ -623,7 +640,7 @@ real large_z_amax(const real lp, const real ls, const real n,
 		}
 	} else if (order == 1){
 		for (uint_fast8_t i=0; i<200; ++i){
-			C1_t<real> C1(amax, v, w, h0, h1);
+			C1_t<real> C1(amax, L);
 			real C1_1 = C1.deriv1 / C1.deriv0;
 			const real f0 = f0_base(amax) - 1/(amax+1) + lym + C1_1;
 			const real f1 = f1_base(amax) + 1/((amax+1)*(amax+1))
@@ -635,7 +652,7 @@ real large_z_amax(const real lp, const real ls, const real n,
 		}
 	} else if (order == 2){
 		for (uint_fast8_t i=0; i<200; ++i){
-			C2_t<real> C2(amax, v, w, h0, h1, h2);
+			C2_t<real> C2(amax, L);
 			real C2_1 = C2.deriv1/C2.deriv0;
 			const real f0 = f0_base(amax) - 1/(amax+2) + lym + C2_1;
 			const real f1 = f1_base(amax) + 1/((amax+2)*(amax+2))
@@ -647,7 +664,7 @@ real large_z_amax(const real lp, const real ls, const real n,
 		}
 	} else if (order == 3){
 		for (int i=0; i<200; ++i){
-			C3_t<real> C3(amax, v, w, h0, h1, h2, h3);
+			C3_t<real> C3(amax, L);
 			const real C3_1 = C3.deriv1/C3.deriv0;
 			auto C3_2 = C3.deriv2/C3.deriv0 - C3_1 * C3_1;
 			const real f0 = f0_base(amax) - 1/(amax+3) + lym + C3_1;
@@ -658,38 +675,9 @@ real large_z_amax(const real lp, const real ls, const real n,
 				break;
 		}
 	}
-	return std::max(amax, amin);
+	return std::max(amax, L.amin);
 }
 
-
-
-struct params3_t {
-	// Additional parameters:
-	double lh0;
-	double h0;
-	double h1;
-	double h2;
-	double h3;
-	bool y_integrated;
-
-	// Parameters:
-	double nu_new;
-	double lp_tilde;
-	double n_new;
-	double ls_tilde;
-	double l1p_w;
-	double w;
-
-	params3_t(){};
-
-	params3_t(double lh0, double h0, double h1, double h2, double h3,
-	          bool y_integrated, double nu_new, double lp_tilde, double n_new,
-	          double ls_tilde, double l1p_w, double w)
-	   : lh0(lh0), h0(h0), h1(h1), h2(h2), h3(h3), y_integrated(y_integrated),
-	     nu_new(nu_new), lp_tilde(lp_tilde), n_new(n_new), ls_tilde(ls_tilde),
-	     l1p_w(l1p_w), w(w)
-	{};
-};
 
 /*
  * Integrand of the 'a'-integral given y^(a+m)
@@ -704,11 +692,8 @@ struct log_double_t {
 
 template<C_t C, bool y_integrated, typename real>
 log_double_t<real>
-a_integral_large_z_log_integrand(real a, real ly, real log_scale,
-                                 const real lp, const real ls, const real n,
-                                 const real v, const real w, const real h0,
-                                 const real h1, const real h2, const real h3,
-                                 const real l1p_w, const real lh0)
+a_integral_large_z_log_integrand(real a, real ly, real log_integrand_max,
+                                 const locals_t<real>& L)
 {
 	using std::log;
 	using boost::multiprecision::log;
@@ -717,7 +702,7 @@ a_integral_large_z_log_integrand(real a, real ly, real log_scale,
 	using std::isinf;
 	using boost::multiprecision::isinf;
 
-	const real va = v * a;
+	const real va = L.v * a;
 
 	// Compute C:
 	real lC = 0.0;
@@ -727,7 +712,7 @@ a_integral_large_z_log_integrand(real a, real ly, real log_scale,
 		lC = 0.0;
 	} else if (C == C_t::C1) {
 		/* C1 */
-		const C1_t C1(a, v, w, h0, h1);
+		const C1_t C1(a, L);
 		if (C1.deriv0 < 0){
 			sign = -1;
 			lC = log(-C1.deriv0);
@@ -736,7 +721,7 @@ a_integral_large_z_log_integrand(real a, real ly, real log_scale,
 		}
 	} else if (C == C_t::C2){
 		/* C2 */
-		const C2_t C2(a, v, w, h0, h1, h2);
+		const C2_t C2(a, L);
 		if (C2.deriv0 < 0){
 			sign = -1;
 			lC = log(-C2.deriv0);
@@ -745,7 +730,7 @@ a_integral_large_z_log_integrand(real a, real ly, real log_scale,
 		}
 	} else if (C == C_t::C3){
 		/* C3 */
-		const C3_t C3(a, v, w, h0, h1, h2, h3);
+		const C3_t C3(a, L);
 		if (C3.deriv0 < 0){
 			sign = -1;
 			lC = log(-C3.deriv0);
@@ -779,10 +764,10 @@ a_integral_large_z_log_integrand(real a, real ly, real log_scale,
 	}
 
 	// Term ( s_tilde / (1-w) ) ^ va
-	lC -= va * (ls + l1p_w);
+	lC -= va * (L.ls + L.l1p_w);
 
 	// Remaining summands:
-	lC += lgva + (a-1.0) * (lp + lh0) - n * lga - log_scale;
+	lC += lgva + (a - 1.0) * (L.lp + L.lh0) - L.n * lga - log_integrand_max;
 
 	if (isinf(lC)){
 		return {.log_abs=-std::numeric_limits<double>::infinity(),
@@ -793,11 +778,8 @@ a_integral_large_z_log_integrand(real a, real ly, real log_scale,
 }
 
 template<C_t C, bool y_integrated, typename real>
-real a_integral_large_z_integrand(real a, real ly, real log_scale,
-                                  const real lp, const real ls, const real n,
-                                  const real v, const real w, const real h0,
-                                  const real h1, const real h2, const real h3,
-                                  const real l1p_w, const real lh0)
+real a_integral_large_z_integrand(real a, real ly, real log_integrand_max,
+                                  const locals_t<real>& L)
 {
 	using std::exp;
 	using boost::multiprecision::exp;
@@ -805,9 +787,8 @@ real a_integral_large_z_integrand(real a, real ly, real log_scale,
 	using boost::multiprecision::isinf;
 
 	log_double_t<real> res
-	    = a_integral_large_z_log_integrand<C,y_integrated, real>(a, ly,
-	                        log_scale, lp, ls, n, v, w, h0, h1, h2, h3, l1p_w,
-	                        lh0);
+	    = a_integral_large_z_log_integrand<C,y_integrated, real>
+	           (a, ly, log_integrand_max, L);
 
 	// Compute the result and test for finity:
 	real result = exp(res.log_abs);
@@ -831,11 +812,7 @@ real a_integral_large_z_integrand(real a, real ly, real log_scale,
 
 
 template<typename real>
-real y_taylor_transition_root_backend(real y, const real lp, const real ls,
-                            const real n, const real v, const real h0,
-                            const real h1, const real h2, const real h3,
-                            const real lh0, const real w, const real l1p_w,
-                            const real log_scale0, const real amin)
+real y_taylor_transition_root_backend(real y, const locals_t<real>& L)
 {
 	using std::log;
 	using boost::multiprecision::log;
@@ -847,14 +824,11 @@ real y_taylor_transition_root_backend(real y, const real lp, const real ls,
 	constexpr double epsilon = 1e-14;
 
 	/* Get the scale: */
-	const real amax = large_z_amax<real,0>(lp, ls, n, v, h0, h1, h2, h3,
-	                                       w, l1p_w, y, amin);
+	const real amax = large_z_amax<real,0>(y, L);
 	const real ly = log(y);
-	const real log_scale = log_scale0
-	    + a_integral_large_z_log_integrand<C_t::C0,true>(amax, ly, log_scale0,
-	                                                lp,  ls, n, v, w, h0, h1,
-	                                                h2, h3, l1p_w,
-	                                                lh0).log_abs;
+	const real log_scale = L.log_scale
+	    + a_integral_large_z_log_integrand<C_t::C0,true>(amax, ly, L.log_scale,
+	                                                     L).log_abs;
 
 	/* Compute the 'a' integrals for the constant and the cubic term: */
 	real error, L1;
@@ -865,15 +839,14 @@ real y_taylor_transition_root_backend(real y, const real lp, const real ls,
 	auto integrand0 = [&](real a) -> real
 	{
 		return a_integral_large_z_integrand<C_t::C0,true,real>(
-		                a, ly, log_scale, lp, ls, n, v, w, h0, h1,
-		                h2, h3, l1p_w, lh0
+		                a, ly, log_scale, L
 		);
 	};
 
 	real S0;
-	if (amax > amin){
+	if (amax > L.amin){
 		real error1, L11;
-		S0 = ts_integrator.integrate(integrand0, amin, amax,
+		S0 = ts_integrator.integrate(integrand0, L.amin, amax,
 		                             TOL_TANH_SINH, &error, &L1, &levels)
 		   + es_integrator.integrate(integrand0, amax,
 		                             std::numeric_limits<real>::infinity(),
@@ -881,7 +854,7 @@ real y_taylor_transition_root_backend(real y, const real lp, const real ls,
 		error += error1;
 		L1 += L11;
 	} else {
-		S0 = es_integrator.integrate(integrand0, amin,
+		S0 = es_integrator.integrate(integrand0, L.amin,
 		                             std::numeric_limits<real>::infinity(),
 		                             TOL_TANH_SINH, &error, &L1, &levels);
 	}
@@ -900,16 +873,15 @@ real y_taylor_transition_root_backend(real y, const real lp, const real ls,
 	auto integrand1 = [&](real a) -> real
 	{
 		return a_integral_large_z_integrand<C_t::C3,true,real>(
-		                a, ly, log_scale, lp, ls, n, v, w, h0, h1,
-		                h2, h3, l1p_w, lh0
+		                a, ly, log_scale, L
 		);
 	};
 
 
 	real S1;
-	if (amax > amin){
+	if (amax > L.amin){
 		real error1, L11;
-		S1 = ts_integrator.integrate(integrand1, amin, amax,
+		S1 = ts_integrator.integrate(integrand1, L.amin, amax,
 		                             TOL_TANH_SINH, &error, &L1, &levels)
 		   + es_integrator.integrate(integrand1, amax,
 		                             std::numeric_limits<real>::infinity(),
@@ -917,7 +889,7 @@ real y_taylor_transition_root_backend(real y, const real lp, const real ls,
 		error += error1;
 		L1 += L11;
 	} else {
-		S1 = es_integrator.integrate(integrand1, amin,
+		S1 = es_integrator.integrate(integrand1, L.amin,
 		                             std::numeric_limits<real>::infinity(),
 		                             TOL_TANH_SINH, &error, &L1, &levels);
 	}
@@ -948,12 +920,7 @@ real y_taylor_transition_root_backend(real y, const real lp, const real ls,
 
 
 template<typename real>
-real y_taylor_transition(const real h0, const real h1, const real h2,
-                         const real h3, const real nu_new,
-                         const real lp_tilde, const real n_new,
-                         const real log_scale, const real ls_tilde,
-                         const real l1p_w, const real w, const real amin,
-                         const real ymin = 1e-32)
+real y_taylor_transition(const locals_t<real>& L, const real ymin = 1e-32)
 {
 	using std::log;
 	using boost::multiprecision::log;
@@ -962,26 +929,17 @@ real y_taylor_transition(const real h0, const real h1, const real h2,
 
 	/* Find a value above the threshold: */
 	real yr = 1e-9;
-	real lh0 = log(h0);
-	real val = y_taylor_transition_root_backend<real>(yr, lp_tilde, ls_tilde,
-	                                                  n_new, nu_new, h0, h1, h2,
-	                                                  h3, lh0, w, l1p_w,
-	                                                  log_scale, amin);
+	real val = y_taylor_transition_root_backend<real>(yr, L);
 	while (val < 0 || isnan(val)){
 		yr = std::min<real>(2*yr, 1.0);
 		if (yr == 1.0)
 			break;
-		val = y_taylor_transition_root_backend<real>(yr, lp_tilde, ls_tilde,
-		                                       n_new, nu_new, h0, h1, h2, h3,
-		                                       lh0, w, l1p_w, log_scale, amin);
+		val = y_taylor_transition_root_backend<real>(yr, L);
 	}
 
 	/* Root finding: */
 	auto rootfun = [&](real y) -> real {
-		return y_taylor_transition_root_backend<real>(y, lp_tilde, ls_tilde,
-		                                        n_new, nu_new, h0, h1, h2, h3,
-		                                        lh0, w, l1p_w, log_scale,
-		                                        amin);
+		return y_taylor_transition_root_backend<real>(y, L);
 	};
 	constexpr std::uintmax_t MAX_ITER = 100;
 	std::uintmax_t max_iter = MAX_ITER;
@@ -1002,12 +960,8 @@ real y_taylor_transition(const real h0, const real h1, const real h2,
  * Compute the actual integral:
  */
 template<bool y_integrated, typename real>
-real a_integral_large_z(const real ym, const real h0, const real h1,
-                        const real h2, const real h3, const real nu_new,
-                        const real lp_tilde, const real n_new,
-                        const real log_scale, const real ls_tilde,
-                        const real l1p_w, const real w, const real amin,
-                        const real S_cmp)
+real a_integral_large_z(const real ym, const real S_cmp,
+                        const locals_t<real>& L)
 {
 	using std::log;
 	using boost::multiprecision::log;
@@ -1020,7 +974,7 @@ real a_integral_large_z(const real ym, const real h0, const real h1,
 
 	/* Set the integrand's non-varying parameters: */
 	const real ly = log(ym);
-	const real lh0 = log(h0);
+	const real lScmp = log(S_cmp);
 
 	/* Integration setup for 'a' integrals:: */
 	real error, L1, S;
@@ -1029,27 +983,23 @@ real a_integral_large_z(const real ym, const real h0, const real h1,
 
 	auto integrand = [&](real a) -> real
 	{
-		real S0 = a_integral_large_z_integrand<C_t::C0, y_integrated,real>(
-		               a, ly, log_scale, lp_tilde, ls_tilde, n_new, nu_new,
-		               w, h0, h1, h2, h3, l1p_w, lh0
-		);
-		real S1 = a_integral_large_z_integrand<C_t::C1,y_integrated,real>(
-		               a, ly,log_scale, lp_tilde, ls_tilde, n_new, nu_new,
-		               w, h0, h1, h2, h3, l1p_w, lh0
-		);
-		real S2 = a_integral_large_z_integrand<C_t::C2,y_integrated,real>(
-		               a, ly,log_scale, lp_tilde, ls_tilde, n_new, nu_new,
-		               w, h0, h1, h2, h3, l1p_w, lh0
-		);
-		real S3 = a_integral_large_z_integrand<C_t::C3,y_integrated,real>(
-		              a, ly, log_scale, lp_tilde, ls_tilde, n_new, nu_new,
-		              w, h0, h1, h2, h3, l1p_w, lh0
-		);
+		real S0
+		   = a_integral_large_z_integrand<C_t::C0,y_integrated,real>
+		         (a, ly, lScmp, L);
+		real S1
+		   = a_integral_large_z_integrand<C_t::C1,y_integrated,real>
+		         (a, ly, lScmp, L);
+		real S2
+		   = a_integral_large_z_integrand<C_t::C2,y_integrated,real>
+		         (a, ly, lScmp, L);
+		real S3
+		   = a_integral_large_z_integrand<C_t::C3,y_integrated,real>
+		         (a, ly, lScmp, L);
 		return S0 + S1 + S2 + S3;
 	};
 
 	try {
-		S = integrator.integrate(integrand, amin,
+		S = integrator.integrate(integrand, L.amin,
 		                         std::numeric_limits<real>::infinity(),
 		                         TOL_TANH_SINH, &error, &L1, &levels);
 	} catch (std::runtime_error& e) {
@@ -1059,7 +1009,7 @@ real a_integral_large_z(const real ym, const real h0, const real h1,
 		throw std::runtime_error(msg);
 	}
 	if (isinf(S) || isnan(S))
-		throw ScaleError<real>("a_integral_large_z", log_scale);
+		throw ScaleError<real>("a_integral_large_z", L.log_scale);
 	if (error > 1e-14 * std::max(L1, S_cmp))
 		throw PrecisionError<real>("a_integral_large_z_S3", error, L1);
 
@@ -1076,17 +1026,12 @@ real a_integral_large_z(const real ym, const real h0, const real h1,
 using pdtoolbox::heatflow::posterior_t;
 
 
-template<typename real, bool need_norm=true>
+template<typename real, bool need_norm=true, bool use_cdf_eval=false>
 void init_locals(const double* qi, const double* ci, size_t N,
-                 const real nu, const real n, const real s, const real p,
-                 const real amin,
+                 const real v, const real n, const real s, const real p,
+                 const real amin, const double* x, const size_t Nx,
                  // Destination parameters:
-                 real& lp_tilde, real& ls_tilde, real& nu_new,
-                 real& n_new, real& Qmax, real& h0, real& h1,
-                 real& h2, real& h3, real& w, real& l1p_w,
-                 real& ztrans, real& log_scale, real& norm,
-                 real& Iref, std::vector<real>& ki, real& full_taylor_integral,
-                 size_t& imax)
+                 locals_t<real>& L, size_t& imax, double dest_tol)
 {
 	using std::isinf;
 	using boost::multiprecision::isinf;
@@ -1096,24 +1041,25 @@ void init_locals(const double* qi, const double* ci, size_t N,
 	using boost::multiprecision::log1p;
 
 	// Initialize parameters:
-	nu_new = nu + N;
-	n_new = n + N;
+	L.v = v + N;
+	L.n = n + N;
+	L.amin = amin;
 
 	// Step 0: Determine Qmax, A, B, and ki:
 	imax = 0;
-	Qmax = std::numeric_limits<real>::infinity();
+	L.Qmax = std::numeric_limits<real>::infinity();
 	for (size_t i=0; i<N; ++i){
 		if (qi[i] <= 0)
 			throw std::runtime_error("At least one qi is zero or negative and "
 			                         "has hence left the model definition "
 			                         "space.");
 		real Q = qi[i] / ci[i];
-		if (Q > 0 && Q < Qmax){
-			Qmax = Q;
+		if (Q > 0 && Q < L.Qmax){
+			L.Qmax = Q;
 			imax = i;
 		}
 	}
-	if (isinf(Qmax))
+	if (isinf(L.Qmax))
 		throw std::runtime_error("Found Qmax == inf. The model is not "
 		                         "well-defined. This might happen if all "
 		                         "ci <= 0, i.e. heat flow anomaly has a "
@@ -1122,60 +1068,59 @@ void init_locals(const double* qi, const double* ci, size_t N,
 	real A = s;
 	for (size_t i=0; i<N; ++i)
 		A += qi[i];
-	ls_tilde = log(A);
+	L.ls = log(A);
 	real B = 0.0;
 	for (size_t i=0; i<N; ++i)
 		B += ci[i];
+	L.ki.resize(N);
 	for (size_t i=0; i<N; ++i)
-		ki[i] = ci[i] * Qmax / qi[i];
+		L.ki[i] = ci[i] * L.Qmax / qi[i];
 	real lq_sum = 0.0;
 	for (size_t i=0; i<N; ++i)
 		lq_sum += log(qi[i]);
 
-	lp_tilde = log(p) + lq_sum;
-	w = B * Qmax / A;
+	L.lp = log(p) + lq_sum;
+	L.w = B * L.Qmax / A;
 
 	// Integration config:
 
 	/* Get an estimate of the scaling: */
 
 	/* The new version: */
-	az_t azmax = log_integrand_max(lp_tilde, ls_tilde, n_new, nu_new, w, amin,
-	                               ki);
-	log_scale = azmax.log_integrand;
+	az_t azmax = log_integrand_max(L);
+	L.log_scale = azmax.log_integrand;
 
 	/* Compute the coefficients for the large-z (small-y) Taylor expansion: */
-	h0=1.0;
-	h1=0;
-	h2=0;
-	h3=0;
+	L.h0=1.0;
+	L.h1=0;
+	L.h2=0;
+	L.h3=0;
 	for (size_t i=0; i<N; ++i){
 		if (i == imax)
 			continue;
-		const real d0 = 1.0 - ki[i];
-		h3 = d0 * h3 + ki[i] * h2;
-		h2 = d0 * h2 + ki[i] * h1;
-		h1 = d0 * h1 + ki[i] * h0;
-		h0 *= d0;
+		const real d0 = 1.0 - L.ki[i];
+		L.h3 = d0 * L.h3 + L.ki[i] * L.h2;
+		L.h2 = d0 * L.h2 + L.ki[i] * L.h1;
+		L.h1 = d0 * L.h1 + L.ki[i] * L.h0;
+		L.h0 *= d0;
 	}
+	L.lh0 = log(L.h0);
 
 	/* Step 1: Compute the normalization constant.
 	 *         This requires the full integral and might require
 	 *         a readjustment of the log_scale parameter. */
-	l1p_w = log1p(-w);
+	L.l1p_w = log1p(-L.w);
 	bool norm_success = false;
-	full_taylor_integral = std::nan("");
-	norm = std::nan("");
-	ztrans = std::nan("");
+	L.full_taylor_integral = std::nan("");
+	L.norm = std::nan("");
+	L.ztrans = std::nan("");
 	real ymax, S;
 
-	while (!norm_success && !isinf(log_scale)){
+	while (!norm_success && !isinf(L.log_scale)){
 		// Compute the transition z where we switch to an analytic integral of
 		// the Taylor expansion:
 		try {
-			ymax = y_taylor_transition(h0, h1, h2, h3, nu_new, lp_tilde, n_new,
-			                           log_scale, ls_tilde, l1p_w, w,
-			                           static_cast<real>(1e-32));
+			ymax = y_taylor_transition(L, static_cast<real>(1e-32));
 		} catch (ScaleError<real>& s) {
 			if (s.log_scale() < 0){
 				std::string msg("Failed to determine the normalization "
@@ -1186,7 +1131,7 @@ void init_locals(const double* qi, const double* ci, size_t N,
 				msg.append(std::to_string(static_cast<double>(s.log_scale())));
 				throw std::runtime_error(msg);
 			}
-			log_scale += s.log_scale();
+			L.log_scale += s.log_scale();
 			continue;
 		} catch (PrecisionError<real>& s){
 			std::string msg("Failed to determine the normalization "
@@ -1199,7 +1144,7 @@ void init_locals(const double* qi, const double* ci, size_t N,
 			msg.append(std::to_string(static_cast<double>(s.L1())));
 			throw std::runtime_error(msg);
 		}
-		ztrans = 1.0 - ymax;
+		L.ztrans = 1.0 - ymax;
 
 		/*
 		 * For the unnormed posterior, we do not need the normalization
@@ -1211,32 +1156,48 @@ void init_locals(const double* qi, const double* ci, size_t N,
 		try {
 			/* Compute a reference integral along the a axis at z that
 			 * corresponds to the maximum (a,z): */
-			Iref = 0;
-			Iref = outer_integrand(azmax.z, lp_tilde, ls_tilde, n_new,
-			                       nu_new, ki, w, log_scale, amin, Iref);
+			L.Iref = 0;
+			L.Iref = outer_integrand(azmax.z, L);
+
+
+			std::map<real,real> cache;
 
 			auto integrand = [&](real z) -> real
 			{
-				return outer_integrand(z, lp_tilde, ls_tilde, n_new, nu_new,
-				                       ki, w, log_scale, amin, Iref);
+				auto it = cache.lower_bound(z);
+				if (it == cache.end() || it->first != z){
+					real val = outer_integrand(z, L);
+					it = cache.insert(it, std::make_pair(z, val));
+				}
+				return it->second;
 			};
 
 			// 1.1: Double numerical integration in z range [0,1-ymax]:
-			static_assert(std::is_same<real, double>::value ||
-			              std::is_same<real, long double>::value ||
-			              std::is_same<real, float>::value ||
-			              std::is_same<real, float128>::value);
-			real error;
-			tanh_sinh<real> integrator;
-			S = integrator.integrate(integrand, static_cast<real>(0), ztrans,
-			                         TOL_TANH_SINH, &error);
+			if (use_cdf_eval){
+				/* This is called for the CDF: */
+				std::vector<real> z;
+				z.reserve(Nx);
+				for (size_t i=0; i<Nx; ++i){
+					real zi = static_cast<real>(x[i]) / L.Qmax;
+					if (zi <= L.ztrans)
+						z.push_back(zi);
+				}
+				L.cdf_eval = CDFEval<real>(z, integrand, 0.0, L.ztrans,
+				                           0.0, dest_tol);
+				S = L.cdf_eval->norm();
 
+			} else {
+				real error;
+				tanh_sinh<real> integrator;
+				S = integrator.integrate(integrand, static_cast<real>(0),
+				                         L.ztrans, TOL_TANH_SINH, &error);
+			}
 		} catch (ScaleError<real>& s) {
 			if (s.log_scale() < 0)
 				throw std::runtime_error("Failed to determine the "
 				                         "normalization constant: Encountered "
 				                         "negative scale error.");
-			log_scale += s.log_scale();
+			L.log_scale += s.log_scale();
 			continue;
 		} catch (PrecisionError<real>& s) {
 			s.append_message("Failed to determine the normalization "
@@ -1247,7 +1208,7 @@ void init_locals(const double* qi, const double* ci, size_t N,
 			                "for the integrand: '");
 			msg.append(err.what());
 			msg.append("'.\nMore information: ztrans=");
-			msg.append(std::to_string(static_cast<double>(ztrans)));
+			msg.append(std::to_string(static_cast<double>(L.ztrans)));
 			msg.append(", ymax=");
 			std::ostringstream os_ymax;
 			os_ymax << ymax;
@@ -1259,17 +1220,19 @@ void init_locals(const double* qi, const double* ci, size_t N,
 		try {
 			// 1.2: Combined analytical and numerical integration for
 			//      z in range [1-ymax, 1]:
-			full_taylor_integral =
-			a_integral_large_z<true>(ymax, h0, h1, h2, h3, nu_new, lp_tilde,
-			                   n_new, log_scale, ls_tilde, l1p_w, w, amin,
-			                   S);
-			S += full_taylor_integral;
+			L.full_taylor_integral =
+			a_integral_large_z<true>(ymax, S, L);
+			S += L.full_taylor_integral;
+
+			if (use_cdf_eval)
+				L.cdf_eval->add_outside_mass(L.full_taylor_integral / S);
+
 		} catch (ScaleError<real>& s) {
 			if (s.log_scale() < 0)
 				throw std::runtime_error("Failed to determine the "
 				                         "normalization constant: Encountered "
 				                         "negative scale error.");
-			log_scale += s.log_scale();
+			L.log_scale += s.log_scale();
 			continue;
 		} catch (PrecisionError<real>& s) {
 			s.append_message("Failed to determine the normalization constant "
@@ -1280,14 +1243,14 @@ void init_locals(const double* qi, const double* ci, size_t N,
 			                "for the integrand: '");
 			msg.append(err.what());
 			msg.append("'.\nMore information: ztrans=");
-			msg.append(std::to_string(static_cast<double>(ztrans)));
+			msg.append(std::to_string(static_cast<double>(L.ztrans)));
 			msg.append(", ymax=");
 			std::ostringstream os_ymax;
 			os_ymax << ymax;
 			msg.append(os_ymax.str());
 			throw std::runtime_error(msg);
 		}
-		norm = S;
+		L.norm = S;
 		norm_success = true;
 	}
 }
@@ -1322,27 +1285,26 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 
 	typedef gauss_kronrod<real, 15> GK;
 
+	constexpr bool is_cumulative
+	   = type & (posterior_t::CUMULATIVE | posterior_t::TAIL);
 
 	/* Step 1: Use the common parameter initialization routine which
 	 *         mainly determines the normalization constant: */
-	real lp_tilde=0, ls_tilde=0, nu_new=0, n_new=0, Qmax=0, h0=0, h1=0,
-	     h2=0, h3=0, w=0, l1p_w=0, ztrans=0, log_scale=0, norm=0,
-	     full_taylor_integral=0, Iref=0;
+	locals_t<real> L;
 	size_t imax;
-	std::vector<real> ki(N);
-	if (type == posterior_t::UNNORMED_LOG)
+	if (type == posterior_t::UNNORMED_LOG){
 		init_locals<real,false>(qi, ci, N, (real)nu, (real)n, (real)s, (real)p,
-		            (real)amin, lp_tilde, ls_tilde, nu_new, n_new, Qmax, h0, h1,
-		            h2, h3, w, l1p_w, ztrans, log_scale, norm, Iref, ki,
-		            full_taylor_integral, imax);
-	else
+		                        (real)amin, x, Nx, L, imax, dest_tol);
+	} else if (is_cumulative){
+		init_locals<real,true,true>(qi, ci, N, (real)nu, (real)n, (real)s,
+		                             (real)p, (real)amin, x, Nx, L, imax,
+		                             dest_tol);
+	} else {
 		init_locals(qi, ci, N, (real)nu, (real)n, (real)s, (real)p, (real)amin,
-		            lp_tilde, ls_tilde, nu_new, n_new, Qmax, h0, h1, h2, h3, w,
-		            l1p_w, ztrans, log_scale, norm, Iref, ki,
-		            full_taylor_integral, imax);
+		            x, Nx, L, imax, dest_tol);
+	}
 
 	std::vector<size_t> order(0);
-	bool is_cumulative = type & (posterior_t::CUMULATIVE | posterior_t::TAIL);
 	real z_last = 0.0, S_cumul = 0.0;
 	if (is_cumulative){
 		order.resize(Nx);
@@ -1371,17 +1333,10 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 	}
 
 	auto integrand = [&](real z) -> real {
-		return outer_integrand<real>(z, lp_tilde, ls_tilde, n_new, nu_new, ki,
-		                             w, log_scale, amin, Iref);
+		return outer_integrand<real>(z, L);
 	};
 
-	/* A condition for deciding the integrator: */
-	bool use_thsh = false;
-	if (type == posterior_t::TAIL || type == posterior_t::CUMULATIVE)
-		use_thsh = (integrand(ztrans)*ztrans > 2*norm);
-
-	tanh_sinh<real> thsh_int;
-	// /* Step 2: Compute the values: */
+	/* Step 2: Compute the values: */
 	for (size_t i=0; i<Nx; ++i){
 		const size_t j = (is_cumulative) ? order[i] : i;
 		// Short cut: x out of bounds:
@@ -1393,7 +1348,7 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 			else
 				res[j] = 0.0;
 			continue;
-		} else if (x[j] >= Qmax){
+		} else if (x[j] >= L.Qmax){
 			if (type == posterior_t::DENSITY || type == posterior_t::TAIL)
 				res[j] = 0.0;
 			else if (type == posterior_t::UNNORMED_LOG)
@@ -1404,7 +1359,7 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 		}
 
 		/* Continue depending on chosen representation of the posterior: */
-		const real zi = x[j] / Qmax;
+		const real zi = static_cast<real>(x[j]) / L.Qmax;
 		if (isnan(zi)){
 			res[j] = std::nan("");
 			continue;
@@ -1417,145 +1372,43 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 			 * Then norm the outer_integrand to a PDF in z. Revert the change of
 			 * variables x->z by dividing the PDF by Qmax.
 			 */
-			if (zi <= ztrans)
-				res[j] = static_cast<double>(integrand(zi) / (Qmax * norm));
+			if (zi <= L.ztrans)
+				res[j] = static_cast<double>(integrand(zi) / (L.Qmax * L.norm));
 			else
 				// Use the Taylor expansion for the limit z->1, y=1-z -> 0:
 				res[j] = static_cast<double>(
-				             a_integral_large_z<false,real>(1.0-zi, h0, h1, h2,
-				                       h3, nu_new, lp_tilde, n_new, log_scale,
-				                       ls_tilde, l1p_w, w, amin, norm)
-				         / (Qmax * norm)
+				             a_integral_large_z<false,real>(1.0 - zi, L.norm, L)
+				         / (L.Qmax * L.norm)
 				);
 		} else if (type == posterior_t::CUMULATIVE){
-			real S;
-			if (zi <= ztrans){
-				real err;
-				const real eps_tol
-				   = boost::math::tools::root_epsilon<double>();
-				if (z_last == zi){
-					S = 0;
-				} else {
-					S = GK::integrate(integrand, z_last, zi, 1,
-					                  eps_tol, &err);
-					if (err > 1e-2 * dest_tol * norm) {
-						if (S != 0)
-							S = GK::integrate(integrand, z_last, zi, 15,
-								              1e-2 * dest_tol * norm / S);
-						else
-							S = GK::integrate(integrand, z_last, zi, 15);
-					}
-				}
-				S_cumul += S;
+			real resj;
+			if (zi <= L.ztrans){
+				resj = L.cdf_eval->cdf(zi);
 				z_last = zi;
-
-				/* Sanity check: Crosscheck the total integral against
-				 * the Gauss-Kronrod-derived norm: */
-				if (i+1 == Nx){
-					S = GK::integrate(integrand, z_last,
-					                                ztrans);
-					real norm_num = S + S_cumul + full_taylor_integral;
-					if (abs(norm_num - norm) > dest_tol * norm){
-						throw PrecisionError<real>("CDF normalization failed "
-						                     "to achieve the desired "
-						                     "precision.",
-						                     abs(norm_num - norm), norm);
-					}
-					/* Renormalize: */
-					const double rescale = 1.0 / static_cast<double>(norm_num);
-					for (size_t k=0; k<Nx; ++k)
-						res[k] *= rescale;
-				}
 			} else {
-				/* Sanity check: */
-				if (z_last < ztrans){
-					S = GK::integrate(integrand, z_last, ztrans);
-					real norm_num = S + S_cumul + full_taylor_integral;
-					if (abs(norm_num - norm) > dest_tol * norm){
-						throw PrecisionError<real>("CDF normalization failed "
-						                           "to achieve the desired "
-						                           "precision.",
-						                           abs(norm_num - norm),
-						                           norm);
-					}
-				}
 				/* Now integrate from the back: */
-				S = norm
-				    - a_integral_large_z<true, real>(1.0-zi, h0, h1, h2, h3,
-				                       nu_new, lp_tilde, n_new, log_scale,
-				                       ls_tilde, l1p_w, w, amin, norm);
-				S_cumul += S;
+				real back = a_integral_large_z<true, real>(1.0-zi, L.norm, L);
+				resj = (L.norm - back) / L.norm;
 				z_last = zi;
 			}
 			res[j] = static_cast<double>(
-			    std::max<real>(std::min<real>(S_cumul / norm, 1.0), 0.0)
+			    std::max<real>(std::min<real>(resj, 1.0), 0.0)
 			);
 		} else if (type == posterior_t::TAIL){
-			real S;
-			if (zi <= ztrans){
+			real resj;
+			if (zi <= L.ztrans){
 				// First the part from zi to ztrans:
-				if (z_last >= ztrans){
-					z_last = ztrans;
-					S_cumul = full_taylor_integral;
-				}
-				if (use_thsh)
-					S = thsh_int.integrate(integrand, zi, z_last);
-				else {
-					real err;
-					constexpr double eps_tol
-					   = boost::math::tools::root_epsilon<double>();
-					if (zi == z_last){
-						S = 0.0;
-					} else {
-						S = GK::integrate(integrand, zi, z_last, 1,
-						                  (real)eps_tol, &err);
-						if (err > 1e-2 * dest_tol * norm) {
-							if (S != 0)
-								S = GK::integrate(integrand, zi, z_last,
-								                  15,
-								                  1e-2 * dest_tol
-								                       * norm / S);
-							else
-								S = GK::integrate(integrand, zi, z_last);
-						}
-					}
-				}
-				S_cumul += S;
+				resj = L.cdf_eval->tail(zi);
 				z_last = zi;
 			} else {
 				// The part from zi to 1:
-				S_cumul = a_integral_large_z<true, real>(1.0-zi, h0, h1, h2,
-				                       h3, nu_new, lp_tilde, n_new, log_scale,
-				                       ls_tilde, l1p_w, w, amin, norm);
+				resj = a_integral_large_z<true, real>(1.0-zi, L.norm,
+				                                      L) / L.norm;
 				z_last = zi;
 			}
 			res[j] = static_cast<double>(
-			    std::max<real>(std::min<real>(S_cumul / norm, 1.0), 0.0)
+			    std::max<real>(std::min<real>(resj, 1.0), 0.0)
 			);
-
-			/* Sanity check of the normalization: */
-			if (i+1 == Nx && z_last < ztrans){
-				if (z_last > 0)
-					if (use_thsh)
-						S = thsh_int.integrate(integrand, 0, z_last);
-					else
-						S = GK::integrate(integrand, 0, z_last);
-				else
-					S = 0.0;
-				real norm_num = S + S_cumul;
-				if (abs(norm_num - norm) > dest_tol * norm){
-					throw PrecisionError<real>("Tail distribution "
-					                           "normalization failed to "
-					                           "achieve the desired "
-					                           "precision.",
-					                          abs(norm_num - norm),
-					                           norm);
-				}
-				/* Renormalize: */
-				const double rescale = static_cast<double>(norm / norm_num);
-				for (size_t k=0; k<Nx; ++k)
-					res[k] *= rescale;
-			}
 
 		} else if (type == posterior_t::UNNORMED_LOG){
 			/* Return the logarithm of the unnormed density.
@@ -1563,14 +1416,12 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 			 * additional dimensions that need to be taken into account
 			 * when normalizing.
 			 */
-			if (zi <= ztrans){
-				res[j] = static_cast<double>(log(integrand(zi)) + log_scale);
+			if (zi <= L.ztrans){
+				res[j] = static_cast<double>(log(integrand(zi)) + L.log_scale);
 			} else {
 				res[j] = static_cast<double>(
-				    log(a_integral_large_z<false,real>(1.0-zi, h0, h1,
-				             h2, h3, nu_new, lp_tilde, n_new, log_scale,
-				             ls_tilde, l1p_w, w, amin, 0.0))
-				         + log_scale
+				    log(a_integral_large_z<false,real>(1.0-zi, 0.0, L))
+				         + L.log_scale
 				);
 			}
 		}
@@ -1767,29 +1618,22 @@ void tail_quantiles(const double* quantiles, double* res, const size_t Nquant,
                     const double nu, const double amin, const double dest_tol)
 {
 	/* Estimates the tail quantiles using the QuantileInverter class. */
+	typedef long double real;
 
 	/* Step 1: Use the common parameter initialization routine which
 	 *         mainly determines the normalization constant: */
-	double lp_tilde=0, ls_tilde=0, nu_new=0, n_new=0, Qmax=0, h0=0, h1=0,
-	       h2=0, h3=0, w=0, l1p_w=0, ztrans=0, log_scale=0, norm=0,
-	       full_taylor_integral=0, Iref=0;
+	locals_t<real> L;
 	size_t imax;
-	std::vector<double> ki(N);
-	init_locals(qi, ci, N, nu, n, s, p, amin, lp_tilde,
-	            ls_tilde, nu_new, n_new, Qmax, h0, h1, h2, h3, w, l1p_w,
-	            ztrans, log_scale, norm, Iref, ki, full_taylor_integral, imax);
+	init_locals<real>(qi, ci, N, nu, n, s, p, amin, nullptr, 0, L, imax,
+	                  dest_tol);
 
 
 	auto integrand = [&](double z) -> double {
 		double result = 0.0;
-		if (z <= ztrans)
-			result = outer_integrand(z, lp_tilde, ls_tilde, n_new, nu_new,
-			                         ki, w, log_scale, amin, Iref) / norm;
+		if (z <= L.ztrans)
+			result = outer_integrand<real>(z, L) / L.norm;
 		else if (z < 1)
-			result = a_integral_large_z<false>(1.0-z, h0, h1, h2, h3,
-			                                   nu_new, lp_tilde, n_new,
-			                                   log_scale, ls_tilde,
-			                                   l1p_w, w, amin, norm) / norm;
+			result = a_integral_large_z<false,real>(1.0-z, L.norm, L) / L.norm;
 
 		return result;
 	};
@@ -1801,7 +1645,7 @@ void tail_quantiles(const double* quantiles, double* res, const size_t Nquant,
 
 		/* Now invert: */
 		for (; i<Nquant; ++i){
-			res[i] = Qmax * qinv.invert(1.0 - quantiles[i]);
+			res[i] = L.Qmax * qinv.invert(1.0 - quantiles[i]);
 		}
 	} catch (...) {
 		tanh_sinh<double> integrator;
@@ -1817,7 +1661,7 @@ void tail_quantiles(const double* quantiles, double* res, const size_t Nquant,
 			std::pair<double,double> bracket
 			   = toms748_solve(rootfun, 0.0, 1.0, 1.0-zi, -zi, tolerance,
 			                   maxiter);
-			res[i] = Qmax * 0.5 * (bracket.first + bracket.second);
+			res[i] = L.Qmax * 0.5 * (bracket.first + bracket.second);
 		}
 	}
 }
@@ -1831,6 +1675,11 @@ void posterior_tail_quantiles_batch(
                      double p, double s, double n, double nu,
                      double amin, double dest_tol)
 {
+	using std::abs;
+	using boost::multiprecision::abs;
+
+	typedef long double real;
+
 	/* Sanity: */
 	if (qi.size() != ci.size())
 		throw std::runtime_error("Sizes of `qi` and `ci` do not match.");
@@ -1846,41 +1695,14 @@ void posterior_tail_quantiles_batch(
 	 *         Do so in parallel since we need one set of parameters per
 	 *         (qi,ci) sample.
 	 */
-	struct locals_t {
-		double lp_tilde;
-		double ls_tilde;
-		double nu_new;
-		double n_new;
-		double Qmax;
-		double h0;
-		double h1;
-		double h2;
-		double h3;
-		double w;
-		double l1p_w;
-		double ztrans;
-		double log_scale;
-		double norm;
-		double Iref;
-		double full_taylor_integral;
-		std::vector<double> ki;
-	};
-	std::vector<locals_t> locals(qi.size());
+	std::vector<locals_t<real>> locals(qi.size());
 	#pragma omp parallel for
 	for (size_t i=0; i<qi.size(); ++i){
 		if (!error_flag){
 			size_t imax;
 			try {
-				locals[i].ki.resize(N[i]);
-				init_locals(qi[i], ci[i], N[i], nu, n, s, p, amin,
-				            locals[i].lp_tilde, locals[i].ls_tilde,
-				            locals[i].nu_new, locals[i].n_new,
-				            locals[i].Qmax, locals[i].h0, locals[i].h1,
-				            locals[i].h2, locals[i].h3, locals[i].w,
-				            locals[i].l1p_w, locals[i].ztrans,
-				            locals[i].log_scale, locals[i].norm,
-				            locals[i].Iref, locals[i].ki,
-				            locals[i].full_taylor_integral, imax);
+				init_locals<real>(qi[i], ci[i], N[i], nu, n, s, p, amin,
+				                  nullptr, 0, locals[i], imax, dest_tol);
 			} catch (const std::exception& e){
 				error_flag = true;
 				err_msg = std::string(e.what());
@@ -1895,7 +1717,7 @@ void posterior_tail_quantiles_batch(
 	}
 
 	/* The overall maximum frictional power: */
-	double Qmax = 0.0;
+	real Qmax = 0.0;
 	for (size_t i=0; i<qi.size(); ++i){
 		Qmax = std::max(Qmax, locals[i].Qmax);
 
@@ -1907,36 +1729,34 @@ void posterior_tail_quantiles_batch(
 	}
 
 	auto integrand = [&](double P_H) -> double {
-		double result = 0.0;
+		real result = 0.0;
+		bool fail = false;
+		#pragma omp parallel for
 		for (size_t i=0; i<qi.size(); ++i){
-			if (P_H >= locals[i].Qmax)
+			if (fail || P_H >= locals[i].Qmax)
 				continue;
-			const double z = P_H / locals[i].Qmax;
-			if (z <= locals[i].ztrans)
-				result += outer_integrand(z, locals[i].lp_tilde,
-				                          locals[i].ls_tilde, locals[i].n_new,
-				                          locals[i].nu_new, locals[i].ki,
-				                          locals[i].w, locals[i].log_scale,
-				                          amin, locals[i].Iref)
-				          / locals[i].norm;
-			else if (z < 1)
-				result += a_integral_large_z<false>(1.0-z, locals[i].h0,
-				                           locals[i].h1, locals[i].h2,
-				                           locals[i].h3, locals[i].nu_new,
-				                           locals[i].lp_tilde, locals[i].n_new,
-				                           locals[i].log_scale,
-				                           locals[i].ls_tilde, locals[i].l1p_w,
-				                           locals[i].w, amin,
-				                           locals[i].norm) / locals[i].norm;
+			const real z = P_H / locals[i].Qmax;
+			try {
+				if (z <= locals[i].ztrans)
+					result += outer_integrand(z, locals[i])
+					          / locals[i].norm;
+				else if (z < 1)
+					result += a_integral_large_z<false>(1.0 - z, locals[i].norm,
+					                                    locals[i])
+					          / locals[i].norm;
+			} catch (...) {
+				fail = true;
+			}
 		}
 
-		return result / qi.size();
+		return static_cast<double>(result / qi.size());
 	};
 
 	size_t i=0;
 	try {
 		/* Initialize the quantile inverter: */
-		QuantileInverter qinv(integrand, 0.0, Qmax, dest_tol, dest_tol, OR);
+		QuantileInverter qinv(integrand, 0.0, static_cast<double>(Qmax),
+		                      dest_tol, dest_tol, OR);
 
 		/* Now invert: */
 		for (; i<Nquant; ++i){
@@ -1950,12 +1770,13 @@ void posterior_tail_quantiles_batch(
 				       - quantiles[i];
 			};
 			auto tolerance = [&](double a, double b) -> bool {
-				return std::fabs(a-b) <= dest_tol;
+				return abs(a-b) <= dest_tol;
 			};
 			std::uintmax_t maxiter = 50;
-			std::pair<double,double> bracket
-			   = toms748_solve(rootfun, 0.0, Qmax, 1.0-quantiles[i],
-			                   -quantiles[i], tolerance, maxiter);
+			std::pair<double, double> bracket
+			   = toms748_solve(rootfun, 0.0, static_cast<double>(Qmax),
+			                   1.0-quantiles[i], -quantiles[i], tolerance,
+			                   maxiter);
 			res[i] = 0.5 * (bracket.first + bracket.second);
 		}
 	}
