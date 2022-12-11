@@ -103,6 +103,7 @@ and this project adheres to
 #### Added
 - Added different working precisions for the heat flow anomaly strength
   quantification.
+- Make `gamma_mle` method available in `reheatfunq.regional`.
 
 
 ### [1.1.1] - 2022-12-02

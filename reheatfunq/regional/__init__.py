@@ -19,3 +19,4 @@
 
 from .prior import GammaConjugatePrior, default_prior
 from .predictive import HeatFlowPredictive
+from .backend import gamma_mle
