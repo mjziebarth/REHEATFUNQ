@@ -1264,7 +1264,7 @@ void init_locals(const double* qi, const double* ci, size_t N,
  */
 
 template<posterior_t type>
-void posterior(const double* x, double* res, size_t Nx, const double* qi,
+void posterior(const double* x, long double* res, size_t Nx, const double* qi,
                const double* ci, size_t N, double p, double s, double n,
                double nu, double amin, double dest_tol)
 {
@@ -1282,8 +1282,7 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 	//typedef long double real;
 	//typedef boost::multiprecision::cpp_dec_float_100 real;
 	typedef real_t real;
-
-	typedef gauss_kronrod<real, 15> GK;
+	//typedef double real;
 
 	constexpr bool is_cumulative
 	   = type & (posterior_t::CUMULATIVE | posterior_t::TAIL);
@@ -1305,7 +1304,6 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 	}
 
 	std::vector<size_t> order(0);
-	real z_last = 0.0, S_cumul = 0.0;
 	if (is_cumulative){
 		order.resize(Nx);
 		for (size_t i=0; i<Nx; ++i){
@@ -1318,8 +1316,6 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 			              return x[i] < x[j];
 			          }
 			);
-			/* We start cumulatively from the front: */
-			z_last = 0.0;
 		} else {
 			std::sort(order.begin(), order.end(),
 			          [&](size_t i, size_t j) -> bool
@@ -1327,8 +1323,6 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 			              return x[i] > x[j];
 			          }
 			);
-			/* We start cumulatively from the back: */
-			z_last = 1.0;
 		}
 	}
 
@@ -1342,7 +1336,7 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 		// Short cut: x out of bounds:
 		if (x[j] < 0){
 			if (type == posterior_t::UNNORMED_LOG)
-				res[j] = -std::numeric_limits<double>::infinity();
+				res[j] = -std::numeric_limits<long double>::infinity();
 			else if (type == posterior_t::TAIL)
 				res[j] = 1.0;
 			else
@@ -1352,7 +1346,7 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 			if (type == posterior_t::DENSITY || type == posterior_t::TAIL)
 				res[j] = 0.0;
 			else if (type == posterior_t::UNNORMED_LOG)
-				res[j] = -std::numeric_limits<double>::infinity();
+				res[j] = -std::numeric_limits<long double>::infinity();
 			else
 				res[j] = 1.0;
 			continue;
@@ -1372,43 +1366,38 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 			 * Then norm the outer_integrand to a PDF in z. Revert the change of
 			 * variables x->z by dividing the PDF by Qmax.
 			 */
-			if (zi <= L.ztrans)
-				res[j] = static_cast<double>(integrand(zi) / (L.Qmax * L.norm));
-			else
+			if (zi <= L.ztrans){
+				real resj = integrand(zi) / (L.Qmax * L.norm);
+				res[j] = static_cast<long double>(resj);
+			} else {
 				// Use the Taylor expansion for the limit z->1, y=1-z -> 0:
-				res[j] = static_cast<double>(
-				             a_integral_large_z<false,real>(1.0 - zi, L.norm, L)
-				         / (L.Qmax * L.norm)
-				);
+				real resj = a_integral_large_z<false,real>(1.0 - zi, L.norm, L)
+				            / (L.Qmax * L.norm);
+				res[j] = static_cast<long double>(resj);
+			}
 		} else if (type == posterior_t::CUMULATIVE){
 			real resj;
 			if (zi <= L.ztrans){
 				resj = L.cdf_eval->cdf(zi);
-				z_last = zi;
 			} else {
 				/* Now integrate from the back: */
 				real back = a_integral_large_z<true, real>(1.0-zi, L.norm, L);
 				resj = (L.norm - back) / L.norm;
-				z_last = zi;
 			}
-			res[j] = static_cast<double>(
-			    std::max<real>(std::min<real>(resj, 1.0), 0.0)
-			);
+			resj = std::max<real>(std::min<real>(resj, 1.0), 0.0);
+			res[j] = static_cast<long double>(resj);
 		} else if (type == posterior_t::TAIL){
 			real resj;
 			if (zi <= L.ztrans){
 				// First the part from zi to ztrans:
 				resj = L.cdf_eval->tail(zi);
-				z_last = zi;
 			} else {
 				// The part from zi to 1:
 				resj = a_integral_large_z<true, real>(1.0-zi, L.norm,
 				                                      L) / L.norm;
-				z_last = zi;
 			}
-			res[j] = static_cast<double>(
-			    std::max<real>(std::min<real>(resj, 1.0), 0.0)
-			);
+			resj = std::max<real>(std::min<real>(resj, 1.0), 0.0);
+			res[j] = static_cast<long double>(resj);
 
 		} else if (type == posterior_t::UNNORMED_LOG){
 			/* Return the logarithm of the unnormed density.
@@ -1416,14 +1405,14 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 			 * additional dimensions that need to be taken into account
 			 * when normalizing.
 			 */
+			real resj;
 			if (zi <= L.ztrans){
-				res[j] = static_cast<double>(log(integrand(zi)) + L.log_scale);
+				resj = log(integrand(zi)) + L.log_scale;
 			} else {
-				res[j] = static_cast<double>(
-				    log(a_integral_large_z<false,real>(1.0-zi, 0.0, L))
-				         + L.log_scale
-				);
+				resj = log(a_integral_large_z<false,real>(1.0-zi, 0.0, L))
+				         + L.log_scale;
 			}
+			res[j] = static_cast<long double>(resj);
 		}
 	}
 }
@@ -1435,15 +1424,15 @@ void posterior(const double* x, double* res, size_t Nx, const double* qi,
 namespace pdtoolbox {
 namespace heatflow {
 
-void posterior_pdf(const double* x, double* res, size_t Nx, const double* qi,
-                   const double* ci, size_t N, double p, double s, double n,
-                   double nu, double amin, double dest_tol)
+void posterior_pdf(const double* x, long double* res, size_t Nx,
+                   const double* qi, const double* ci, size_t N, double p,
+                   double s, double n, double nu, double amin, double dest_tol)
 {
 	posterior<DENSITY>(x, res, Nx, qi, ci, N, p, s, n, nu, amin, dest_tol);
 }
 
 
-void posterior_pdf_batch(const double* x, size_t Nx, double* res,
+void posterior_pdf_batch(const double* x, size_t Nx, long double* res,
                          const std::vector<const double*>& qi,
                          const std::vector<const double*>& ci,
                          const std::vector<size_t>& N,
@@ -1480,15 +1469,15 @@ void posterior_pdf_batch(const double* x, size_t Nx, double* res,
 }
 
 
-void posterior_cdf(const double* x, double* res, size_t Nx, const double* qi,
-                   const double* ci, size_t N, double p, double s, double n,
-                   double nu, double amin, double dest_tol)
+void posterior_cdf(const double* x, long double* res, size_t Nx,
+                   const double* qi, const double* ci, size_t N, double p,
+                   double s, double n, double nu, double amin, double dest_tol)
 {
 	posterior<CUMULATIVE>(x, res, Nx, qi, ci, N, p, s, n, nu, amin, dest_tol);
 }
 
 
-void posterior_cdf_batch(const double* x, size_t Nx, double* res,
+void posterior_cdf_batch(const double* x, size_t Nx, long double* res,
                          const std::vector<const double*>& qi,
                          const std::vector<const double*>& ci,
                          const std::vector<size_t>& N,
@@ -1525,15 +1514,15 @@ void posterior_cdf_batch(const double* x, size_t Nx, double* res,
 }
 
 
-void posterior_tail(const double* x, double* res, size_t Nx, const double* qi,
-                    const double* ci, size_t N, double p, double s, double n,
-                    double nu, double amin, double dest_tol)
+void posterior_tail(const double* x, long double* res, size_t Nx,
+                    const double* qi, const double* ci, size_t N, double p,
+                    double s, double n, double nu, double amin, double dest_tol)
 {
 	posterior<TAIL>(x, res, Nx, qi, ci, N, p, s, n, nu, amin, dest_tol);
 }
 
 
-void posterior_tail_batch(const double* x, size_t Nx, double* res,
+void posterior_tail_batch(const double* x, size_t Nx, long double* res,
                           const std::vector<const double*>& qi,
                           const std::vector<const double*>& ci,
                           const std::vector<size_t>& N,
@@ -1570,7 +1559,7 @@ void posterior_tail_batch(const double* x, size_t Nx, double* res,
 }
 
 
-void posterior_log_unnormed(const double* x, double* res, size_t Nx,
+void posterior_log_unnormed(const double* x, long double* res, size_t Nx,
                             const double* qi, const double* ci, size_t N,
                             double p, double s, double n, double nu,
                             double amin, double dest_tol)
@@ -1583,9 +1572,10 @@ void posterior_log_unnormed(const double* x, double* res, size_t Nx,
 /*
  * A version of the above catching errors and returning NaNs:
  */
-void posterior_silent(const double* x, double* res, size_t Nx, const double* qi,
-               const double* ci, size_t N, double p, double s, double n,
-               double nu, double amin, double dest_tol, posterior_t type)
+void posterior_silent(const double* x, long double* res, size_t Nx,
+                      const double* qi, const double* ci, size_t N,
+                      double p, double s, double n, double nu, double amin,
+                      double dest_tol, posterior_t type)
 {
 	try {
 		if (type == DENSITY)

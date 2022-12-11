@@ -198,7 +198,8 @@ class HeatFlowAnomalyPosterior:
         # Heavy lifting:
         return marginal_posterior_cdf_batch(P_H, p, self.gcp.s, self.gcp.n,
                                             self.gcp.v, Qi, Ci,
-                                            self.gcp.amin).mean(axis=0)
+                                            self.gcp.amin)\
+                   .mean(axis=0).astype(np.double)
 
 
     def tail(self, P_H: ArrayLike) -> np.ndarray:
@@ -232,7 +233,8 @@ class HeatFlowAnomalyPosterior:
         # Heavy lifting:
         return marginal_posterior_tail_batch(P_H, p, self.gcp.s, self.gcp.n,
                                              self.gcp.v, Qi, Ci,
-                                             self.gcp.amin).mean(axis=0)
+                                             self.gcp.amin)\
+                   .mean(axis=0).astype(np.double)
 
 
     def tail_quantiles(self, quantiles: ArrayLike,

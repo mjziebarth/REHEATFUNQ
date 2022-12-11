@@ -37,47 +37,49 @@ enum posterior_t {
 	UNNORMED_LOG = 4
 };
 
-void posterior_pdf(const double* x, double* res, size_t Nx, const double* qi,
-                   const double* ci, size_t N, double p, double s, double n,
-                   double nu, double amin, double dest_tol);
+void posterior_pdf(const double* x, long double* res, size_t Nx,
+                   const double* qi, const double* ci, size_t N, double p,
+                   double s, double n, double nu, double amin, double dest_tol);
 
-void posterior_pdf_batch(const double* x, size_t Nx, double* res,
+void posterior_pdf_batch(const double* x, size_t Nx, long double* res,
                          const std::vector<const double*>& qi,
                          const std::vector<const double*>& ci,
                          const std::vector<size_t>& N,
                          double p, double s, double n, double nu,
                          double amin, double dest_tol);
 
-void posterior_cdf(const double* x, double* res, size_t Nx, const double* qi,
-                   const double* ci, size_t N, double p, double s, double n,
-                   double nu, double amin, double dest_tol);
+void posterior_cdf(const double* x, long double* res, size_t Nx,
+                   const double* qi, const double* ci, size_t N, double p,
+                   double s, double n, double nu, double amin, double dest_tol);
 
-void posterior_cdf_batch(const double* x, size_t Nx, double* res,
+void posterior_cdf_batch(const double* x, size_t Nx, long double* res,
                          const std::vector<const double*>& qi,
                          const std::vector<const double*>& ci,
                          const std::vector<size_t>& N,
                          double p, double s, double n, double nu,
                          double amin, double dest_tol);
 
-void posterior_tail(const double* x, double* res, size_t Nx, const double* qi,
-                    const double* ci, size_t N, double p, double s, double n,
-                    double nu, double amin, double dest_tol);
+void posterior_tail(const double* x, long double* res, size_t Nx,
+                    const double* qi, const double* ci, size_t N, double p,
+                    double s, double n, double nu, double amin,
+                    double dest_tol);
 
-void posterior_tail_batch(const double* x, size_t Nx, double* res,
+void posterior_tail_batch(const double* x, size_t Nx, long double* res,
                           const std::vector<const double*>& qi,
                           const std::vector<const double*>& ci,
                           const std::vector<size_t>& N,
                           double p, double s, double n, double nu,
                           double amin, double dest_tol);
 
-void posterior_log_unnormed(const double* x, double* res, size_t Nx,
+void posterior_log_unnormed(const double* x, long double* res, size_t Nx,
                             const double* qi, const double* ci, size_t N,
                             double p, double s, double n, double nu,
                             double amin, double dest_tol);
 
-void posterior_silent(const double* x, double* res, size_t Nx, const double* qi,
-               const double* ci, size_t N, double p, double s, double n,
-               double nu, double amin, double dest_tol, posterior_t type);
+void posterior_silent(const double* x, long double* res, size_t Nx,
+                      const double* qi, const double* ci, size_t N, double p,
+                      double s, double n, double nu, double amin,
+                      double dest_tol, posterior_t type);
 
 void tail_quantiles(const double* quantiles, double* res, const size_t Nquant,
                     const double* qi, const double* ci, const size_t N,

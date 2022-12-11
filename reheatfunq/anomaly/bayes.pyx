@@ -33,43 +33,43 @@ from libcpp cimport bool
 from libcpp.vector cimport vector
 
 cdef extern from "ziebarth2022a.hpp" namespace "pdtoolbox::heatflow" nogil:
-    void posterior_pdf(const double* x, double* res, size_t Nx,
+    void posterior_pdf(const double* x, long double* res, size_t Nx,
                        const double* qi, const double* ci, size_t N, double p,
                        double s, double n, double nu, double amin,
                        double dest_tol) except+
 
-    void posterior_pdf_batch(const double* x, size_t Nx, double* res,
+    void posterior_pdf_batch(const double* x, size_t Nx, long double* res,
                              const vector[const double*]& qi,
                              const vector[const double*]& ci,
                              const vector[size_t]& N,
                              double p, double s, double n, double nu,
                              double amin, double dest_tol) except+
 
-    void posterior_cdf(const double* x, double* res, size_t Nx,
+    void posterior_cdf(const double* x, long double* res, size_t Nx,
                        const double* qi, const double* ci, size_t N, double p,
                        double s, double n, double nu, double amin,
                        double dest_tol) except+
 
-    void posterior_cdf_batch(const double* x, size_t Nx, double* res,
+    void posterior_cdf_batch(const double* x, size_t Nx, long double* res,
                              const vector[const double*]& qi,
                              const vector[const double*]& ci,
                              const vector[size_t]& N,
                              double p, double s, double n, double nu,
                              double amin, double dest_tol) except+
 
-    void posterior_tail(const double* x, double* res, size_t Nx,
+    void posterior_tail(const double* x, long double* res, size_t Nx,
                         const double* qi, const double* ci, size_t N, double p,
                         double s, double n, double nu, double amin,
                         double dest_tol) except+
 
-    void posterior_tail_batch(const double* x, size_t Nx, double* res,
+    void posterior_tail_batch(const double* x, size_t Nx, long double* res,
                               const vector[const double*]& qi,
                               const vector[const double*]& ci,
                               const vector[size_t]& N,
                               double p, double s, double n, double nu,
                               double amin, double dest_tol) except+
 
-    void posterior_log_unnormed(const double* x, double* res, size_t Nx,
+    void posterior_log_unnormed(const double* x, long double* res, size_t Nx,
                                 const double* qi, const double* ci, size_t N,
                                 double p, double s, double n, double nu,
                                 double amin, double dest_tol) except+
@@ -100,14 +100,13 @@ cdef extern from "ziebarth2022a.hpp" namespace "pdtoolbox::heatflow" nogil:
 @cython.boundscheck(False)
 def marginal_posterior_pdf(double[::1] P_H, double p, double s, double n,
                            double v, const double[::1] qi, const double[::1] ci,
-                           double amin = 1.0, double dest_tol = 1e-8,
-                           bool inplace=False):
+                           double amin = 1.0, double dest_tol = 1e-8):
     """
     Computes the marginal posterior in total power Q̇ for a given set (s,n,v=ν,p)
     of prior parameters, heat flow measurements qi, and anomaly scalings ci.
     """
     # Step 0: Allocate the memory for evaluating the posterior:
-    cdef double[::1] z
+    cdef long double[::1] z
     cdef size_t N = P_H.shape[0], M=qi.shape[0]
     if qi.shape[0] != ci.shape[0]:
         raise RuntimeError("`qi` and `ci` have to be of same shape in "
@@ -115,10 +114,7 @@ def marginal_posterior_pdf(double[::1] P_H, double p, double s, double n,
     if M == 0:
         raise NotImplementedError("No data given - use prior "
                                   "(not implemented).")
-    if inplace:
-        z = P_H
-    else:
-        z = np.empty(N)
+    z = np.empty(N, dtype=np.longdouble)
 
     # Heavy lifting in C++:
     with nogil:
@@ -157,7 +153,7 @@ def marginal_posterior_pdf_batch(const double[::1] P_H, double p, double s,
             raise RuntimeError("In one sample, the shape of `qi` and `ci` do "
                                "not match.")
 
-    cdef double[:,::1] res = np.empty((Nqc, Nx))
+    cdef long double[:,::1] res = np.empty((Nqc, Nx), dtype=np.longdouble)
     with nogil:
         posterior_pdf_batch(&P_H[0], Nx, &res[0,0], qi_vec, ci_vec, Nqc_i,
                             p, s, n, v, amin, dest_tol)
@@ -169,15 +165,14 @@ def marginal_posterior_pdf_batch(const double[::1] P_H, double p, double s,
 @cython.boundscheck(False)
 def marginal_posterior_cdf(double[::1] P_H, double p, double s, double n,
                            double v, const double[::1] qi, const double[::1] ci,
-                           double amin = 1.0, double dest_tol=1e-8,
-                           bool inplace=False):
+                           double amin = 1.0, double dest_tol=1e-8):
     """
     Computes the marginal posterior cumulative distribution function in
     dissipated power P_H for a given set (s,n,v=ν,p) of prior parameters,
     heat flow measurements qi, and anomaly scalings ci.
     """
     # Step 0: Allocate the memory for evaluating the posterior:
-    cdef double[::1] z
+    cdef long double[::1] z
     cdef size_t N = P_H.shape[0], M=qi.shape[0]
     if qi.shape[0] != ci.shape[0]:
         raise RuntimeError("`qi` and `ci` have to be of same shape in "
@@ -185,10 +180,7 @@ def marginal_posterior_cdf(double[::1] P_H, double p, double s, double n,
     if M == 0:
         raise NotImplementedError("No data given - use prior "
                                   "(not implemented).")
-    if inplace:
-        z = P_H
-    else:
-        z = np.empty(N)
+    z = np.empty(N, dtype=np.longdouble)
 
     # Heavy lifting in C++:
     with nogil:
@@ -227,7 +219,7 @@ def marginal_posterior_cdf_batch(const double[::1] P_H, double p, double s,
             raise RuntimeError("In one sample, the shape of `qi` and `ci` do "
                                "not match.")
 
-    cdef double[:,::1] res = np.empty((Nqc, Nx))
+    cdef long double[:,::1] res = np.empty((Nqc, Nx), dtype=np.longdouble)
     with nogil:
         posterior_cdf_batch(&P_H[0], Nx, &res[0,0], qi_vec, ci_vec, Nqc_i,
                             p, s, n, v, amin, dest_tol)
@@ -239,15 +231,14 @@ def marginal_posterior_cdf_batch(const double[::1] P_H, double p, double s,
 def marginal_posterior_tail(double[::1] P_H, double p, double s, double n,
                             double v, const double[::1] qi,
                             const double[::1] ci,
-                            double amin = 1.0, double dest_tol = 1e-8,
-                            bool inplace=False):
+                            double amin = 1.0, double dest_tol = 1e-8):
     """
     Computes the marginal posterior cumulative distribution function in
     dissipated power P_H for a given set (s,n,v=ν,p) of prior parameters,
     heat flow measurements qi, and anomaly scalings ci.
     """
     # Step 0: Allocate the memory for evaluating the posterior:
-    cdef double[::1] z
+    cdef long double[::1] z
     cdef size_t N = P_H.shape[0], M=qi.shape[0]
     if qi.shape[0] != ci.shape[0]:
         raise RuntimeError("`qi` and `ci` have to be of same shape in "
@@ -255,10 +246,8 @@ def marginal_posterior_tail(double[::1] P_H, double p, double s, double n,
     if M == 0:
         raise NotImplementedError("No data given - use prior "
                                   "(not implemented).")
-    if inplace:
-        z = P_H
-    else:
-        z = np.empty(N)
+
+        z = np.empty(N, dtype=np.longdouble)
 
     # Heavy lifting in C++:
     with nogil:
@@ -297,7 +286,7 @@ def marginal_posterior_tail_batch(const double[::1] P_H, double p, double s,
             raise RuntimeError("In one sample, the shape of `qi` and `ci` do "
                                "not match.")
 
-    cdef double[:,::1] res = np.empty((Nqc, Nx))
+    cdef long double[:,::1] res = np.empty((Nqc, Nx), dtype=np.longdouble)
     with nogil:
         posterior_tail_batch(&P_H[0], Nx, &res[0,0], qi_vec, ci_vec, Nqc_i,
                              p, s, n, v, amin, dest_tol)
@@ -310,8 +299,7 @@ def marginal_posterior_tail_batch(const double[::1] P_H, double p, double s,
 def marginal_posterior_log_unnormed(double[::1] P_H, double p, double s,
                                     double n, double v, const double[::1] qi,
                                     const double[::1] ci, double epsabs = 1e-8,
-                                    double amin = 1.0, double dest_tol=1e-10,
-                                    bool inplace=False):
+                                    double amin = 1.0, double dest_tol=1e-10):
     """
     Computes the marginal posterior in dissipated power P_H for a given set
     (s,n,v=ν,p) of prior parameters, heat flow measurements qi, and anomaly
@@ -322,7 +310,7 @@ def marginal_posterior_log_unnormed(double[::1] P_H, double p, double s,
     adding a new dimension to the posterior and hence normalizing accordingly.
     """
     # Step 0: Allocate the memory for evaluating the posterior:
-    cdef double[::1] z
+    cdef long double[::1] z
     cdef size_t N = P_H.shape[0], M=qi.shape[0]
     if qi.shape[0] != ci.shape[0]:
         raise RuntimeError("`qi` and `ci` have to be of same shape in "
@@ -330,10 +318,8 @@ def marginal_posterior_log_unnormed(double[::1] P_H, double p, double s,
     if M == 0:
         raise NotImplementedError("No data given - use prior "
                                   "(not implemented).")
-    if inplace:
-        z = P_H
-    else:
-        z = np.empty(N)
+
+    z = np.empty(N, dtype=np.longdouble)
 
     # Heavy lifting in C++:
     with nogil:
