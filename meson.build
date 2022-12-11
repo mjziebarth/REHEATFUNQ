@@ -57,9 +57,25 @@ sources_hfp = ['external/pdtoolbox/src/ziebarth2022a.cpp',
                'external/pdtoolbox/src/quantileinverter.cpp']
 dependencies_hfp = [openmp_dep, boost_dep]
 
+hfp_cpp_args = []
+hfp_link_args = []
+if get_option('anomaly_posterior_float128')
+    hfp_cpp_args += ['--std=gnu++20','']
+    hfp_link_args += ['-lquadmath']
+endif
+if get_option('anomaly_posterior_dec50')
+    hfp_cpp_args += ['-DREHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50']
+endif
+if get_option('anomaly_posterior_dec100')
+    hfp_cpp_args += ['-DREHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100']
+endif
+
+
 libhfp = static_library(
     'hfp', sources_hfp,
     dependencies : dependencies_hfp,
+    cpp_args : hfp_cpp_args,
+    link_args : hfp_link_args,
     include_directories : include
 )
 
@@ -115,7 +131,8 @@ python.extension_module('bayes',
                         dependencies : [dep_py],
                         include_directories : include,
                         override_options : ['cython_language=cpp'],
-                        link_with : libhfp)
+                        link_with : libhfp,
+                        link_args : hfp_link_args)
 
 python.extension_module('rdisks',
                         'reheatfunq/coverings/rdisks.pyx',

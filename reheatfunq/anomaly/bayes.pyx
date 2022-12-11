@@ -5,7 +5,8 @@
 #
 # Author: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
 #
-# Copyright (C) 2022 Deutsches GeoForschungsZentrum GFZ
+# Copyright (C) 2022 Deutsches GeoForschungsZentrum GFZ,
+#               2022 Malte J. Ziebarth
 #
 # [1] Ziebarth, M. J., Anderson, J. G., von Specht, S., Heidbach, O., &
 #     Cotton, F. (submitted 2021). "Seismic Efficiency and Elastic Power
@@ -32,47 +33,88 @@ import numpy as np
 from libcpp cimport bool
 from libcpp.vector cimport vector
 
+# The higher precision arithmetics for the posterior-internal
+# code are activated via compile-time defines.
+# We grab them here for later querying in Python code:
+cdef extern from * namespace "reheatfunq::pydefines" nogil:
+    """
+    namespace reheatfunq {
+    namespace pydefines {
+    #ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
+    bool HAS_FLOAT128 = true;
+    #else
+    bool HAS_FLOAT128 = false;
+    #endif
+    #ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50
+    bool HAS_DEC50 = true;
+    #else
+    bool HAS_DEC50 = false;
+    #endif
+    #ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100
+    bool HAS_DEC100 = true;
+    #else
+    bool HAS_DEC100 = false;
+    #endif
+    }
+    }
+    """
+    bool HAS_FLOAT128
+    bool HAS_DEC50
+    bool HAS_DEC100
+
+
 cdef extern from "ziebarth2022a.hpp" namespace "pdtoolbox::heatflow" nogil:
+    enum precision_t:
+        WP_DOUBLE = 0
+        WP_LONG_DOUBLE = 1
+        WP_FLOAT_128 = 2
+        WP_BOOST_DEC_50 = 3
+        WP_BOOST_DEC_100 = 4
+
     void posterior_pdf(const double* x, long double* res, size_t Nx,
                        const double* qi, const double* ci, size_t N, double p,
                        double s, double n, double nu, double amin,
-                       double dest_tol) except+
+                       double dest_tol, precision_t wp) except+
 
     void posterior_pdf_batch(const double* x, size_t Nx, long double* res,
                              const vector[const double*]& qi,
                              const vector[const double*]& ci,
                              const vector[size_t]& N,
                              double p, double s, double n, double nu,
-                             double amin, double dest_tol) except+
+                             double amin, double dest_tol,
+                             precision_t wp) except+
 
     void posterior_cdf(const double* x, long double* res, size_t Nx,
                        const double* qi, const double* ci, size_t N, double p,
                        double s, double n, double nu, double amin,
-                       double dest_tol) except+
+                       double dest_tol, precision_t wp) except+
 
     void posterior_cdf_batch(const double* x, size_t Nx, long double* res,
                              const vector[const double*]& qi,
                              const vector[const double*]& ci,
                              const vector[size_t]& N,
                              double p, double s, double n, double nu,
-                             double amin, double dest_tol) except+
+                             double amin, double dest_tol,
+                             precision_t wp) except+
 
     void posterior_tail(const double* x, long double* res, size_t Nx,
                         const double* qi, const double* ci, size_t N, double p,
                         double s, double n, double nu, double amin,
-                        double dest_tol) except+
+                        double dest_tol, precision_t wp) except+
 
     void posterior_tail_batch(const double* x, size_t Nx, long double* res,
                               const vector[const double*]& qi,
                               const vector[const double*]& ci,
                               const vector[size_t]& N,
                               double p, double s, double n, double nu,
-                              double amin, double dest_tol) except+
+                              double amin, double dest_tol,
+                              precision_t wp) except+
 
     void posterior_log_unnormed(const double* x, long double* res, size_t Nx,
                                 const double* qi, const double* ci, size_t N,
                                 double p, double s, double n, double nu,
-                                double amin, double dest_tol) except+
+                                double amin, double dest_tol,
+                                precision_t wp) except+
 
     void tail_quantiles(const double* quantiles, double* res,
                         const size_t Nquant, const double* qi, const double* ci,
@@ -96,14 +138,63 @@ cdef extern from "ziebarth2022a.hpp" namespace "pdtoolbox::heatflow" nogil:
                                short print) except+
 
 
+def _support_float128():
+    return HAS_FLOAT128
+
+def _support_dec50():
+    return HAS_DEC50
+
+def _support_dec100():
+    return HAS_DEC100
+
+
+
+cdef precision_t get_working_precision(str working_precision, size_t M):
+    # Get the working precision.
+    if working_precision == 'auto':
+        # Decide depending on the number of data points.
+        if M > 500:
+            working_precision = 'long double'
+        else:
+            working_precision = 'double'
+    cdef precision_t wp
+    if working_precision == 'double':
+        wp = WP_DOUBLE
+    elif working_precision == 'long double':
+        wp = WP_LONG_DOUBLE
+    elif working_precision == 'float128':
+        wp = WP_FLOAT_128
+    elif working_precision == 'dec50':
+        wp = WP_BOOST_DEC_50
+    elif working_precision == 'dec100':
+        wp = WP_BOOST_DEC_100
+    else:
+        raise RuntimeError("Unknonw `working_precision` parameter given.")
+
+    return wp
+
 
 @cython.boundscheck(False)
 def marginal_posterior_pdf(double[::1] P_H, double p, double s, double n,
                            double v, const double[::1] qi, const double[::1] ci,
-                           double amin = 1.0, double dest_tol = 1e-8):
+                           double amin = 1.0, double dest_tol = 1e-8,
+                           str working_precision = 'auto'):
     """
     Computes the marginal posterior in total power Q̇ for a given set (s,n,v=ν,p)
     of prior parameters, heat flow measurements qi, and anomaly scalings ci.
+
+    Parameters
+    ----------
+    ...
+    working_precision : str, optional
+       Decides in which floating point precision the algorithm should work
+       internally. Must be one of 'double', 'long double', 'float128',
+       'dec50', 'dec100', or 'auto'. The standard C++ floating point numbers
+       are 'double' and 'long double'. The 'dec50' and 'dec100' options refer
+       to the boost multiprecision  50 and 100 decimal digit precision numbers,
+       respectively. The 'float128' implementation requires  REHEATFUNQ to be
+       compiled with the g++ 128bit floating point extension and the define
+       'REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD' set.
     """
     # Step 0: Allocate the memory for evaluating the posterior:
     cdef long double[::1] z
@@ -116,10 +207,13 @@ def marginal_posterior_pdf(double[::1] P_H, double p, double s, double n,
                                   "(not implemented).")
     z = np.empty(N, dtype=np.longdouble)
 
+    # Working precision:
+    cdef precision_t wp = get_working_precision(working_precision, M)
+
     # Heavy lifting in C++:
     with nogil:
         posterior_pdf(&P_H[0], &z[0], N, &qi[0], &ci[0], M, p, s, n, v, amin,
-                      dest_tol)
+                      dest_tol, wp)
 
     return z.base
 
@@ -127,9 +221,23 @@ def marginal_posterior_pdf(double[::1] P_H, double p, double s, double n,
 @cython.boundscheck(False)
 def marginal_posterior_pdf_batch(const double[::1] P_H, double p, double s,
                                  double n, double v, list Qi, list Ci,
-                                 double amin = 1.0, double dest_tol = 1e-8):
+                                 double amin = 1.0, double dest_tol = 1e-8,
+                                 str working_precision = 'auto'):
     """
     ...
+
+    Parameters
+    ----------
+    ...
+    working_precision : str, optional
+       Decides in which floating point precision the algorithm should work
+       internally. Must be one of 'double', 'long double', 'float128',
+       'dec50', 'dec100', or 'auto'. The standard C++ floating point numbers
+       are 'double' and 'long double'. The 'dec50' and 'dec100' options refer
+       to the boost multiprecision  50 and 100 decimal digit precision numbers,
+       respectively. The 'float128' implementation requires  REHEATFUNQ to be
+       compiled with the g++ 128bit floating point extension and the define
+       'REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD' set.
     """
     cdef size_t Nx = P_H.shape[0]
     cdef size_t Nqc = len(Qi)
@@ -140,6 +248,7 @@ def marginal_posterior_pdf_batch(const double[::1] P_H, double p, double s,
     cdef const double[::1] qi, ci
     cdef vector[const double*] qi_vec, ci_vec
     cdef vector[size_t] Nqc_i
+    cdef Mmax = 0
     qi_vec.resize(Nqc)
     ci_vec.resize(Nqc)
     Nqc_i.resize(Nqc)
@@ -149,14 +258,18 @@ def marginal_posterior_pdf_batch(const double[::1] P_H, double p, double s,
         qi_vec[i] = &qi[0]
         ci_vec[i] = &ci[0]
         Nqc_i[i] = qi.shape[0]
+        Mmax = max(qi.shape[0], Mmax)
         if ci.shape[0] != Nqc_i[i]:
             raise RuntimeError("In one sample, the shape of `qi` and `ci` do "
                                "not match.")
 
+    # Working precision:
+    cdef precision_t wp = get_working_precision(working_precision, Mmax)
+
     cdef long double[:,::1] res = np.empty((Nqc, Nx), dtype=np.longdouble)
     with nogil:
         posterior_pdf_batch(&P_H[0], Nx, &res[0,0], qi_vec, ci_vec, Nqc_i,
-                            p, s, n, v, amin, dest_tol)
+                            p, s, n, v, amin, dest_tol, wp)
 
     return res.base
 
@@ -165,11 +278,25 @@ def marginal_posterior_pdf_batch(const double[::1] P_H, double p, double s,
 @cython.boundscheck(False)
 def marginal_posterior_cdf(double[::1] P_H, double p, double s, double n,
                            double v, const double[::1] qi, const double[::1] ci,
-                           double amin = 1.0, double dest_tol=1e-8):
+                           double amin = 1.0, double dest_tol=1e-8,
+                           str working_precision = 'auto'):
     """
     Computes the marginal posterior cumulative distribution function in
     dissipated power P_H for a given set (s,n,v=ν,p) of prior parameters,
     heat flow measurements qi, and anomaly scalings ci.
+
+    Parameters
+    ----------
+    ...
+    working_precision : str, optional
+       Decides in which floating point precision the algorithm should work
+       internally. Must be one of 'double', 'long double', 'float128',
+       'dec50', 'dec100', or 'auto'. The standard C++ floating point numbers
+       are 'double' and 'long double'. The 'dec50' and 'dec100' options refer
+       to the boost multiprecision  50 and 100 decimal digit precision numbers,
+       respectively. The 'float128' implementation requires  REHEATFUNQ to be
+       compiled with the g++ 128bit floating point extension and the define
+       'REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD' set.
     """
     # Step 0: Allocate the memory for evaluating the posterior:
     cdef long double[::1] z
@@ -182,10 +309,13 @@ def marginal_posterior_cdf(double[::1] P_H, double p, double s, double n,
                                   "(not implemented).")
     z = np.empty(N, dtype=np.longdouble)
 
+    # Working precision:
+    cdef precision_t wp = get_working_precision(working_precision, M)
+
     # Heavy lifting in C++:
     with nogil:
         posterior_cdf(&P_H[0], &z[0], N, &qi[0], &ci[0], M, p, s, n, v,
-                      amin, dest_tol)
+                      amin, dest_tol, wp)
 
     return z.base
 
@@ -193,9 +323,23 @@ def marginal_posterior_cdf(double[::1] P_H, double p, double s, double n,
 @cython.boundscheck(False)
 def marginal_posterior_cdf_batch(const double[::1] P_H, double p, double s,
                                  double n, double v, list Qi, list Ci,
-                                 double amin = 1.0, double dest_tol = 1e-8):
+                                 double amin = 1.0, double dest_tol = 1e-8,
+                                 str working_precision = 'auto'):
     """
     ...
+
+    Parameters
+    ----------
+    ...
+    working_precision : str, optional
+       Decides in which floating point precision the algorithm should work
+       internally. Must be one of 'double', 'long double', 'float128',
+       'dec50', 'dec100', or 'auto'. The standard C++ floating point numbers
+       are 'double' and 'long double'. The 'dec50' and 'dec100' options refer
+       to the boost multiprecision  50 and 100 decimal digit precision numbers,
+       respectively. The 'float128' implementation requires  REHEATFUNQ to be
+       compiled with the g++ 128bit floating point extension and the define
+       'REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD' set.
     """
     cdef size_t Nx = P_H.shape[0]
     cdef size_t Nqc = len(Qi)
@@ -206,6 +350,7 @@ def marginal_posterior_cdf_batch(const double[::1] P_H, double p, double s,
     cdef const double[::1] qi, ci
     cdef vector[const double*] qi_vec, ci_vec
     cdef vector[size_t] Nqc_i
+    cdef size_t Mmax = 0
     qi_vec.resize(Nqc)
     ci_vec.resize(Nqc)
     Nqc_i.resize(Nqc)
@@ -215,14 +360,18 @@ def marginal_posterior_cdf_batch(const double[::1] P_H, double p, double s,
         qi_vec[i] = &qi[0]
         ci_vec[i] = &ci[0]
         Nqc_i[i] = qi.shape[0]
+        Mmax = max(qi.shape[0], Mmax)
         if ci.shape[0] != Nqc_i[i]:
             raise RuntimeError("In one sample, the shape of `qi` and `ci` do "
                                "not match.")
 
+    # Working precision:
+    cdef precision_t wp = get_working_precision(working_precision, Mmax)
+
     cdef long double[:,::1] res = np.empty((Nqc, Nx), dtype=np.longdouble)
     with nogil:
         posterior_cdf_batch(&P_H[0], Nx, &res[0,0], qi_vec, ci_vec, Nqc_i,
-                            p, s, n, v, amin, dest_tol)
+                            p, s, n, v, amin, dest_tol, wp)
 
     return res.base
 
@@ -231,11 +380,25 @@ def marginal_posterior_cdf_batch(const double[::1] P_H, double p, double s,
 def marginal_posterior_tail(double[::1] P_H, double p, double s, double n,
                             double v, const double[::1] qi,
                             const double[::1] ci,
-                            double amin = 1.0, double dest_tol = 1e-8):
+                            double amin = 1.0, double dest_tol = 1e-8,
+                            str working_precision = 'auto'):
     """
     Computes the marginal posterior cumulative distribution function in
     dissipated power P_H for a given set (s,n,v=ν,p) of prior parameters,
     heat flow measurements qi, and anomaly scalings ci.
+
+    Parameters
+    ----------
+    ...
+    working_precision : str, optional
+       Decides in which floating point precision the algorithm should work
+       internally. Must be one of 'double', 'long double', 'float128',
+       'dec50', 'dec100', or 'auto'. The standard C++ floating point numbers
+       are 'double' and 'long double'. The 'dec50' and 'dec100' options refer
+       to the boost multiprecision  50 and 100 decimal digit precision numbers,
+       respectively. The 'float128' implementation requires  REHEATFUNQ to be
+       compiled with the g++ 128bit floating point extension and the define
+       'REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD' set.
     """
     # Step 0: Allocate the memory for evaluating the posterior:
     cdef long double[::1] z
@@ -247,12 +410,15 @@ def marginal_posterior_tail(double[::1] P_H, double p, double s, double n,
         raise NotImplementedError("No data given - use prior "
                                   "(not implemented).")
 
-        z = np.empty(N, dtype=np.longdouble)
+    z = np.empty(N, dtype=np.longdouble)
+
+    # Working precision:
+    cdef precision_t wp = get_working_precision(working_precision, M)
 
     # Heavy lifting in C++:
     with nogil:
         posterior_tail(&P_H[0], &z[0], N, &qi[0], &ci[0], M, p, s, n, v,
-                       amin, dest_tol)
+                       amin, dest_tol, wp)
 
     return z.base
 
@@ -260,9 +426,23 @@ def marginal_posterior_tail(double[::1] P_H, double p, double s, double n,
 @cython.boundscheck(False)
 def marginal_posterior_tail_batch(const double[::1] P_H, double p, double s,
                                   double n, double v, list Qi, list Ci,
-                                  double amin = 1.0, double dest_tol = 1e-8):
+                                  double amin = 1.0, double dest_tol = 1e-8,
+                                  str working_precision = 'auto'):
     """
     ...
+
+    Parameters
+    ----------
+    ...
+    working_precision : str, optional
+       Decides in which floating point precision the algorithm should work
+       internally. Must be one of 'double', 'long double', 'float128',
+       'dec50', 'dec100', or 'auto'. The standard C++ floating point numbers
+       are 'double' and 'long double'. The 'dec50' and 'dec100' options refer
+       to the boost multiprecision  50 and 100 decimal digit precision numbers,
+       respectively. The 'float128' implementation requires  REHEATFUNQ to be
+       compiled with the g++ 128bit floating point extension and the define
+       'REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD' set.
     """
     cdef size_t Nx = P_H.shape[0]
     cdef size_t Nqc = len(Qi)
@@ -273,6 +453,7 @@ def marginal_posterior_tail_batch(const double[::1] P_H, double p, double s,
     cdef const double[::1] qi, ci
     cdef vector[const double*] qi_vec, ci_vec
     cdef vector[size_t] Nqc_i
+    cdef size_t Mmax = 0
     qi_vec.resize(Nqc)
     ci_vec.resize(Nqc)
     Nqc_i.resize(Nqc)
@@ -282,14 +463,18 @@ def marginal_posterior_tail_batch(const double[::1] P_H, double p, double s,
         qi_vec[i] = &qi[0]
         ci_vec[i] = &ci[0]
         Nqc_i[i] = qi.shape[0]
+        Mmax = max(qi.shape[0], Mmax)
         if ci.shape[0] != Nqc_i[i]:
             raise RuntimeError("In one sample, the shape of `qi` and `ci` do "
                                "not match.")
 
+    # Working precision:
+    cdef precision_t wp = get_working_precision(working_precision, Mmax)
+
     cdef long double[:,::1] res = np.empty((Nqc, Nx), dtype=np.longdouble)
     with nogil:
         posterior_tail_batch(&P_H[0], Nx, &res[0,0], qi_vec, ci_vec, Nqc_i,
-                             p, s, n, v, amin, dest_tol)
+                             p, s, n, v, amin, dest_tol, wp)
 
     return res.base
 
@@ -299,7 +484,8 @@ def marginal_posterior_tail_batch(const double[::1] P_H, double p, double s,
 def marginal_posterior_log_unnormed(double[::1] P_H, double p, double s,
                                     double n, double v, const double[::1] qi,
                                     const double[::1] ci, double epsabs = 1e-8,
-                                    double amin = 1.0, double dest_tol=1e-10):
+                                    double amin = 1.0, double dest_tol=1e-10,
+                                    str working_precision = 'auto'):
     """
     Computes the marginal posterior in dissipated power P_H for a given set
     (s,n,v=ν,p) of prior parameters, heat flow measurements qi, and anomaly
@@ -308,6 +494,19 @@ def marginal_posterior_log_unnormed(double[::1] P_H, double p, double s,
     Returns the logarithm of the unnormed pdf, i.e. the logarithm of the
     integral over the alpha and beta dimension. This makes it usable for
     adding a new dimension to the posterior and hence normalizing accordingly.
+
+    Parameters
+    ----------
+    ...
+    working_precision : str, optional
+       Decides in which floating point precision the algorithm should work
+       internally. Must be one of 'double', 'long double', 'float128',
+       'dec50', 'dec100', or 'auto'. The standard C++ floating point numbers
+       are 'double' and 'long double'. The 'dec50' and 'dec100' options refer
+       to the boost multiprecision  50 and 100 decimal digit precision numbers,
+       respectively. The 'float128' implementation requires  REHEATFUNQ to be
+       compiled with the g++ 128bit floating point extension and the define
+       'REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD' set.
     """
     # Step 0: Allocate the memory for evaluating the posterior:
     cdef long double[::1] z
@@ -321,10 +520,13 @@ def marginal_posterior_log_unnormed(double[::1] P_H, double p, double s,
 
     z = np.empty(N, dtype=np.longdouble)
 
+    # Working precision:
+    cdef precision_t wp = get_working_precision(working_precision, M)
+
     # Heavy lifting in C++:
     with nogil:
         posterior_log_unnormed(&P_H[0], &z[0], N, &qi[0], &ci[0], M, p, s, n, v,
-                               amin, dest_tol)
+                               amin, dest_tol, wp)
 
     return z.base
 

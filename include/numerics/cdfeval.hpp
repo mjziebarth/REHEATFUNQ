@@ -197,8 +197,11 @@ CDFEval<real>::CDFEval(const std::vector<real>& x, func F, const real xmin,
 	}
 
 	/* Norm: */
-	real scale = (outside_mass > 0) ? 1.0 / (cdf * (1.0 + outside_mass))
-	                                : 1.0 / cdf;
+	real scale;
+	if (outside_mass > 0)
+		scale = 1.0 / (cdf * (1.0 + outside_mass));
+	else
+		scale = 1.0 / cdf;
 	for (xy_t& xy : intervals){
 		xy.cdf *= scale;
 		xy.tail *= scale;

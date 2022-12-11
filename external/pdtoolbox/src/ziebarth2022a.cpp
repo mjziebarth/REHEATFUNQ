@@ -73,9 +73,13 @@ using reheatfunq::CDFEval;
 #ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
 using boost::multiprecision::float128;
 typedef float128 real_t;
+using boost::multiprecision::cpp_dec_float_50;
+using boost::multiprecision::cpp_dec_float_100;
 #else
 typedef long double float128;
 typedef long double real_t;
+using boost::multiprecision::cpp_dec_float_50;
+using boost::multiprecision::cpp_dec_float_100;
 #endif
 
 
@@ -1263,7 +1267,7 @@ void init_locals(const double* qi, const double* ci, size_t N,
  *
  */
 
-template<posterior_t type>
+template<posterior_t type, typename real>
 void posterior(const double* x, long double* res, size_t Nx, const double* qi,
                const double* ci, size_t N, double p, double s, double n,
                double nu, double amin, double dest_tol)
@@ -1278,11 +1282,6 @@ void posterior(const double* x, long double* res, size_t Nx, const double* qi,
 	/* Computes the posterior for a given parameter combination using
 	 * two-dimensional adaptive quadrature.
 	 */
-
-	//typedef long double real;
-	//typedef boost::multiprecision::cpp_dec_float_100 real;
-	typedef real_t real;
-	//typedef double real;
 
 	constexpr bool is_cumulative
 	   = type & (posterior_t::CUMULATIVE | posterior_t::TAIL);
@@ -1426,9 +1425,41 @@ namespace heatflow {
 
 void posterior_pdf(const double* x, long double* res, size_t Nx,
                    const double* qi, const double* ci, size_t N, double p,
-                   double s, double n, double nu, double amin, double dest_tol)
+                   double s, double n, double nu, double amin, double dest_tol,
+                   precision_t working_precision)
 {
-	posterior<DENSITY>(x, res, Nx, qi, ci, N, p, s, n, nu, amin, dest_tol);
+	if (working_precision == WP_DOUBLE)
+		posterior<DENSITY,double>(x, res, Nx, qi, ci, N, p, s, n, nu, amin,
+		                          dest_tol);
+	else if (working_precision == WP_LONG_DOUBLE)
+		posterior<DENSITY,long double>(x, res, Nx, qi, ci, N, p, s, n, nu, amin,
+		                               dest_tol);
+	else if (working_precision == WP_FLOAT_128){
+		#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
+		posterior<DENSITY,float128>(x, res, Nx, qi, ci, N, p, s, n, nu, amin,
+		                            dest_tol);
+		#else
+		throw std::runtime_error("Need to recompile with define 'REHEATFUNQ_"
+		                         "ANOMALY_POSTERIOR_TYPE_QUAD'.");
+		#endif
+	} else if (working_precision == WP_BOOST_DEC_50)
+		#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50
+		posterior<DENSITY,cpp_dec_float_50>(x, res, Nx, qi, ci, N, p, s, n, nu,
+		                                    amin, dest_tol);
+		#else
+		throw std::runtime_error("Need to recompile with define 'REHEATFUNQ_"
+		                         "ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50'.");
+		#endif
+	else if (working_precision == WP_BOOST_DEC_100)
+		#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100
+		posterior<DENSITY,cpp_dec_float_100>(x, res, Nx, qi, ci, N, p, s, n, nu,
+		                                     amin, dest_tol);
+		#else
+		throw std::runtime_error("Need to recompile with define 'REHEATFUNQ_"
+		                         "ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100'.");
+		#endif
+	else
+		throw std::runtime_error("Unknown working_precision parameter.");
 }
 
 
@@ -1437,7 +1468,8 @@ void posterior_pdf_batch(const double* x, size_t Nx, long double* res,
                          const std::vector<const double*>& ci,
                          const std::vector<size_t>& N,
                          double p, double s, double n, double nu,
-                         double amin, double dest_tol)
+                         double amin, double dest_tol,
+                         precision_t working_precision)
 {
 	/* Sanity: */
 	if (qi.size() != ci.size())
@@ -1453,7 +1485,7 @@ void posterior_pdf_batch(const double* x, size_t Nx, long double* res,
 		if (!error_flag){
 			try {
 				posterior_pdf(x, res + Nx*i, Nx, qi[i], ci[i], N[i], p, s, n,
-				              nu, amin, dest_tol);
+				              nu, amin, dest_tol, working_precision);
 			} catch (const std::exception& e){
 				error_flag = true;
 				err_msg = std::string(e.what());
@@ -1471,9 +1503,41 @@ void posterior_pdf_batch(const double* x, size_t Nx, long double* res,
 
 void posterior_cdf(const double* x, long double* res, size_t Nx,
                    const double* qi, const double* ci, size_t N, double p,
-                   double s, double n, double nu, double amin, double dest_tol)
+                   double s, double n, double nu, double amin, double dest_tol,
+                   precision_t working_precision)
 {
-	posterior<CUMULATIVE>(x, res, Nx, qi, ci, N, p, s, n, nu, amin, dest_tol);
+	if (working_precision == WP_DOUBLE)
+		posterior<CUMULATIVE,double>(x, res, Nx, qi, ci, N, p, s, n, nu, amin,
+		                          dest_tol);
+	else if (working_precision == WP_LONG_DOUBLE)
+		posterior<CUMULATIVE,long double>(x, res, Nx, qi, ci, N, p, s, n, nu,
+		                                  amin, dest_tol);
+	else if (working_precision == WP_FLOAT_128){
+		#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
+		posterior<CUMULATIVE,float128>(x, res, Nx, qi, ci, N, p, s, n, nu, amin,
+		                               dest_tol);
+		#else
+		throw std::runtime_error("Need to recompile with define 'REHEATFUNQ_"
+		                         "ANOMALY_POSTERIOR_TYPE_QUAD'.");
+		#endif
+	} else if (working_precision == WP_BOOST_DEC_50)
+		#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50
+		posterior<CUMULATIVE,cpp_dec_float_50>(x, res, Nx, qi, ci, N, p, s, n,
+		                                       nu, amin, dest_tol);
+		#else
+		throw std::runtime_error("Need to recompile with define 'REHEATFUNQ_"
+		                         "ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50'.");
+		#endif
+	else if (working_precision == WP_BOOST_DEC_100)
+		#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100
+		posterior<CUMULATIVE,cpp_dec_float_100>(x, res, Nx, qi, ci, N, p, s, n,
+		                                        nu, amin, dest_tol);
+		#else
+		throw std::runtime_error("Need to recompile with define 'REHEATFUNQ_"
+		                         "ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100'.");
+		#endif
+	else
+		throw std::runtime_error("Unknown working_precision parameter.");
 }
 
 
@@ -1482,7 +1546,8 @@ void posterior_cdf_batch(const double* x, size_t Nx, long double* res,
                          const std::vector<const double*>& ci,
                          const std::vector<size_t>& N,
                          double p, double s, double n, double nu,
-                         double amin, double dest_tol)
+                         double amin, double dest_tol,
+                         precision_t working_precision)
 {
 	/* Sanity: */
 	if (qi.size() != ci.size())
@@ -1498,7 +1563,7 @@ void posterior_cdf_batch(const double* x, size_t Nx, long double* res,
 		if (!error_flag){
 			try {
 				posterior_cdf(x, res + Nx*i, Nx, qi[i], ci[i], N[i], p, s, n,
-				              nu, amin, dest_tol);
+				              nu, amin, dest_tol, working_precision);
 			} catch (const std::exception& e){
 				error_flag = true;
 				err_msg = std::string(e.what());
@@ -1516,9 +1581,41 @@ void posterior_cdf_batch(const double* x, size_t Nx, long double* res,
 
 void posterior_tail(const double* x, long double* res, size_t Nx,
                     const double* qi, const double* ci, size_t N, double p,
-                    double s, double n, double nu, double amin, double dest_tol)
+                    double s, double n, double nu, double amin, double dest_tol,
+                    precision_t working_precision)
 {
-	posterior<TAIL>(x, res, Nx, qi, ci, N, p, s, n, nu, amin, dest_tol);
+	if (working_precision == WP_DOUBLE)
+		posterior<TAIL,double>(x, res, Nx, qi, ci, N, p, s, n, nu, amin,
+		                          dest_tol);
+	else if (working_precision == WP_LONG_DOUBLE)
+		posterior<TAIL,long double>(x, res, Nx, qi, ci, N, p, s, n, nu, amin,
+		                            dest_tol);
+	else if (working_precision == WP_FLOAT_128){
+		#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
+		posterior<TAIL,float128>(x, res, Nx, qi, ci, N, p, s, n, nu, amin,
+		                         dest_tol);
+		#else
+		throw std::runtime_error("Need to recompile with define 'REHEATFUNQ_"
+		                         "ANOMALY_POSTERIOR_TYPE_QUAD'.");
+		#endif
+	} else if (working_precision == WP_BOOST_DEC_50)
+		#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50
+		posterior<TAIL,cpp_dec_float_50>(x, res, Nx, qi, ci, N, p, s, n, nu,
+		                                 amin, dest_tol);
+		#else
+		throw std::runtime_error("Need to recompile with define 'REHEATFUNQ_"
+		                         "ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50'.");
+		#endif
+	else if (working_precision == WP_BOOST_DEC_100)
+		#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100
+		posterior<TAIL,cpp_dec_float_100>(x, res, Nx, qi, ci, N, p, s, n, nu,
+		                                  amin, dest_tol);
+		#else
+		throw std::runtime_error("Need to recompile with define 'REHEATFUNQ_"
+		                         "ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100'.");
+		#endif
+	else
+		throw std::runtime_error("Unknown working_precision parameter.");
 }
 
 
@@ -1527,7 +1624,8 @@ void posterior_tail_batch(const double* x, size_t Nx, long double* res,
                           const std::vector<const double*>& ci,
                           const std::vector<size_t>& N,
                           double p, double s, double n, double nu,
-                          double amin, double dest_tol)
+                          double amin, double dest_tol,
+                          precision_t working_precision)
 {
 	/* Sanity: */
 	if (qi.size() != ci.size())
@@ -1543,7 +1641,7 @@ void posterior_tail_batch(const double* x, size_t Nx, long double* res,
 		if (!error_flag){
 			try {
 				posterior_tail(x, res + Nx*i, Nx, qi[i], ci[i], N[i], p, s, n,
-				               nu, amin, dest_tol);
+				               nu, amin, dest_tol, working_precision);
 			} catch (const std::exception& e){
 				error_flag = true;
 				err_msg = std::string(e.what());
@@ -1562,10 +1660,41 @@ void posterior_tail_batch(const double* x, size_t Nx, long double* res,
 void posterior_log_unnormed(const double* x, long double* res, size_t Nx,
                             const double* qi, const double* ci, size_t N,
                             double p, double s, double n, double nu,
-                            double amin, double dest_tol)
+                            double amin, double dest_tol,
+                            precision_t working_precision)
 {
-	posterior<UNNORMED_LOG>(x, res, Nx, qi, ci, N, p, s, n, nu,
-	                        amin, dest_tol);
+	if (working_precision == WP_DOUBLE)
+		posterior<UNNORMED_LOG,double>(x, res, Nx, qi, ci, N, p, s, n, nu, amin,
+		                               dest_tol);
+	else if (working_precision == WP_LONG_DOUBLE)
+		posterior<UNNORMED_LOG,long double>(x, res, Nx, qi, ci, N, p, s, n, nu,
+		                                    amin, dest_tol);
+	else if (working_precision == WP_FLOAT_128){
+		#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
+		posterior<UNNORMED_LOG,float128>(x, res, Nx, qi, ci, N, p, s, n, nu,
+		                                 amin, dest_tol);
+		#else
+		throw std::runtime_error("Need to recompile with define 'REHEATFUNQ_"
+		                         "ANOMALY_POSTERIOR_TYPE_QUAD'.");
+		#endif
+	} else if (working_precision == WP_BOOST_DEC_50)
+		#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50
+		posterior<UNNORMED_LOG,cpp_dec_float_50>(x, res, Nx, qi, ci, N, p, s, n,
+		                                         nu, amin, dest_tol);
+		#else
+		throw std::runtime_error("Need to recompile with define 'REHEATFUNQ_"
+		                         "ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50'.");
+		#endif
+	else if (working_precision == WP_BOOST_DEC_100)
+		#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100
+		posterior<UNNORMED_LOG,cpp_dec_float_100>(x, res, Nx, qi, ci, N, p, s,
+		                                          n, nu, amin, dest_tol);
+		#else
+		throw std::runtime_error("Need to recompile with define 'REHEATFUNQ_"
+		                         "ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100'.");
+		#endif
+	else
+		throw std::runtime_error("Unknown working_precision parameter.");
 }
 
 
@@ -1575,22 +1704,23 @@ void posterior_log_unnormed(const double* x, long double* res, size_t Nx,
 void posterior_silent(const double* x, long double* res, size_t Nx,
                       const double* qi, const double* ci, size_t N,
                       double p, double s, double n, double nu, double amin,
-                      double dest_tol, posterior_t type)
+                      double dest_tol, posterior_t type,
+                      precision_t working_precision)
 {
 	try {
 		if (type == DENSITY)
-			posterior<DENSITY>(x, res, Nx, qi, ci, N, p, s, n, nu, amin,
-			                   dest_tol);
+			posterior_pdf(x, res, Nx, qi, ci, N, p, s, n, nu, amin, dest_tol,
+			              working_precision);
 		else if (type == CUMULATIVE)
-			posterior<CUMULATIVE>(x, res, Nx, qi, ci, N, p, s, n, nu,
-			                      amin, dest_tol);
+			posterior_cdf(x, res, Nx, qi, ci, N, p, s, n, nu, amin, dest_tol,
+			              working_precision);
 		else if (type == TAIL)
-			posterior<TAIL>(x, res, Nx, qi, ci, N, p, s, n, nu, amin,
-			                dest_tol);
+			posterior_tail(x, res, Nx, qi, ci, N, p, s, n, nu, amin, dest_tol,
+			               working_precision);
 		else if (type == UNNORMED_LOG)
-			posterior<UNNORMED_LOG>(x, res, Nx, qi, ci, N, p, s, n, nu,
-			                        amin, dest_tol);
-	} catch (std::runtime_error& e) {
+			posterior_log_unnormed(x, res, Nx, qi, ci, N, p, s, n, nu, amin,
+			                       dest_tol, working_precision);
+	} catch (...) {
 		for (size_t i=0; i<Nx; ++i){
 			res[i] = std::numeric_limits<double>::quiet_NaN();
 		}

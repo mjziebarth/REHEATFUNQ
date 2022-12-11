@@ -8,4 +8,5 @@ if [ ! -d builddir ]; then
 fi
 
 cd builddir
+meson configure -Danomaly_posterior_dec50=true
 meson compile
