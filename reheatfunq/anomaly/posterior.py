@@ -37,7 +37,7 @@ if _support_float128():
 if _support_dec50():
     _num_prec.append('dec50')
 if _support_dec100():
-    _nume_prec.append('dec100')
+    _num_prec.append('dec100')
 
 
 
