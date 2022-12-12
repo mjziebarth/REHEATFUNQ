@@ -60,7 +60,7 @@ dependencies_hfp = [openmp_dep, boost_dep]
 hfp_cpp_args = []
 hfp_link_args = []
 if get_option('anomaly_posterior_float128')
-    hfp_cpp_args += ['--std=gnu++20','']
+    hfp_cpp_args += ['--std=gnu++20','-DREHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD']
     hfp_link_args += ['-lquadmath']
 endif
 if get_option('anomaly_posterior_dec50')
