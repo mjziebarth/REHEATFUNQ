@@ -372,7 +372,7 @@ real outer_integrand(const real z, const locals_t<real>& L)
 			  + int1.integrate(integrand, lImax.a,
 			                   std::numeric_limits<real>::infinity(),
 			                   TOL_TANH_SINH, &error1, &L11, &lvl1);
-			L1 += L1;
+			L1 += L11;
 			error += error1;
 		} else {
 			size_t levels;
