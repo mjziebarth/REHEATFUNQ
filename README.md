@@ -104,6 +104,13 @@ and this project adheres to
 - Added different working precisions for the heat flow anomaly strength
   quantification.
 - Make `gamma_mle` method available in `reheatfunq.regional`.
+- Added `pytest` testing.
+- Added missing import in `jupyter/REHEATFUNQ/zeahl22hf/geojson.py`.
+
+#### Changed
+- Fix typo leading to incomplete quadrature error estimate in `outer_integrand`.
+- Use precision-dependent tolerance in heat flow anomaly posterior quadrature.
+- Add Kahan summation for heat flow anomaly posterior locals.
 
 
 ### [1.1.1] - 2022-12-02
