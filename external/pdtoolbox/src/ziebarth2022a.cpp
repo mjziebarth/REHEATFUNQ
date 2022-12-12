@@ -1030,6 +1030,37 @@ real a_integral_large_z(const real ym, const real S_cmp,
 
 using pdtoolbox::heatflow::posterior_t;
 
+#pragma GCC push_options
+#pragma GCC optimize("-fno-associative-math")
+template<typename real>
+real kahan_sum(const double* x, size_t N)
+{
+	real S = 0.0;
+	real corr = 0.0;
+	for (size_t i=0; i<N; ++i){
+		real dS = static_cast<real>(x[i]) - corr;
+		real next = S + dS;
+		corr = (next - S) - dS;
+		S = next;
+	}
+	return S;
+}
+
+template<typename real>
+real kahan_sum(const std::vector<real>& x)
+{
+	real S = 0.0;
+	real corr = 0.0;
+	for (const real& xi : x){
+		real dS = xi - corr;
+		real next = S + dS;
+		corr = (next - S) - dS;
+		S = next;
+	}
+	return S;
+}
+#pragma GCC pop_options
+
 
 template<typename real, bool need_norm=true, bool use_cdf_eval=false>
 void init_locals(const double* qi, const double* ci, size_t N,
@@ -1072,19 +1103,19 @@ void init_locals(const double* qi, const double* ci, size_t N,
 		                         "ci <= 0, i.e. heat flow anomaly has a "
 		                         "negative or no impact on all data points.");
 
-	real A = s;
-	for (size_t i=0; i<N; ++i)
-		A += qi[i];
+
+	real A = s + kahan_sum<real>(qi, N);
 	L.ls = log(A);
-	real B = 0.0;
-	for (size_t i=0; i<N; ++i)
-		B += ci[i];
+	real B = kahan_sum<real>(ci, N);
 	L.ki.resize(N);
 	for (size_t i=0; i<N; ++i)
-		L.ki[i] = ci[i] * L.Qmax / qi[i];
+		L.ki[i] = (ci[i] * L.Qmax) / qi[i];
 	real lq_sum = 0.0;
+	std::vector<real> lqi(N);
 	for (size_t i=0; i<N; ++i)
-		lq_sum += log(qi[i]);
+		lqi[i] = log(qi[i]);
+	lq_sum = kahan_sum(lqi);
+	lqi.clear();
 
 	L.lp = log(p) + lq_sum;
 	L.w = B * L.Qmax / A;
