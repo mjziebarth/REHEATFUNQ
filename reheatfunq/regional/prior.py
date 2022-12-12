@@ -19,7 +19,7 @@
 
 # Typing:
 from __future__ import annotations
-from typing import Iterable, Optional, Literal
+from typing import Iterable, Optional, Literal, Tuple
 from numpy.typing import ArrayLike
 
 import numpy as np
