@@ -47,4 +47,4 @@ jobs:
         # Ensure that we can execute the imports:
         python test_anomaly_posterior.py
         # Run the test suite:
-        pytest
+        pytest -s
