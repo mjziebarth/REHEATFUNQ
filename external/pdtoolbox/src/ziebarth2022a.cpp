@@ -83,11 +83,6 @@ using boost::multiprecision::cpp_dec_float_100;
 #endif
 
 
-/* tanh_sinh tolerance: */
-constexpr double TOL_TANH_SINH
-     = cnst_sqrt(std::numeric_limits<double>::epsilon());
-
-
 /* A custom exception type indicating that the integral is out of
  * scale for double precision: */
 template<typename real>
@@ -335,6 +330,8 @@ real outer_integrand(const real z, const locals_t<real>& L)
 	using boost::multiprecision::isinf;
 	using std::isnan;
 	using boost::multiprecision::isnan;
+
+	const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
 
 	if (isnan(z))
 		throw std::runtime_error("`z` is nan!");
@@ -827,6 +824,8 @@ real y_taylor_transition_root_backend(real y, const locals_t<real>& L)
 
 	constexpr double epsilon = 1e-14;
 
+	const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
+
 	/* Get the scale: */
 	const real amax = large_z_amax<real,0>(y, L);
 	const real ly = log(y);
@@ -976,6 +975,8 @@ real a_integral_large_z(const real ym, const real S_cmp,
 	using std::isnan;
 	using boost::multiprecision::isnan;
 
+	const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
+
 	/* Set the integrand's non-varying parameters: */
 	const real ly = log(ym);
 	const real lScmp = log(S_cmp);
@@ -1043,6 +1044,8 @@ void init_locals(const double* qi, const double* ci, size_t N,
 	using boost::multiprecision::log;
 	using std::log1p;
 	using boost::multiprecision::log1p;
+
+	const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
 
 	// Initialize parameters:
 	L.v = v + N;
