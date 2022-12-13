@@ -31,11 +31,11 @@ jobs:
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
           # Monkey-patched install of newer boost version:
-          wget https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2
+          wget -q https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2
           mkdir boost-dl
           tar --bzip2 -xf boost_1_80_0.tar.bz2 -C boost-dl
           sudo rm -r /usr/include/boost
-          sudo cp boost-dl/boost_1_80_0/boost /usr/include
+          sudo cp -r boost-dl/boost_1_80_0/boost /usr/include
           # Python installs:
           pip install matplotlib pyproj meson scipy
           pip install 'mebuex @ git+https://github.com/mjziebarth/Mebuex'
