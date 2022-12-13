@@ -1,4 +1,4 @@
-# Regional distribution submodule init file.
+# Test the numerics of the heat flow anomaly quantification posterior.
 #
 # Authors: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
 #
@@ -17,6 +17,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from .prior import GammaConjugatePrior, default_prior
-from .predictive import HeatFlowPredictive
-from .backend import gamma_mle
+def test_api_import():
+    from reheatfunq import AnomalyLS1980, HeatFlowAnomalyPosterior, \
+                           HeatFlowPredictive, GammaConjugatePrior
+    from reheatfunq.data import read_nghf
+    from reheatfunq.coverings import random_global_R_disk_coverings,\
+                           bootstrap_data_selection, conforming_data_selection
+    from reheatfunq.regional import gamma_mle

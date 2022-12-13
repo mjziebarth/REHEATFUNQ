@@ -26,7 +26,19 @@ from ..regional import GammaConjugatePrior
 from ..coverings.rdisks import bootstrap_data_selection
 from .bayes import marginal_posterior_pdf_batch, marginal_posterior_cdf_batch, \
                    marginal_posterior_tail_batch, \
-                   marginal_posterior_tail_quantiles_batch
+                   marginal_posterior_tail_quantiles_batch, \
+                   _support_float128, _support_dec50, _support_dec100
+
+
+# Define the capabilities of the numerical backend:
+_num_prec = ['auto','double','long double']
+if _support_float128():
+    _num_prec.append('float128')
+if _support_dec50():
+    _num_prec.append('dec50')
+if _support_dec100():
+    _num_prec.append('dec100')
+
 
 
 class HeatFlowAnomalyPosterior:
@@ -135,17 +147,30 @@ class HeatFlowAnomalyPosterior:
                          for w,sample in self.bootstrap)
 
 
-    def pdf(self, P_H: ArrayLike) -> np.ndarray:
+    def pdf(self, P_H: ArrayLike, dest_tol: float = 1e-8,
+            working_precision: Literal[_num_prec] = 'auto') -> np.ndarray:
         """
         Evaluate the marginal posterior distribution in
         heat-generating power :math:`P_H`.
 
         Parameters
         ----------
-
         P_H : array_like
               The powers (in W) at which to evaluate the
               marginal posterior density.
+        dest_tol : float, optional
+              The destination tolerance to use for the power
+              :math:`P_H` integration.
+        working_precision : 'auto' | 'double' | 'long double', optional
+              The precision of the internal numerical computations.
+              The higher the precision, the more likely it is to
+              obtain a precise result for large data sets. The
+              trade off is a longer run time.
+              If the respective flags have been set at compile
+              time, additional options 'float128' (GCC 128bit
+              floating point), 'dec50' (boost 50-digit multiprecision),
+              and 'dec100' (boost 100-digit multiprecision) are
+              available.
 
         Returns
         -------
@@ -164,20 +189,34 @@ class HeatFlowAnomalyPosterior:
 
         # Heavy lifting:
         return marginal_posterior_pdf_batch(P_H, p, self.gcp.s, self.gcp.n,
-                                            self.gcp.v, Qi, Ci).mean(axis=0)
+                                            self.gcp.v, Qi, Ci,
+                                            self.gcp.amin).mean(axis=0)
 
 
-    def cdf(self, P_H: ArrayLike) -> np.ndarray:
+    def cdf(self, P_H: ArrayLike, dest_tol: float = 1e-8,
+            working_precision: Literal[_num_prec] = 'auto') -> np.ndarray:
         """
         Evaluate the marginal posterior cumulative distribution
         of heat-generating power :math:`P_H`.
 
         Parameters
         ----------
-
         P_H : array_like
               The powers (in W) at which to evaluate the
               marginal posterior cumulative distribution.
+        dest_tol : float, optional
+              The destination tolerance to use for the power
+              :math:`P_H` integration.
+        working_precision : 'auto' | 'double' | 'long double', optional
+              The precision of the internal numerical computations.
+              The higher the precision, the more likely it is to
+              obtain a precise result for large data sets. The
+              trade off is a longer run time.
+              If the respective flags have been set at compile
+              time, additional options 'float128' (GCC 128bit
+              floating point), 'dec50' (boost 50-digit multiprecision),
+              and 'dec100' (boost 100-digit multiprecision) are
+              available.
 
         Returns
         -------
@@ -196,10 +235,13 @@ class HeatFlowAnomalyPosterior:
 
         # Heavy lifting:
         return marginal_posterior_cdf_batch(P_H, p, self.gcp.s, self.gcp.n,
-                                            self.gcp.v, Qi, Ci).mean(axis=0)
+                                            self.gcp.v, Qi, Ci,
+                                            self.gcp.amin)\
+                   .mean(axis=0).astype(np.double)
 
 
-    def tail(self, P_H: ArrayLike) -> np.ndarray:
+    def tail(self, P_H: ArrayLike, dest_tol: float = 1e-8,
+             working_precision: Literal[_num_prec] = 'auto') -> np.ndarray:
         """
         Evaluate the posterior tail distribution (complementary
         cumulative distribution) of heat-generating power
@@ -207,10 +249,22 @@ class HeatFlowAnomalyPosterior:
 
         Parameters
         ----------
-
         P_H : array_like
               The powers (in W) at which to evaluate the
               marginal posterior tail distribution.
+        dest_tol : float, optional
+              The destination tolerance to use for the power
+              :math:`P_H` integration.
+        working_precision : 'auto' | 'double' | 'long double', optional
+              The precision of the internal numerical computations.
+              The higher the precision, the more likely it is to
+              obtain a precise result for large data sets. The
+              trade off is a longer run time.
+              If the respective flags have been set at compile
+              time, additional options 'float128' (GCC 128bit
+              floating point), 'dec50' (boost 50-digit multiprecision),
+              and 'dec100' (boost 100-digit multiprecision) are
+              available.
 
         Returns
         -------
@@ -229,7 +283,9 @@ class HeatFlowAnomalyPosterior:
 
         # Heavy lifting:
         return marginal_posterior_tail_batch(P_H, p, self.gcp.s, self.gcp.n,
-                                             self.gcp.v, Qi, Ci).mean(axis=0)
+                                             self.gcp.v, Qi, Ci,
+                                             self.gcp.amin)\
+                   .mean(axis=0).astype(np.double)
 
 
     def tail_quantiles(self, quantiles: ArrayLike,
@@ -262,6 +318,7 @@ class HeatFlowAnomalyPosterior:
         Ci = [self.c[ids] for w,ids in self.bootstrap]
         return marginal_posterior_tail_quantiles_batch(quantiles, p, self.gcp.s,
                                                        self.gcp.n, self.gcp.v,
-                                                       Qi, Ci, float(dest_tol),
+                                                       Qi, Ci, self.gcp.amin,
+                                                       float(dest_tol),
                                                        inplace = True)
 

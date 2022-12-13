@@ -77,7 +77,7 @@ COPY ./include/ ./include/
 COPY ./external/ ./external/
 COPY ./reheatfunq/ ./reheatfunq/
 COPY ./src/ ./src/
-COPY ./compile.sh ./meson.build ./setup.py ./
+COPY ./compile.sh ./meson.build ./setup.py ./meson_options.txt ./
 
 # Compile and install the package:
 RUN set -eux; \

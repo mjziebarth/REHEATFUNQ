@@ -271,7 +271,7 @@ fail_t _tcp_iteration_array(size_t N, double P_MW,
                             const typename std::array<double,Nq>& quantiles,
                             typename std::array<double,2*batch*Nq>& res,
                             double p, double s, double n, double v,
-                            double tolerance)
+                            double amin, double tolerance)
 {
 	/* Some predefined stuff: */
 	constexpr double xmax_km = 80.0;
@@ -303,14 +303,14 @@ fail_t _tcp_iteration_array(size_t N, double P_MW,
 		/* Evaluate the anomalies: */
 		if (tail_quantiles_intcode(quantiles.data(), res_proper, Nq,
 		                           q_i.data(), c_i.data(), N, p, s, n, v,
-		                           tolerance, 0))
+		                           amin, tolerance, 0))
 		{
 			std::fill(res_proper, res_proper+Nq, std::nan(""));
 			++failures.proper;
 		}
 		if (tail_quantiles_intcode(quantiles.data(), res_improper, Nq,
 			                       q_i.data(), c_i.data(), N, 1.0, 0.0,
-			                       0.0, 0.0, tolerance, 0))
+			                       0.0, 0.0, amin, tolerance, 0))
 		{
 			std::fill(res_improper, res_improper+Nq, std::nan(""));
 			++failures.improper;
@@ -328,7 +328,7 @@ std::vector<quantiles_t>
 test_performance_cpp(size_t N, size_t M, double P_MW, const dist_t& dist,
                      const std::array<double,Nq>& quantiles, double PRIOR_P,
                      double PRIOR_S, double PRIOR_N, double PRIOR_V,
-                     bool verbose, bool show_failures, size_t seed,
+                     double amin, bool verbose, bool show_failures, size_t seed,
                      unsigned short nthread, double tolerance)
 {
 	using namespace std::chrono_literals;
@@ -370,7 +370,7 @@ test_performance_cpp(size_t N, size_t M, double P_MW, const dist_t& dist,
 			                                      generator, dist,
 			                                      quantiles, res, PRIOR_P,
 			                                      PRIOR_S, PRIOR_N, PRIOR_V,
-			                                      tolerance);
+			                                      amin, tolerance);
 			/* Set the results: */
 			if (j*batch >= M){
 				for (uint_fast8_t k=0; k<M-j*batch; ++k){
@@ -403,7 +403,7 @@ std::vector<heatflowpaper::quantiles_t>
 heatflowpaper::test_performance_1q(size_t N, size_t M, double P_MW,
                     double K, double T, double quantile, double PRIOR_P,
                     double PRIOR_S, double PRIOR_N, double PRIOR_V,
-                    bool verbose, bool show_failures, size_t seed,
+                    double amin, bool verbose, bool show_failures, size_t seed,
                     unsigned short nthread, double tolerance)
 {
 	std::array<double,1> quant({quantile});
@@ -411,14 +411,14 @@ heatflowpaper::test_performance_1q(size_t N, size_t M, double P_MW,
 		typedef std::array<double,10> dvec_t;
 		gamma_dist_t<dvec_t> gma(K,T);
 		return test_performance_cpp<1>(N, M, P_MW, gma, quant, PRIOR_P,
-		                               PRIOR_S, PRIOR_N, PRIOR_V,
+		                               PRIOR_S, PRIOR_N, PRIOR_V, amin,
 		                               verbose, show_failures, seed,
 		                               nthread, tolerance);
 	} else {
 		gamma_dist_t<std::vector<double>> gma(K,T);
 		return test_performance_cpp<1>(N, M, P_MW, gma, quant, PRIOR_P,
-		                               PRIOR_S, PRIOR_N, PRIOR_V, verbose,
-		                               show_failures, seed, nthread,
+		                               PRIOR_S, PRIOR_N, PRIOR_V, amin,
+		                               verbose, show_failures, seed, nthread,
 		                               tolerance);
 	}
 }
@@ -429,21 +429,21 @@ heatflowpaper::test_performance_41q(size_t N, size_t M, double P_MW,
                     double K, double T,
                     const std::array<double,41>& quantile, double PRIOR_P,
                     double PRIOR_S, double PRIOR_N, double PRIOR_V,
-                    bool verbose, bool show_failures, size_t seed,
+                    double amin, bool verbose, bool show_failures, size_t seed,
                     unsigned short nthread, double tolerance)
 {
 	if (N == 10){
 		typedef std::array<double,10> dvec_t;
 		gamma_dist_t<dvec_t> gma(K,T);
 		return test_performance_cpp<41>(N, M, P_MW, gma, quantile, PRIOR_P,
-		                                PRIOR_S, PRIOR_N, PRIOR_V,
+		                                PRIOR_S, PRIOR_N, PRIOR_V, amin,
 		                                verbose, show_failures, seed,
 		                                nthread, tolerance);
 	} else {
 		gamma_dist_t<std::vector<double>> gma(K,T);
 		return test_performance_cpp<41>(N, M, P_MW, gma, quantile, PRIOR_P,
-		                               PRIOR_S, PRIOR_N, PRIOR_V, verbose,
-		                               show_failures, seed, nthread,
+		                               PRIOR_S, PRIOR_N, PRIOR_V, amin,
+		                               verbose, show_failures, seed, nthread,
 		                               tolerance);
 	}
 }
@@ -453,12 +453,13 @@ heatflowpaper::test_performance_mixture_4q(size_t N, size_t M, double P_MW,
                     double x0, double s0, double a0, double x1, double s1,
                     double a1, const std::array<double,4>& quantiles,
                     double PRIOR_P, double PRIOR_S, double PRIOR_N,
-                    double PRIOR_V, bool verbose, bool show_failures,
-                    size_t seed, unsigned short nthread, double tolerance)
+                    double PRIOR_V, double amin, bool verbose,
+                    bool show_failures, size_t seed, unsigned short nthread,
+                    double tolerance)
 {
 	mixture_dist_t<std::vector<double>> mix(x0, s0, a0, x1, s1, a1);
 	return test_performance_cpp<4>(N, M, P_MW, mix, quantiles, PRIOR_P,
-	                               PRIOR_S, PRIOR_N, PRIOR_V, verbose,
+	                               PRIOR_S, PRIOR_N, PRIOR_V, amin, verbose,
 	                               show_failures, seed, nthread,
 	                               tolerance);
 
@@ -469,12 +470,13 @@ heatflowpaper::test_performance_mixture_41q(size_t N, size_t M, double P_MW,
                     double x0, double s0, double a0, double x1, double s1,
                     double a1, const std::array<double,41>& quantiles,
                     double PRIOR_P, double PRIOR_S, double PRIOR_N,
-                    double PRIOR_V, bool verbose, bool show_failures,
-                    size_t seed, unsigned short nthread, double tolerance)
+                    double PRIOR_V, double amin, bool verbose,
+                    bool show_failures, size_t seed, unsigned short nthread,
+                    double tolerance)
 {
 	mixture_dist_t<std::vector<double>> mix(x0, s0, a0, x1, s1, a1);
 	return test_performance_cpp<41>(N, M, P_MW, mix, quantiles, PRIOR_P,
-	                                PRIOR_S, PRIOR_N, PRIOR_V, verbose,
+	                                PRIOR_S, PRIOR_N, PRIOR_V, amin, verbose,
 	                                show_failures, seed, nthread,
 	                                tolerance);
 

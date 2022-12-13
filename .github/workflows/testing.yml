@@ -1,0 +1,64 @@
+name: Testing
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    strategy:
+      max-parallel: 1
+      matrix:
+        python-version: ['3.10']
+    steps:
+    - uses: actions/checkout@v1
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v1
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Build REHEATFUNQ
+      run: |
+          # Some basic environment information:
+          echo "Current folder:"
+          pwd
+          ls
+          echo ""
+          # Install packages:
+          sudo apt-get install -y libproj-dev libeigen3-dev \
+                                  libcgal-dev libgeographic-dev build-essential\
+                                  git openssh-client ssh cython3 \
+                                  python3-sphinx ninja-build cmake-data \
+                                  cmake-extras extra-cmake-modules \
+                                  python3-numpy wget
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
+          # Monkey-patched install of newer boost version:
+          wget -q https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2
+          mkdir boost-dl
+          tar --bzip2 -xf boost_1_80_0.tar.bz2 -C boost-dl
+          sudo rm -r /usr/include/boost
+          sudo cp -r boost-dl/boost_1_80_0/boost /usr/include
+          # Python installs:
+          pip install matplotlib pyproj meson scipy
+          pip install 'mebuex @ git+https://github.com/mjziebarth/Mebuex'
+          pip install 'loaducerf3 @ git+https://git.gfz-potsdam.de/ziebarth/loaducerf3'
+          bash compile.sh
+          pip install --user .
+    - name: Lint with flake8
+      run: |
+        pip install flake8
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 reheatfunq --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 jupyter --count --select=E9,F63,F7,F82 --show-source --statistics
+    - name: Test with pytest
+      run: |
+        #
+        pip install pytest
+        cd testing
+        # Ensure that we can execute the imports:
+        python test_anomaly_posterior.py
+        # Run the test suite:
+        pytest -s
