@@ -99,8 +99,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-### [Unreleased]
+### [1.2.0] - 2022-12-13
 #### Added
+- Add `amin` parameter to heat flow anomaly strength quantification.
 - Added different working precisions for the heat flow anomaly strength
   quantification.
 - Make `gamma_mle` method available in `reheatfunq.regional`.
@@ -111,6 +112,8 @@ and this project adheres to
 - Fix typo leading to incomplete quadrature error estimate in `outer_integrand`.
 - Use precision-dependent tolerance in heat flow anomaly posterior quadrature.
 - Add Kahan summation for heat flow anomaly posterior locals.
+- Speed up heat flow anomaly posterior CDF and tail distribution via `CDFEval`
+  class that computes norm and cumulative distribution simultaneously.
 
 
 ### [1.1.1] - 2022-12-02
