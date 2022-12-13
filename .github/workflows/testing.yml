@@ -21,6 +21,11 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Build REHEATFUNQ
       run: |
+          # Some basic environment information:
+          echo "Current folder:"
+          pwd
+          ls
+          echo ""
           # Install packages:
           sudo apt-get install -y libproj-dev libeigen3-dev \
                                   libcgal-dev libgeographic-dev build-essential\
@@ -46,7 +51,8 @@ jobs:
       run: |
         pip install flake8
         # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 reheatfunq --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 jupyter --count --select=E9,F63,F7,F82 --show-source --statistics
     - name: Test with pytest
       run: |
         #
