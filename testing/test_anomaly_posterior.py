@@ -112,7 +112,7 @@ def test_across_precisions_N100():
     np.testing.assert_allclose(cdf[1],cdf[2], rtol=1e-14, atol=0.0)
     np.testing.assert_allclose(tail[0],tail[2], rtol=1e-14, atol=0.0)
     np.testing.assert_allclose(tail[1],tail[2], rtol=1e-14, atol=0.0)
-    np.testing.assert_allclose(tail[2], 1.0 - cdf[2], rtol=0.0, atol=1e-15)
+    np.testing.assert_allclose(tail[2], 1.0 - cdf[2], rtol=0.0, atol=2e-15)
 
 
 def test_across_precisions_N1000():
