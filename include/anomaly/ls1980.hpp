@@ -43,6 +43,8 @@ public:
 	virtual void batch_c_i_ptr(size_t N, const double* xy, double* c_i,
 	                           double P_H=1.0) const;
 
+	double length() const;
+
 private:
 	/*
 	 * Boost typedefs

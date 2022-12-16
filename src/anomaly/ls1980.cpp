@@ -139,3 +139,8 @@ void LachenbruchSass1980Anomaly::batch_c_i_ptr(size_t N, const double* xy,
 		++c_i;
 	}
 }
+
+double LachenbruchSass1980Anomaly::length() const
+{
+	return L;
+}

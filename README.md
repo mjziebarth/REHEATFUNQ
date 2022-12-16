@@ -116,6 +116,10 @@ and this project adheres to
   class that computes norm and cumulative distribution simultaneously.
 
 
+### Unreleased
+#### Added
+- Add `length()` method to `AnomalyLS1980` class.
+
 ### [1.1.1] - 2022-12-02
 #### Changed
 - Update REHEATFUNQ Jupyter notebooks, mainly unified figure aesthetics.

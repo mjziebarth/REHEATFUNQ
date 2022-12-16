@@ -42,6 +42,7 @@ cdef extern from "anomaly/ls1980.hpp" namespace "reheatfunq" nogil:
     """
     cppclass LachenbruchSass1980Anomaly(HeatFlowAnomaly):
         LachenbruchSass1980Anomaly(const double* xy, size_t N, double d)
+        double length() const
 
     shared_ptr[HeatFlowAnomaly] \
     convert_LS1980_shared_ptr(shared_ptr[LachenbruchSass1980Anomaly])
@@ -111,6 +112,7 @@ cdef class AnomalyLS1980(Anomaly):
     d : float
        Depth of the fault (in m).
     """
+    cdef double _length
 
     def __init__(self, const double[:,::1] xy, double d):
         # Sanity:
@@ -118,9 +120,12 @@ cdef class AnomalyLS1980(Anomaly):
             raise RuntimeError("`xy` must be of shape (N,2).")
         cdef size_t N = xy.shape[0]
         cdef cdblptr xy_ptr = &xy[0,0]
+        cdef shared_ptr[LachenbruchSass1980Anomaly] ano
 
         with nogil:
-            self._anomaly = \
-            convert_LS1980_shared_ptr(
-                make_shared[LachenbruchSass1980Anomaly](xy_ptr, N, d)
-            )
+            ano = make_shared[LachenbruchSass1980Anomaly](xy_ptr, N, d)
+            self._length = deref(ano).length()
+            self._anomaly = convert_LS1980_shared_ptr(ano)
+
+    def length(self) -> double:
+        return self._length
