@@ -544,7 +544,7 @@ class GammaConjugatePrior:
                                  amax - 0.05*(amax-amin))
         ax.plot(a_plot, a_plot / q_mean, color='lightskyblue', linewidth=1.0,
                 zorder=1)
-        ax.text(2, 4.3e-2, f'${q_mean}\,\\mathrm{{mW}}/\\mathrm{{m}}^2$',
+        ax.text(2, 4.3e-2, f'${q_mean}\,\\mathrm{{mW}}\,\\mathrm{{m}}^{{-2}}$',
                 fontsize=8, rotation=45, color='lightskyblue')
         for entry in q_plot:
             if isinstance(entry, tuple):
@@ -558,7 +558,7 @@ class GammaConjugatePrior:
                     a_plot[(a_plot >= qamin) & (a_plot <= qamax)] / q,
                     color=color, linewidth=0.7, zorder=1)
             ax.text(sqrt(qamin * qamax), 1.2 * sqrt(qamin * qamax) / q,
-                    f'${q}\,\\mathrm{{mWm}}^{{-2}}$', fontsize=8,
+                    f'${q}\,\\mathrm{{mW\,m}}^{{-2}}$', fontsize=8,
                     rotation=45, color=color)
 
         # 3) The standard deviation isolines:
@@ -576,7 +576,7 @@ class GammaConjugatePrior:
                     linestyle=':', color=color, linewidth=0.7)
             albl = sqrt(qamin * qamax)
             blbl = sqrt(albl) / qstd
-            ax.text(albl, 1.1*blbl, f'${qstd}\,\\mathrm{{mWm}}^{{-2}}$',
+            ax.text(albl, 1.1*blbl, f'${qstd}\,\\mathrm{{mW\,m}}^{{-2}}$',
                     fontsize=8, rotation=27, color=color)
 
         if ai is not None:

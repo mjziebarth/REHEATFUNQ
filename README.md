@@ -120,6 +120,10 @@ and this project adheres to
 #### Added
 - Add `length()` method to `AnomalyLS1980` class.
 
+#### Changed
+- Change default unit representation in `GammaConjugatePrior.visualize`.
+
+
 ### [1.1.1] - 2022-12-02
 #### Changed
 - Update REHEATFUNQ Jupyter notebooks, mainly unified figure aesthetics.
