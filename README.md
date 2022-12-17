@@ -121,11 +121,14 @@ and this project adheres to
 - Add `length()` method to `AnomalyLS1980` class.
 - Add backup Gauss-Kronrod quadrature in heat flow anomaly quantification
   backend when computing the transition to the large *z* expansion backend.
-- Add new Jupyter notebooks `A8-Data-Size-vs-Variance.ipynb`, and
-  `A10-Gamma-Sketch.ipynb`from paper.
+- Add new Jupyter notebooks `A7-Bias-10-Percent-Tail-Quantile-Alpha-Beta.ipynb`,
+  `A8-Data-Size-vs-Variance.ipynb`, and `A10-Gamma-Sketch.ipynb` from paper.
 
 #### Changed
 - Change default unit representation in `GammaConjugatePrior.visualize`.
+- Update notebooks `03-Gamma-Conjugate-Prior-Parameters.ipynb`,
+  `04-Global-Map.ipynb`, `06-Heat-Flow-Analysis.ipynb`, and
+  `A5-Uniform-Point-Density.ipynb`
 
 
 ### [1.1.1] - 2022-12-02
