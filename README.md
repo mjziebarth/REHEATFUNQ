@@ -119,6 +119,8 @@ and this project adheres to
 ### Unreleased
 #### Added
 - Add `length()` method to `AnomalyLS1980` class.
+- Add backup Gauss-Kronrod quadrature in heat flow anomaly quantification
+  backend when computing the transition to the large *z* expansion backend.
 
 #### Changed
 - Change default unit representation in `GammaConjugatePrior.visualize`.

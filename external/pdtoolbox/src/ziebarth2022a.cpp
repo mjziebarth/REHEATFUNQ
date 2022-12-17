@@ -822,6 +822,9 @@ real y_taylor_transition_root_backend(real y, const locals_t<real>& L)
 	using std::abs;
 	using boost::multiprecision::abs;
 
+	/* Backup Gauss-Kronrod quadrature: */
+	typedef gauss_kronrod<real,31> GK;
+
 	constexpr double epsilon = 1e-14;
 
 	const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
@@ -839,6 +842,13 @@ real y_taylor_transition_root_backend(real y, const locals_t<real>& L)
 	exp_sinh<real> es_integrator;
 	tanh_sinh<real> ts_integrator;
 
+	auto integrand00 = [&](real a, real distance_to_border) -> real
+	{
+		return a_integral_large_z_integrand<C_t::C0,true,real>(
+		                a, ly, log_scale, L
+		);
+	};
+
 	auto integrand0 = [&](real a) -> real
 	{
 		return a_integral_large_z_integrand<C_t::C0,true,real>(
@@ -849,11 +859,19 @@ real y_taylor_transition_root_backend(real y, const locals_t<real>& L)
 	real S0;
 	if (amax > L.amin){
 		real error1, L11;
-		S0 = ts_integrator.integrate(integrand0, L.amin, amax,
-		                             TOL_TANH_SINH, &error, &L1, &levels)
-		   + es_integrator.integrate(integrand0, amax,
-		                             std::numeric_limits<real>::infinity(),
-		                             TOL_TANH_SINH, &error1, &L11, &levels);
+		/* Try tanh_sinh for the integral [amin, amax] first, but fall back
+		 * to Gauss-Kronrod if an exception is thrown:
+		 */
+		try {
+			S0 = ts_integrator.integrate(integrand00, L.amin, amax,
+			                             TOL_TANH_SINH, &error, &L1, &levels);
+		} catch (...) {
+			S0 = GK::integrate(integrand0, L.amin, amax, 9, TOL_TANH_SINH,
+			                   &error, &L1);
+		}
+		S0 += es_integrator.integrate(integrand0, amax,
+		                              std::numeric_limits<real>::infinity(),
+		                              TOL_TANH_SINH, &error1, &L11, &levels);
 		error += error1;
 		L1 += L11;
 	} else {
@@ -872,23 +890,36 @@ real y_taylor_transition_root_backend(real y, const locals_t<real>& L)
 		                           error, L1);
 	}
 
-
-	auto integrand1 = [&](real a) -> real
+	auto integrand10 = [&](real a, real distance_to_border) -> real
 	{
 		return a_integral_large_z_integrand<C_t::C3,true,real>(
 		                a, ly, log_scale, L
 		);
 	};
 
+	auto integrand1 = [&](real a) -> real
+	{
+		return a_integral_large_z_integrand<C_t::C3,true,real>(
+		                a, ly, log_scale, L);
+	};
+
 
 	real S1;
 	if (amax > L.amin){
 		real error1, L11;
-		S1 = ts_integrator.integrate(integrand1, L.amin, amax,
-		                             TOL_TANH_SINH, &error, &L1, &levels)
-		   + es_integrator.integrate(integrand1, amax,
-		                             std::numeric_limits<real>::infinity(),
-		                             TOL_TANH_SINH, &error1, &L11, &levels);
+		/* Try tanh_sinh for the integral [amin, amax] first, but fall back
+		 * to Gauss-Kronrod if an exception is thrown:
+		 */
+		try {
+			S1 = ts_integrator.integrate(integrand10, L.amin, amax,
+			                             TOL_TANH_SINH, &error, &L1, &levels);
+		} catch (...) {
+			S1 = GK::integrate(integrand1, L.amin, amax, 9, TOL_TANH_SINH,
+			                   &error, &L1);
+		}
+		S1 += es_integrator.integrate(integrand1, amax,
+		                              std::numeric_limits<real>::infinity(),
+		                              TOL_TANH_SINH, &error1, &L11, &levels);
 		error += error1;
 		L1 += L11;
 	} else {
