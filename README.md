@@ -106,8 +106,9 @@ and this project adheres to
 - Add backup Gauss-Kronrod quadrature in heat flow anomaly quantification
   backend when computing the transition to the large *z* expansion backend.
 - Add new Jupyter notebooks `A7-Bias-10-Percent-Tail-Quantile-Alpha-Beta.ipynb`,
-  `A8-Data-Size-vs-Variance.ipynb`, `A9-Simple-Heat-Conduction.ipynb`, and
-  `A10-Gamma-Sketch.ipynb` from paper.
+  `A8-Data-Size-vs-Variance.ipynb`, `A9-Simple-Heat-Conduction.ipynb`,
+  `A10-Gamma-Sketch.ipynb`, and `A11-Sketch-Generate-Permutations.ipynb` from
+  paper.
 
 #### Changed
 - Change default unit representation in `GammaConjugatePrior.visualize`.
