@@ -17,5 +17,5 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from .anomaly import AnomalyLS1980
+from .anomaly import AnomalyLS1980, AnomalyNearestNeighbor
 from .posterior import HeatFlowAnomalyPosterior

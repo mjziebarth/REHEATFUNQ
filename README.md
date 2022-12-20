@@ -102,6 +102,8 @@ and this project adheres to
 
 ### Unreleased
 #### Added
+- Add `AnomalyNearestNeighbor` class that can perform the heat flow analysis
+  for arbitrary heat flow anomalies sampled at the heat flow data locations.
 - Add `length()` method to `AnomalyLS1980` class.
 - Add backup Gauss-Kronrod quadrature in heat flow anomaly quantification
   backend when computing the transition to the large *z* expansion backend.
@@ -109,6 +111,9 @@ and this project adheres to
   `A8-Data-Size-vs-Variance.ipynb`, `A9-Simple-Heat-Conduction.ipynb`,
   `A10-Gamma-Sketch.ipynb`, and `A11-Sketch-Generate-Permutations.ipynb` from
   paper.
+- Add new Jupyter notebook `Custom-Anomaly.ipynb` that can be used to quickstart
+  the analysis of a custom heat flow anomaly using the `AnomalyNearestNeighbor`
+  class.
 
 #### Changed
 - Change default unit representation in `GammaConjugatePrior.visualize`.

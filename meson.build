@@ -40,7 +40,8 @@ libgcp = static_library(
 #
 # Anomaly:
 #
-sources_anomaly = ['src/anomaly.cpp', 'src/anomaly/ls1980.cpp']
+sources_anomaly = ['src/anomaly.cpp', 'src/anomaly/ls1980.cpp',
+                   'src/anomaly/nearestneighbor.cpp']
 dependencies_anomaly = [openmp_dep, boost_dep]
 
 libanomaly = static_library(

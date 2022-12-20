@@ -47,6 +47,23 @@ cdef extern from "anomaly/ls1980.hpp" namespace "reheatfunq" nogil:
     shared_ptr[HeatFlowAnomaly] \
     convert_LS1980_shared_ptr(shared_ptr[LachenbruchSass1980Anomaly])
 
+cdef extern from "anomaly/nearestneighbor.hpp" namespace "reheatfunq" nogil:
+    """
+    namespace reheatfunq {
+    std::shared_ptr<HeatFlowAnomaly>
+    convert_NNA_shared_ptr(std::shared_ptr<NearestNeighborAnomaly> ptr)
+    {
+        return ptr;
+    }
+    }
+    """
+    cppclass NearestNeighborAnomaly(HeatFlowAnomaly):
+        NearestNeighborAnomaly(const double* xyq, size_t N)
+
+    shared_ptr[HeatFlowAnomaly] \
+    convert_NNA_shared_ptr(shared_ptr[NearestNeighborAnomaly])
+
+
 ctypedef const double* cdblptr
 
 
@@ -129,3 +146,34 @@ cdef class AnomalyLS1980(Anomaly):
 
     def length(self) -> double:
         return self._length
+
+
+@cython.embedsignature(True)
+cdef class AnomalyNearestNeighbor(Anomaly):
+    """
+    A multi-purpose heat flow anomaly class with user-provided anomaly
+    coefficients :math:`c_i` using nearest neighbor interpolation to
+    obtain the coefficients at the data locations.
+
+    This class can be used to provide arbitrary heat flow solutions
+    (e.g. from numerical methods) to REHEATFUNQ. To do so, the
+    coefficients should be provided at the locations of the data
+    later analyzed.
+
+    Parameters
+    ----------
+    xyc : array_like
+       Array of point solutions :math:`(x_i,y_i,c_i)`.
+    """
+
+    def __init__(self, const double[:,::1] xyc):
+        # Sanity:
+        if xyc.shape[1] != 3:
+            raise RuntimeError("`xyc` must be of shape (N,3).")
+        cdef size_t N = xyc.shape[0]
+        cdef cdblptr xyc_ptr = &xyc[0,0]
+        cdef shared_ptr[NearestNeighborAnomaly] ano
+
+        with nogil:
+            ano = make_shared[NearestNeighborAnomaly](xyc_ptr, N)
+            self._anomaly = convert_NNA_shared_ptr(ano)
