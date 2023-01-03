@@ -114,12 +114,16 @@ and this project adheres to
 - Add new Jupyter notebook `Custom-Anomaly.ipynb` that can be used to quickstart
   the analysis of a custom heat flow anomaly using the `AnomalyNearestNeighbor`
   class.
+- Add compile option to turn of machine-specific code and tuning.
 
 #### Changed
 - Change default unit representation in `GammaConjugatePrior.visualize`.
-- Update notebooks `03-Gamma-Conjugate-Prior-Parameters.ipynb`,
+- Update notebooks `01-Load-and-filter-NGHF.ipynb`,
+  `03-Gamma-Conjugate-Prior-Parameters.ipynb`,
   `04-Global-Map.ipynb`, `06-Heat-Flow-Analysis.ipynb`, and
   `A5-Uniform-Point-Density.ipynb`
+- Fix missing installs in Docker image
+- Compile Python package binaries in portable mode.
 
 ### [1.2.0] - 2022-12-13
 #### Added
