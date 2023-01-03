@@ -9,3 +9,7 @@ option('anomaly_posterior_dec100', type : 'boolean', value : false,
        description : 'Whether to support 50 digit boost multiprecision ' +
                      'floating point numbers in the anomaly quantification ' +
                      'posterior.')
+option('portable', type : 'boolean', value : false,
+       description : 'Whether to compile the binaries portably. If not, ' +
+                     'march=native and mtune=native switches are applied.'
+       )

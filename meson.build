@@ -1,7 +1,12 @@
 project('REHEATFUNQ','cpp','cython',
         default_options : ['optimization=3'])
-add_project_arguments(['-march=native','-mtune=native',
-                       '-std=c++20'], language : 'cpp')
+add_project_arguments(['-std=c++20'], language : 'cpp')
+
+# Use natively tuned code by default - turn off by use of the 'portable'
+# option:
+if not get_option('portable')
+    add_project_arguments(['-march=native','-mtune=native'], language : 'cpp')
+endif
 
 include = include_directories('include','external/pdtoolbox/include')
 
