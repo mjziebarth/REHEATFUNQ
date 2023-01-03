@@ -30,7 +30,7 @@ RUN set -eux; \
               libcgal-dev libgeographic-dev \
               build-essential python3-sphinx ninja-build git \
               libopenblas-dev libopenblas-base liblapacke-dev libgsl-dev \
-              python3-numpy cmake; \
+              python3-numpy cmake fonts-roboto; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
@@ -65,10 +65,14 @@ RUN set -eux; \
 RUN set -eux; \
     git clone https://github.com/mjziebarth/FlotteKarte.git; \
     cd FlotteKarte; \
+    meson setup builddir; \
+    cd builddir; \
+    meson configure -Dportable=true; \
+    cd ..; \
     bash compile.sh; \
     pip install --user --no-cache-dir .
 RUN set -eux; \
-    pip install --user  --no-cache-dir \
+    PDTOOLBOX_PORTABLE=1 pip install --user  --no-cache-dir \
             'pdtoolbox @ git+https://git.gfz-potsdam.de/ziebarth/pdtoolbox.git';
 ENV PATH = "$PATH:/home/reheatfunq/.local/bin"
 
@@ -81,7 +85,12 @@ COPY ./compile.sh ./meson.build ./setup.py ./meson_options.txt ./
 
 # Compile and install the package:
 RUN set -eux; \
-    bash compile.sh; \
+    mkdir builddir; \
+    meson setup builddir; \
+    cd builddir; \
+    meson configure -Danomaly_posterior_dec50=true -Dportable=true; \
+    meson compile; \
+    cd ..; \
     pip install --no-cache-dir --user .; \
     rm -r build; \
     rm -r builddir
