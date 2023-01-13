@@ -10,7 +10,21 @@ endif
 
 include = include_directories('include','external/pdtoolbox/include')
 
-eigen_dep = dependency('eigen3')
+eigen_dep = dependency('eigen3', required : false)
+if not eigen_dep.found()
+    # This is a patch for the Docker build.
+    # Eigen does not really need any installed library as
+    # long as all the headers can be found.
+    # If the dependency lookup failed, we proceed in good
+    # faith that the headers are installed in the correct
+    # position.
+    compiler = meson.get_compiler('cpp')
+    if not compiler.check_header('eigen3/Eigen/Dense',
+                                 include_directories : include)
+        error('Could not access the Eigen headers. Make sure that from your ' +
+              'include path, "eigen3/Eigen/Dense" can be accessed.')
+    endif
+endif
 boost_dep = dependency('boost')
 openmp_dep = dependency('openmp')
 geographiclib_dep = dependency('GeographicLib', required : false)
