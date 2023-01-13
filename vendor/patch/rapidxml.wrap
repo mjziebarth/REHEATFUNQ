@@ -1,0 +1,5 @@
+[wrap-file]
+directory = rapidxml-1.13
+source_filename = rapidxml-1.13.tar.xz
+source_hash = 4f9c5744ad3fda4b2e7ebfb64b51fadf45ef9dbaba8637a162b83f439d5642d2
+patch_directory = rapidxml
