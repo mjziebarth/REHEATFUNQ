@@ -3,7 +3,7 @@
 #
 # Author: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
 #
-# Copyright (C) 2022 Malte J. Ziebarth
+# Copyright (C) 2022-2023 Malte J. Ziebarth
 #               Jupyter Development Team (see below)
 #
 # This program is free software: you can redistribute it and/or modify
@@ -34,13 +34,15 @@ USER root
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-                    build-essential netbase gfortran;\
+                    gcc g++ libc-dev netbase;\
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
 #
 # Hereafter, everything should be self-contained.
 #
+
+ENV PREFIX=/sci
 
 # Add the user that will later be the default:
 RUN set -eux;\
@@ -54,43 +56,50 @@ USER root
 
 # Bootstrap GCC:
 COPY ./vendor/xz-5.4.0.tar.bz2 \
+     ./vendor/make-4.4.tar.gz \
      ./vendor/gcc-12.2.0.tar.xz \
-     ./vendor/bzip2-latest.tar.gz \
+     ./vendor/bzip2-1.0.8.tar.gz \
      ./vendor/mpfr-4.2.0.tar.xz \
      ./vendor/mpc-1.3.1.tar.xz \
      ./vendor/gmp-6.2.1.tar.xz \
+     ./vendor/m4-1.4.19.tar.xz \
+     ./vendor/perl-5.36.0.tar.xz \
      ./vendor/
+
+COPY ./docker/bootstrap-gcc.sh ./docker/
+
 RUN set -eux; \
-    #
-    # bz2:
-    #
-    tar -xf vendor/bzip2-latest.tar.gz bzip2-1.0.8; \
-    cd bzip2-1.0.8; \
-    CXXFLAGS="-fPIC" CFLAGS="-fPIC" make -j `nproc`; \
-    make clean; \
-    CXXFLAGS="-fPIC" CFLAGS="-fPIC" make -f Makefile-libbz2_so; \
-    make install PREFIX=/usr; \
-    cd ..; \
-    rm -rf bzip2-1.0.8; \
-    #
-    # xz:
-    #
-    tar -xf vendor/xz-5.4.0.tar.bz2 xz-5.4.0; \
-    cd xz-5.4.0; \
-    ./configure; \
-    make -j `nproc`; \
-    make install; \
-    cd ..; \
-    rm -rf xz-5.4.0; \
-    #
-    # GCC:
-    #
-    ls -l /usr/bin; \
-    tar -xf vendor/gcc-12.2.0.tar.xz; \
-    cd gcc-12.2.0; \
-    ./configure;
+    PREFIX=$PREFIX \
+    VENDORDIR=vendor \
+    BZ2_ID=bzip2-1.0.8 \
+    XZ_ID=xz-5.4.0 \
+    M4_ID=m4-1.4.19 \
+    GMP_ID=gmp-6.2.1 \
+    MPFR_ID=mpfr-4.2.0 \
+    MPC_ID=mpc-1.3.1 \
+    GCC_ID=gcc-12.2.0 \
+    MAKE_ID=make-4.4 \
+    PERL_ID=perl-5.36.0 \
+    ./docker/bootstrap-gcc.sh
 
+RUN set -eux; \
+    apt-get remove -y --no-install-recommends \
+                    gcc g++ libc-dev;\
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
 
+#RUN set -eux; \
+#    echo "/sci/lib" > /etc/ld.so.conf; \
+#    echo "/sci/lib64" >> /etc/ld.so.conf; \
+#    echo "/usr/local/lib" >> /etc/ld.so.conf; \
+#    echo "/usr/local/lib64" >> /etc/ld.so.conf; \
+#    cat /etc/ld.so.conf.old >> /etc/ld.so.conf; \
+#    ldconfig; \
+#    exit -1
+RUN set -eux; \
+    cd /sci/bin; \
+    ln -s gcc cc; \
+    ls -l /sci/bin
 
 
 # Runtime dependencies:
@@ -99,11 +108,11 @@ COPY ./vendor/sqlite-amalgamation-3400100.tar.xz \
      ./vendor/eigen-3.4.0.tar.xz ./vendor/boost_1_81_0.tar.lzma-lrz \
      ./vendor/proj-9.1.1.tar.xz ./vendor/geos-3.11.1.tar.xz \
      ./vendor/lrzip-0.651.tar.gz  ./vendor/autoconf-2.71.tar.xz \
-     ./vendor/m4-1.4.19.tar.xz ./vendor/automake-1.16.5.tar.xz \
+     ./vendor/automake-1.16.5.tar.xz \
      ./vendor/libtool-2.4.6.tar.xz ./vendor/zlib-1.2.13.tar.xz \
      ./vendor/lzo-2.10.tar.gz ./vendor/lz4-1.9.4.tar.gz \
      ./vendor/libzmq-master-2023-01-10.tar.xz \
-     ./vendor/perl-5.36.0.tar.xz ./vendor/openssl-3.0.7.tar.xz \
+     ./vendor/openssl-3.0.7.tar.xz \
      ./vendor/cmake-3.25.1.tar.xz ./vendor/ninja-1.11.1.tar.xz \
      ./vendor/libffi-3.4.4.tar.xz \
      ./vendor/geos-3.11.1.tar.xz ./vendor/Python-3.11.1.tar.xz \
@@ -119,8 +128,8 @@ COPY ./vendor/sqlite-amalgamation-3400100.tar.xz \
      ./vendor/Pillow-9.4.0.tar.lzma-lrz ./vendor/contourpy-1.0.6.tar.xz \
      ./vendor/kiwisolver-1.4.4.tar.xz ./vendor/matplotlib-3.6.2.tar.xz \
      ./vendor/pyproj-3.4.1.tar.xz ./vendor/gdal-3.6.2.tar.xz \
-     ./vendor/yaml-0.2.5.tar.xz ./vendor/gmp-6.2.1.tar.xz \
-     ./vendor/CGAL-5.5.1-library.tar.xz ./vendor/gsl-2.7.1.tar.xz \
+     ./vendor/yaml-0.2.5.tar.xz ./vendor/CGAL-5.5.1-library.tar.xz \
+     ./vendor/gsl-2.7.1.tar.xz \
      ./vendor/geographiclib-2.1.2.tar.xz \
      ./vendor/
 COPY ./include/ ./include/
@@ -129,33 +138,18 @@ COPY ./vendor/patch/ ./vendor/patch/
 # Install bz2, xz-utils, m4, autoconf, automake, libtool, lrzip, perl, OpenSSL,
 #         cmake, Ninja:
 RUN set -eux; \
-    #
-    # bz2:
-    #
-    tar -xf vendor/bzip2-latest.tar.gz bzip2-1.0.8; \
-    cd bzip2-1.0.8; \
-    CXXFLAGS="-fPIC" CFLAGS="-fPIC" make -j `nproc`; \
-    make clean; \
-    CXXFLAGS="-fPIC" CFLAGS="-fPIC" make -f Makefile-libbz2_so; \
-    make install PREFIX=/usr; \
-    cd ..; \
-    rm -rf bzip2-1.0.8; \
-    #
-    # xz:
-    #
-    tar -xf vendor/xz-5.4.0.tar.bz2 xz-5.4.0; \
-    cd xz-5.4.0; \
-    ./configure; \
-    make -j `nproc`; \
-    make install; \
-    cd ..; \
-    rm -rf xz-5.4.0; \
+    export PATH=$PREFIX/bin:$PATH; \
+    export CPATH=$PREFIX/include; \
+    ls -la /usr/bin; \
+    which make; \
+    which gcc; \
+    which cc; \
     #
     # m4:
     #
     tar -xf vendor/m4-1.4.19.tar.xz m4-1.4.19; \
     cd m4-1.4.19; \
-    ./configure; \
+    ./configure --prefix=$PREFIX; \
     make -j `nproc`; \
     make install; \
     cd ..; \
@@ -165,7 +159,7 @@ RUN set -eux; \
     #
     tar -xf vendor/autoconf-2.71.tar.xz autoconf-2.71; \
     cd autoconf-2.71/; \
-    ./configure; \
+    ./configure --prefix=$PREFIX; \
     make -j `nproc`; \
     make install; \
     cd ..; \
@@ -175,7 +169,7 @@ RUN set -eux; \
     #
     tar -xf vendor/automake-1.16.5.tar.xz automake-1.16.5; \
     cd automake-1.16.5/; \
-    ./configure; \
+    ./configure --prefix=$PREFIX; \
     make -j `nproc`; \
     make install; \
     cd ..; \
@@ -185,7 +179,7 @@ RUN set -eux; \
     #
     tar -xf vendor/libtool-2.4.6.tar.xz libtool-2.4.6; \
     cd libtool-2.4.6/; \
-    ./configure; \
+    ./configure --prefix=$PREFIX; \
     make -j `nproc`; \
     make install; \
     cd ..; \
@@ -195,7 +189,7 @@ RUN set -eux; \
     #
     tar -xf vendor/zlib-1.2.13.tar.xz zlib-1.2.13; \
     cd zlib-1.2.13/; \
-    ./configure; \
+    ./configure --prefix=$PREFIX; \
     make -j `nproc`; \
     make install; \
     cd ..; \
@@ -205,7 +199,7 @@ RUN set -eux; \
     #
     tar -xf vendor/lzo-2.10.tar.gz lzo-2.10; \
     cd lzo-2.10/; \
-    ./configure; \
+    ./configure --prefix=$PREFIX; \
     make -j `nproc`; \
     make install; \
     cd ..; \
@@ -216,7 +210,7 @@ RUN set -eux; \
     tar -xf vendor/lz4-1.9.4.tar.gz lz4-1.9.4; \
     cd lz4-1.9.4/; \
     make -j `nproc`; \
-    make install; \
+    make install PREFIX=$PREFIX; \
     cd ..; \
     rm -rf lz4-1.9.4; \
     #
@@ -225,30 +219,17 @@ RUN set -eux; \
     tar -xf vendor/lrzip-0.651.tar.gz lrzip-0.651; \
     cd lrzip-0.651/; \
     ./autogen.sh; \
-    ./configure; \
+    ./configure --prefix=$PREFIX; \
     make -j `nproc`; \
     make install; \
     cd ..; \
     rm -rf lrzip-0.651; \
     #
-    # Perl:
-    #
-    tar -xf vendor/perl-5.36.0.tar.xz; \
-    cd perl-5.36.0; \
-    ./Configure -des; \
-    make -j `nproc`; \
-    #./perl -I. -MTestInit cpan/Socket/t/getaddrinfo.t; \
-    #export LD_LIBRARY_PATH=`pwd`; cd t; ./perl harness; \
-    #make test; \
-    make install; \
-    cd ..; \
-    rm -rf perl-5.36.0; \
-    #
     # OpenSSL:
     #
     tar -xf vendor/openssl-3.0.7.tar.xz; \
     cd openssl-3.0.7; \
-    ./Configure; \
+    ./Configure --prefix=$PREFIX zlib; \
     make -j `nproc`; \
     make install_sw; \
     cd ..; \
@@ -259,6 +240,7 @@ RUN set -eux; \
     tar -xf vendor/cmake-3.25.1.tar.xz; \
     cd cmake-3.25.1; \
     ./bootstrap --parallel=`nproc` -- \
+                -DCMAKE_INSTALL_PREFIX=$PREFIX \
                 -DCMAKE_BUILD_TYPE:STRING=Release; \
     make -j `nproc`; \
     make install; \
@@ -269,7 +251,8 @@ RUN set -eux; \
     #
     tar -xf vendor/ninja-1.11.1.tar.xz ninja-1.11.1; \
     cd ninja-1.11.1; \
-    cmake -Bbuild-cmake -DCMAKE_BUILD_TYPE=Release; \
+    cmake -Bbuild-cmake -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=$PREFIX; \
     cmake --build build-cmake -j `nproc`; \
     ./build-cmake/ninja_test; \
     cp build-cmake/ninja /bin; \
@@ -283,14 +266,14 @@ RUN set -eux; \
     mkdir cmake-ninja; \
     cd cmake-ninja; \
     cmake -G Ninja -D CMAKE_BUILD_TYPE=Release \
-                   -D CMAKE_INSTALL_LIBDIR=/usr/lib \
-                   -D CMAKE_INSTALL_BINDIR=/usr/bin ..; \
+                   -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_LIB_DIR=lib ..; \
     cmake --build .; \
     cmake --build . --target install; \
     cd ../..; \
     rm -rf libzmq-master-2023-01-10
 
-
+ENV PATH "/sci/bin:$PATH"
+ENV CPATH="/sci/include/"
 
 # Install sqlite3:
 COPY ./external/sqlite ./external/sqlite
@@ -302,7 +285,8 @@ RUN set -eux; \
     cd external/sqlite/; \
     mkdir build; \
     cd build; \
-    cmake -G Ninja -D CMAKE_BUILD_TYPE=Release ..; \
+    cmake -G Ninja -D CMAKE_BUILD_TYPE=Release \
+                   -D CMAKE_INSTALL_PREFIX=$PREFIX ..; \
     cmake --build .; \
     cmake --build . --target install; \
     ls -l /usr/lib; \
@@ -322,7 +306,7 @@ RUN set -eux; \
     cd build; \
     cmake -G Ninja -DENABLE_TIFF=OFF -DENABLE_CURL=OFF -DBUILD_PROJSYNC=OFF \
           -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_INSTALL_LIBDIR=lib ..; \
+          -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_INSTALL_LIBDIR=lib ..; \
     cmake --build .; \
     cmake --build . --target install; \
     cd ..; \
@@ -334,7 +318,7 @@ RUN set -eux; \
     tar xvf boost_1_81_0.tar; \
     rm -vf boost_1_81_0.tar; \
     cd boost_1_81_0/; \
-    ./bootstrap.sh --with-libraries=math;\
+    ./bootstrap.sh --with-libraries=math --prefix=$PREFIX;\
     ./b2 install; \
     cd /home/reheatfunq/REHEATFUNQ; \
     rm -rf boost_1_81_0/; \
@@ -350,7 +334,7 @@ RUN set -eux; \
     #
     tar -xf vendor/libffi-3.4.4.tar.xz libffi-3.4.4; \
     cd libffi-3.4.4; \
-    ./configure; \
+    ./configure --prefix=$PREFIX; \
     make -j `nproc`; \
     make install; \
     cd ..; \
@@ -364,15 +348,20 @@ RUN set -eux; \
     tar -xf vendor/Python-3.11.1.tar.xz Python-3.11.1; \
     cd Python-3.11.1; \
     env TESTTIMEOUT=10; \
+    export PYLDFLAGSONE="-L$PREFIX/lib -L$PREFIX/lib64 "; \
+    export PYLDFLAGSTWO="-Wl,--rpath=$PREFIX/lib -Wl,--rpath=$PREFIX/lib64"; \
     ./configure --enable-optimizations --with-lto=yes --enable-shared \
-                --with-assertions --prefix=/usr; \
+                --with-assertions --prefix=$PREFIX --with-openssl=/sci \
+                CFLAGS="-I/sci/include/" \
+                LDFLAGS="$PYLDFLAGSONE $PYLDFLAGSTWO"; \
     make -j `nproc`; \
     #make test; \
     make install; \
     cd ..; \
     rm -rf Python-3.11.1; \
-    ln -s /usr/bin/pip3 /usr/bin/pip; \
-    ln -s /usr/bin/python3 /usr/bin/python; \
+    ln -s $PREFIX/bin/pip3 $PREFIX/bin/pip; \
+    ln -s $PREFIX/bin/python3 $PREFIX/bin/python; \
+    find /sci -name libpython*; \
     python vendor/patch/python/test_bz2.py
 
 COPY ./vendor/wheels/ ./vendor/wheels/
@@ -386,15 +375,28 @@ COPY ./vendor/geos-3.11.1.tar.xz \
      ./vendor/yaml-0.2.5.tar.xz \
      ./vendor/gmp-6.2.1.tar.xz \
      ./vendor/CGAL-5.5.1-library.tar.xz \
+     ./vendor/patch-2.7.6.tar.xz \
      ./vendor/
 
-# Install GEOS:
 RUN set -eux; \
+    #
+    # patch:
+    #
+    tar -xf vendor/patch-2.7.6.tar.xz patch-2.7.6; \
+    cd patch-2.7.6; \
+    ./configure --prefix=$PREFIX; \
+    make -j `nproc`; \
+    make install; \
+    cd ..; \
+    rm -rf patch-2.7.6; \
+    #
+    # GEOS:
+    #
     tar -xf vendor/geos-3.11.1.tar.xz geos-3.11.1; \
     cd geos-3.11.1; \
     mkdir build; \
     cd build;\
-    cmake -G Ninja -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release \
+    cmake -G Ninja -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_BUILD_TYPE=Release \
                    -DCMAKE_INSTALL_LIBDIR=lib ..; \
     cmake --build .; \
     cmake --build . --target install; \
@@ -423,7 +425,7 @@ RUN set -eux; \
     tar -xf vendor/OpenBLAS-0.3.21.tar.xz; \
     cd OpenBLAS-0.3.21; \
     make -j `nproc`; \
-    make install PREFIX=/usr; \
+    make install PREFIX=$PREFIX; \
     cd ..; \
     rm -rf OpenBLAS-0.3.21; \
     #
@@ -432,7 +434,7 @@ RUN set -eux; \
     tar -xf vendor/numpy-1.24.1.tar.xz numpy-1.24.1; \
     cp vendor/patch/NumPy/site.cfg numpy-1.24.1/; \
     cd numpy-1.24.1; \
-    python setup.py build -j `nproc` install --prefix /usr; \
+    python setup.py build -j `nproc` install --prefix $PREFIX; \
     cd ..; \
     rm -rf numpy-1.24.1; \
     #
@@ -442,7 +444,8 @@ RUN set -eux; \
     cd geographiclib-2.1.2; \
     mkdir build; \
     cd build; \
-    cmake -G Ninja -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release ..; \
+    cmake -G Ninja -DCMAKE_INSTALL_PREFIX=$PREFIX \
+                   -DCMAKE_BUILD_TYPE=Release ..; \
     cmake --build .; \
     cmake --build . --target install; \
     cd ../..; \
@@ -452,7 +455,7 @@ RUN set -eux; \
     #
     tar -xf vendor/gsl-2.7.1.tar.xz gsl-2.7.1; \
     cd gsl-2.7.1; \
-    ./configure --prefix=/usr; \
+    ./configure --prefix=$PREFIX; \
     make -j `nproc`; \
     make install; \
     cd ..; \
@@ -464,8 +467,8 @@ RUN set -eux; \
     cd gdal-3.6.2; \
     mkdir build; \
     cd build; \
-    cmake -G Ninja  -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release \
-                    -DPython_ROOT=/usr ..; \
+    cmake -G Ninja  -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_BUILD_TYPE=Release \
+                    -DPython_ROOT=$PREFIX ..; \
     cmake --build .; \
     cmake --build . --target install; \
     cd ../..; \
@@ -475,32 +478,20 @@ RUN set -eux; \
     #
     tar -xf vendor/yaml-0.2.5.tar.xz yaml-0.2.5; \
     cd yaml-0.2.5; \
-    ./configure --prefix=/usr; \
+    ./configure --prefix=$PREFIX; \
     make -j `nproc`; \
     make install; \
     cd ..; \
     rm -rf yaml-0.2.5; \
     #              \
-    # gmp:
-    #              \
-    tar -xf vendor/gmp-6.2.1.tar.xz gmp-6.2.1; \
-    cd gmp-6.2.1; \
-    ./configure --prefix=/usr --enable-cxx;\
-    make -j `nproc`; \
-    make check -j `nproc`; \
-    make install ; \
-    cd ..; \
-    rm -rf gmp-6.2.1; \
-    #              \
     # CGAL:  \
     #              \
     tar -xf vendor/CGAL-5.5.1-library.tar.xz CGAL-5.5.1; \
     cd CGAL-5.5.1; \
-    cmake . -D CMAKE_INSTALL_PREFIX=/usr -D CMAKE_BUILD_TYPE=Release; \
+    cmake . -D CMAKE_INSTALL_PREFIX=$PREFIX -D CMAKE_BUILD_TYPE=Release; \
     make install; \
     cd ..; \
     rm -rf CGAL-5.5.1;
-
 
 # Pythran:
 
@@ -703,6 +694,8 @@ RUN set -eux; \
     rm -rf MarkupSafe-2.1.1;
 
 
+ENV LD_LIBRARY_PATH="/sci/lib:/sci/lib64:$LD_LIBRARY_PATH"
+
 RUN set -eux; \
     python -c "from scipy.optimize import minimize"; \
     pip list; \
@@ -712,7 +705,7 @@ RUN set -eux; \
     #find / -name libzmq*; \
     tar -xf vendor/pyzmq-24.0.1.tar.xz pyzmq-24.0.1; \
     cd pyzmq-24.0.1; \
-    ZMQ_PREFIX=/usr pip install --user --no-index --no-build-isolation .; \
+    ZMQ_PREFIX=$PREFIX pip install --user --no-index --no-build-isolation .; \
     cd ..; \
     rm -rf pyzmq-24.0.1; \
     #              \
@@ -786,7 +779,7 @@ COPY ./external/ ./external/
 
 # Python dependencies:
 RUN set -eux; \
-    ls /usr/lib/python3.11/site-packages; \
+    ls /sci/lib/python3.11/site-packages; \
     ls ~/.local/lib/python3.11/site-packages; \
     cd vendor/wheels; \
     pip install --no-index --no-build-isolation --no-cache-dir \
@@ -875,11 +868,14 @@ RUN set -eux; \
     mv ProjWrapCpp-1.3.0 loaducerf3-v1.1.3/subprojects/libprojwrap; \
     rm loaducerf3-v1.1.3/subprojects/libprojwrap.wrap; \
     ls loaducerf3-v1.1.3/subprojects; \
-    cp external/projwrap/meson.build loaducerf3-v1.1.3/subprojects/libprojwrap/; \
+    cp vendor/patch/projwrap/meson.build.patch \
+       loaducerf3-v1.1.3/subprojects/libprojwrap/; \
     rm loaducerf3-v1.1.3/subprojects/rapidxml.wrap; \
     cp vendor/rapidxml-1.13.tar.xz loaducerf3-v1.1.3/subprojects/packagefiles/; \
     cp vendor/patch/rapidxml.wrap loaducerf3-v1.1.3/subprojects/; \
-    cd loaducerf3-v1.1.3; \
+    cd loaducerf3-v1.1.3/subprojects/libprojwrap; \
+    patch < meson.build.patch; \
+    cd ../..; \
     meson setup builddir; \
     cd builddir; \
     meson configure -Dportable=true; \
@@ -889,7 +885,8 @@ RUN set -eux; \
     cd ..; \
     # FlotteKarte install \
     tar -xf vendor/FlotteKarte-main.tar.xz FlotteKarte-main/; \
-    mv loaducerf3-v1.1.3/subprojects/libprojwrap/ FlotteKarte-main/subprojects/; \
+    mv loaducerf3-v1.1.3/subprojects/libprojwrap/ \
+       FlotteKarte-main/subprojects/; \
     rm FlotteKarte-main/subprojects/libprojwrap.wrap; \
     cp vendor/patch/FlotteKarte/meson.build FlotteKarte-main/; \
     cd FlotteKarte-main/; \
@@ -917,7 +914,7 @@ RUN set -eux; \
     cp vendor/patch/pdtoolbox/setup.py.patch pdtoolbox-main/; \
     cd pdtoolbox-main; \
     patch < setup.py.patch; \
-    ls /usr/lib/ | grep blas; \
+    ls /sci/lib/ | grep blas; \
     PDTOOLBOX_PORTABLE=1 python setup.py build_ext --verbose -j`nproc` \
             bdist_wheel; \
     pip install --user --no-index --no-build-isolation \
@@ -926,7 +923,7 @@ RUN set -eux; \
     cd ..; \
     rm -rf pdtoolbox-main
 
-ENV PATH = "$PATH:/home/reheatfunq/.local/bin"
+ENV PATH = "/sci/bin:$PATH:/home/reheatfunq/.local/bin"
 
 USER root
 # Fonts:
@@ -934,7 +931,6 @@ RUN set -eux; \
     mkdir -p /usr/share/fonts; \
     tar -xf vendor/fonts/Roboto.tar.xz Roboto/; \
     mv Roboto/* /usr/share/fonts/;
-    #fc-cache
 USER reheatfunq
 
 # Copy necessary directories:
