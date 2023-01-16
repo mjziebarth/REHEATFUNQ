@@ -20,6 +20,17 @@ REHEATFUNQ source code to install REHEATFUNQ:
 ```bash
 pip install --user .
 ```
+You can also use one of two Docker files that come with this repository. Use
+```bash
+sudo docker build -t 'reheatfunq' .
+```
+to build the Docker image `Dockerfile` based on `python:slim` which includes
+updated dependencies and has a short compilation time.
+
+Alternatively, you can build the reproducible `Dockerfile-stable` with fixed
+dependencies at the state of the REHEATFUNQ description paper. See the
+[REHEATFUNQ documentation](https://mjziebarth.github.io/REHEATFUNQ/) for more
+informatio about how to build the `Dockerfile-stable` image.
 
 ## Usage
 Visit the [REHEATFUNQ documentation](https://mjziebarth.github.io/REHEATFUNQ/)
