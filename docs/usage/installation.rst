@@ -129,7 +129,7 @@ Then, you can build and run the Docker image as above:
 
 .. code :: bash
 
-   sudo docker build -f Dockerfile-stable -t 'reheatfunq-1.3.0'
+   sudo docker build -f Dockerfile-stable -t 'reheatfunq-1.3.0' .
    sudo docker run -p XXXX:8888 reheatfunq-1.3.0
 
 Nearly all of the dependencies of this container are contained in
