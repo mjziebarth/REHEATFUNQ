@@ -64,47 +64,7 @@ COPY ./vendor/compile/xz-5.4.0.tar.bz2 \
      ./vendor/compile/gmp-6.2.1.tar.xz \
      ./vendor/compile/m4-1.4.19.tar.xz \
      ./vendor/compile/perl-5.36.0.tar.xz \
-     ./vendor/compile/
-
-COPY ./docker/bootstrap-gcc.sh ./docker/
-
-RUN set -eux; \
-    PREFIX=$PREFIX \
-    VENDORDIR=vendor/compile \
-    BZ2_ID=bzip2-1.0.8 \
-    XZ_ID=xz-5.4.0 \
-    M4_ID=m4-1.4.19 \
-    GMP_ID=gmp-6.2.1 \
-    MPFR_ID=mpfr-4.2.0 \
-    MPC_ID=mpc-1.3.1 \
-    GCC_ID=gcc-12.2.0 \
-    MAKE_ID=make-4.4 \
-    PERL_ID=perl-5.36.0 \
-    ./docker/bootstrap-gcc.sh
-
-RUN set -eux; \
-    apt-get remove -y --no-install-recommends \
-                    gcc g++ libc-dev;\
-    apt-get clean; \
-    rm -rf /var/lib/apt/lists/*
-
-#RUN set -eux; \
-#    echo "/sci/lib" > /etc/ld.so.conf; \
-#    echo "/sci/lib64" >> /etc/ld.so.conf; \
-#    echo "/usr/local/lib" >> /etc/ld.so.conf; \
-#    echo "/usr/local/lib64" >> /etc/ld.so.conf; \
-#    cat /etc/ld.so.conf.old >> /etc/ld.so.conf; \
-#    ldconfig; \
-#    exit -1
-RUN set -eux; \
-    cd /sci/bin; \
-    ln -s gcc cc; \
-    ls -l /sci/bin
-
-
-# Runtime dependencies:
-# Copy external code that includes dependencies to install
-COPY ./vendor/compile/sqlite-amalgamation-3400100.tar.xz \
+     ./vendor/compile/sqlite-amalgamation-3400100.tar.xz \
      ./vendor/compile/eigen-3.4.0.tar.xz \
      ./vendor/compile/boost_1_81_0.tar.lzma-lrz \
      ./vendor/compile/proj-9.1.1.tar.xz \
@@ -149,9 +109,78 @@ COPY ./vendor/compile/sqlite-amalgamation-3400100.tar.xz \
      ./vendor/compile/CGAL-5.5.1-library.tar.xz \
      ./vendor/compile/gsl-2.7.1.tar.xz \
      ./vendor/compile/geographiclib-2.1.2.tar.xz \
+     ./vendor/compile/Cython-0.29.33.tar.xz \
+     ./vendor/compile/OpenBLAS-0.3.21.tar.xz \
+     ./vendor/compile/numpy-1.24.1.tar.xz \
+     ./vendor/compile/geographiclib-2.1.2.tar.xz \
+     ./vendor/compile/gsl-2.7.1.tar.xz \
+     ./vendor/compile/gdal-3.6.2.tar.xz \
+     ./vendor/compile/yaml-0.2.5.tar.xz \
+     ./vendor/compile/gmp-6.2.1.tar.xz \
+     ./vendor/compile/CGAL-5.5.1-library.tar.xz \
+     ./vendor/compile/patch-2.7.6.tar.xz \
+     ./vendor/compile/Pillow-9.4.0.tar.lzma-lrz \
+     ./vendor/compile/contourpy-1.0.6.tar.xz \
+     ./vendor/compile/kiwisolver-1.4.4.tar.xz \
+     ./vendor/compile/matplotlib-3.6.2.tar.xz \
+     ./vendor/compile/pyproj-3.4.1.tar.xz \
+     ./vendor/compile/scipy-1.10.0.tar.xz \
+     ./vendor/compile/pandas-1.5.2.tar.xz \
+     ./vendor/compile/shapely-2.0.0.tar.xz \
+     ./vendor/compile/Fiona-1.8.22.tar.xz \
+     ./vendor/compile/cffi-1.15.1.tar.xz \
+     ./vendor/compile/argon2-cffi-bindings-21.2.0.tar.xz \
+     ./vendor/compile/MarkupSafe-2.1.1.tar.xz \
+     ./vendor/compile/pyzmq-24.0.1.tar.xz \
+     ./vendor/compile/tornado-6.2.tar.xz \
+     ./vendor/compile/pyrsistent-0.19.3.tar.gz \
+     ./vendor/compile/PyYAML-6.0.tar.gz \
+     ./vendor/compile/debugpy-1.6.5.tar.xz \
+     ./vendor/compile/psutil-5.9.4.tar.xz \
+     ./vendor/compile/scikit-learn-1.2.0.tar.xz \
+     ./vendor/compile/loaducerf3-v1.1.3.tar.gz \
+     ./vendor/compile/ProjWrapCpp-1.3.0.tar.xz \
+     ./vendor/compile/FlotteKarte-0.2.6.tar.xz \
+     ./vendor/compile/pdtoolbox-v0.7.0.tar.xz \
+     ./vendor/compile/rapidxml-1.13.tar.xz \
      ./vendor/compile/
+
+COPY ./docker/bootstrap-gcc.sh ./docker/
+
+RUN set -eux; \
+    PREFIX=$PREFIX \
+    VENDORDIR=vendor/compile \
+    BZ2_ID=bzip2-1.0.8 \
+    XZ_ID=xz-5.4.0 \
+    M4_ID=m4-1.4.19 \
+    GMP_ID=gmp-6.2.1 \
+    MPFR_ID=mpfr-4.2.0 \
+    MPC_ID=mpc-1.3.1 \
+    GCC_ID=gcc-12.2.0 \
+    MAKE_ID=make-4.4 \
+    PERL_ID=perl-5.36.0 \
+    ./docker/bootstrap-gcc.sh; \
+    # Link gcc as cc:
+    cd /sci/bin; \
+    ln -s gcc cc; \
+    #
+    # Uninstall the development packages:
+    #
+    apt-get remove -y --no-install-recommends \
+                    gcc g++ libc-dev;\
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
+
+
+# Runtime dependencies:
+# Copy external code that includes dependencies to install
+COPY ./external/sqlite ./external/sqlite
 COPY ./include/ ./include/
 COPY ./vendor/patch/ ./vendor/patch/
+COPY ./vendor/fonts/ ./vendor/fonts/
+
+ENV PATH "/sci/bin:$PATH"
+ENV CPATH="/sci/include/"
 
 # Install bz2, xz-utils, m4, autoconf, automake, libtool, lrzip, perl, OpenSSL,
 #         cmake, Ninja:
@@ -289,14 +318,10 @@ RUN set -eux; \
     cmake --build .; \
     cmake --build . --target install; \
     cd ../..; \
-    rm -rf libzmq-master-2023-01-10
-
-ENV PATH "/sci/bin:$PATH"
-ENV CPATH="/sci/include/"
-
-# Install sqlite3:
-COPY ./external/sqlite ./external/sqlite
-RUN set -eux; \
+    rm -rf libzmq-master-2023-01-10; \
+    #
+    # sqlite3:
+    #
     tar -xf vendor/compile/sqlite-amalgamation-3400100.tar.xz \
             sqlite-amalgamation-3400100; \
     mv sqlite-amalgamation-3400100/* external/sqlite; \
@@ -313,11 +338,10 @@ RUN set -eux; \
     # Ensure that the RTREE works: \
     gcc vendor/patch/sqlite3/ensure_rtree.cpp -lsqlite3 -o ensure_rtree; \
     rm ensure_rtree; \
-    rm -rf external/sqlite
-
-# Install Proj:
-RUN set -eux; \
-    #export CMAKE_PROGRAM_PATH=/usr/bin; \
+    rm -rf external/sqlite; \
+    #
+    # PROJ:
+    #
     tar -xf vendor/compile/proj-9.1.1.tar.xz proj-9.1.1; \
     pwd; \
     cd proj-9.1.1;\
@@ -328,7 +352,7 @@ RUN set -eux; \
           -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_INSTALL_LIBDIR=lib ..; \
     cmake --build .; \
     cmake --build . --target install; \
-    cd ..; \
+    cd ../..; \
     rm -rf proj-9.1.1/; \
     #
     # boost:
@@ -339,7 +363,7 @@ RUN set -eux; \
     cd boost_1_81_0/; \
     ./bootstrap.sh --with-libraries=math --prefix=$PREFIX;\
     ./b2 install; \
-    cd /home/reheatfunq/REHEATFUNQ; \
+    cd ..; \
     rm -rf boost_1_81_0/; \
     #
     # Eigen:
@@ -357,10 +381,7 @@ RUN set -eux; \
     make -j `nproc`; \
     make install; \
     cd ..; \
-    rm -rf libffi-3.4.4
-
-# Install Python:
-RUN set -eux; \
+    rm -rf libffi-3.4.4; \
     #
     # Python:
     #
@@ -381,22 +402,7 @@ RUN set -eux; \
     ln -s $PREFIX/bin/pip3 $PREFIX/bin/pip; \
     ln -s $PREFIX/bin/python3 $PREFIX/bin/python; \
     find /sci -name libpython*; \
-    python vendor/patch/python/test_bz2.py
-
-COPY ./vendor/wheels/ ./vendor/wheels/
-COPY ./vendor/compile/Cython-0.29.33.tar.xz \
-     ./vendor/compile/OpenBLAS-0.3.21.tar.xz \
-     ./vendor/compile/numpy-1.24.1.tar.xz \
-     ./vendor/compile/geographiclib-2.1.2.tar.xz \
-     ./vendor/compile/gsl-2.7.1.tar.xz \
-     ./vendor/compile/gdal-3.6.2.tar.xz \
-     ./vendor/compile/yaml-0.2.5.tar.xz \
-     ./vendor/compile/gmp-6.2.1.tar.xz \
-     ./vendor/compile/CGAL-5.5.1-library.tar.xz \
-     ./vendor/compile/patch-2.7.6.tar.xz \
-     ./vendor/
-
-RUN set -eux; \
+    python vendor/patch/python/test_bz2.py; \
     #
     # patch:
     #
@@ -509,7 +515,17 @@ RUN set -eux; \
     cmake . -D CMAKE_INSTALL_PREFIX=$PREFIX -D CMAKE_BUILD_TYPE=Release; \
     make install; \
     cd ..; \
-    rm -rf CGAL-5.5.1;
+    rm -rf CGAL-5.5.1; \
+    #
+    # Fonts:
+    #
+    mkdir -p /usr/share/fonts; \
+    tar -xf vendor/fonts/Roboto.tar.xz Roboto/; \
+    mv Roboto/* /usr/share/fonts/;
+
+ENV LD_LIBRARY_PATH="/sci/lib:/sci/lib64:$LD_LIBRARY_PATH"
+
+COPY ./vendor/wheels/ ./vendor/wheels/
 
 # Pythran:
 
@@ -531,27 +547,6 @@ RUN set -eux; \
                 vendor/wheels/ply-3.11-py2.py3-none-any.whl
 
 USER reheatfunq
-
-COPY ./vendor/compile/Pillow-9.4.0.tar.lzma-lrz \
-     ./vendor/compile/contourpy-1.0.6.tar.xz \
-     ./vendor/compile/kiwisolver-1.4.4.tar.xz \
-     ./vendor/compile/matplotlib-3.6.2.tar.xz \
-     ./vendor/compile/pyproj-3.4.1.tar.xz \
-     ./vendor/compile/scipy-1.10.0.tar.xz \
-     ./vendor/compile/pandas-1.5.2.tar.xz \
-     ./vendor/compile/shapely-2.0.0.tar.xz \
-     ./vendor/compile/Fiona-1.8.22.tar.xz \
-     ./vendor/compile/cffi-1.15.1.tar.xz \
-     ./vendor/compile/argon2-cffi-bindings-21.2.0.tar.xz \
-     ./vendor/compile/MarkupSafe-2.1.1.tar.xz \
-     ./vendor/compile/pyzmq-24.0.1.tar.xz \
-     ./vendor/compile/tornado-6.2.tar.xz \
-     ./vendor/compile/pyrsistent-0.19.3.tar.gz \
-     ./vendor/compile/PyYAML-6.0.tar.gz \
-     ./vendor/compile/debugpy-1.6.5.tar.xz \
-     ./vendor/compile/psutil-5.9.4.tar.xz \
-     ./vendor/compile/scikit-learn-1.2.0.tar.xz \
-     ./vendor/
 
 RUN set -eux; \
     #         \
@@ -702,12 +697,10 @@ RUN set -eux; \
     pip install --user --no-index --no-build-isolation \
                 dist/MarkupSafe-2.1.1-*.whl; \
     cd ..; \
-    rm -rf MarkupSafe-2.1.1;
-
-
-ENV LD_LIBRARY_PATH="/sci/lib:/sci/lib64:$LD_LIBRARY_PATH"
-
-RUN set -eux; \
+    rm -rf MarkupSafe-2.1.1; \
+    #
+    # Ensure that scipy works:
+    #
     python -c "from scipy.optimize import minimize"; \
     pip list; \
     #              \
@@ -784,7 +777,7 @@ RUN set -eux; \
     cd ..; \
     rm -rf scikit-learn-1.2.0;
 
-COPY ./external/ ./external/
+#COPY ./external/ ./external/
 
 # Python dependencies:
 RUN set -eux; \
@@ -864,23 +857,20 @@ RUN set -eux; \
            jupyter_core-5.1.3-py3-none-any.whl \
            jupyter_client-7.4.8-py3-none-any.whl \
            jupyter_server-2.0.6-py3-none-any.whl \
-           notebook-6.5.2-py3-none-any.whl
-
-
-
-COPY ./vendor/ ./vendor/
-
-
-RUN set -eux; \
-    tar -xf vendor/loaducerf3-v1.1.3.tar.gz loaducerf3-v1.1.3/; \
-    tar -xf vendor/ProjWrapCpp-1.3.0.tar.xz ProjWrapCpp-1.3.0; \
+           notebook-6.5.2-py3-none-any.whl; \
+    #
+    # loaducerf3:
+    #
+    tar -xf vendor/compile/loaducerf3-v1.1.3.tar.gz loaducerf3-v1.1.3/; \
+    tar -xf vendor/compile/ProjWrapCpp-1.3.0.tar.xz ProjWrapCpp-1.3.0; \
     mv ProjWrapCpp-1.3.0 loaducerf3-v1.1.3/subprojects/libprojwrap; \
     rm loaducerf3-v1.1.3/subprojects/libprojwrap.wrap; \
     ls loaducerf3-v1.1.3/subprojects; \
     cp vendor/patch/projwrap/meson.build.patch \
        loaducerf3-v1.1.3/subprojects/libprojwrap/; \
     rm loaducerf3-v1.1.3/subprojects/rapidxml.wrap; \
-    cp vendor/rapidxml-1.13.tar.xz loaducerf3-v1.1.3/subprojects/packagefiles/; \
+    cp vendor/compile/rapidxml-1.13.tar.xz \
+       loaducerf3-v1.1.3/subprojects/packagefiles/; \
     cp vendor/patch/rapidxml.wrap loaducerf3-v1.1.3/subprojects/; \
     cd loaducerf3-v1.1.3/subprojects/libprojwrap; \
     patch < meson.build.patch; \
@@ -892,8 +882,10 @@ RUN set -eux; \
     meson compile -C builddir; \
     pip install --user --no-cache-dir --no-index --no-build-isolation .; \
     cd ..; \
-    # FlotteKarte install \
-    tar -xf vendor/FlotteKarte-0.2.6.tar.xz FlotteKarte-0.2.6/; \
+    #
+    # FlotteKarte:
+    #
+    tar -xf vendor/compile/FlotteKarte-0.2.6.tar.xz FlotteKarte-0.2.6/; \
     mv loaducerf3-v1.1.3/subprojects/libprojwrap/ \
        FlotteKarte-0.2.6/subprojects/; \
     rm FlotteKarte-0.2.6/subprojects/libprojwrap.wrap; \
@@ -906,20 +898,17 @@ RUN set -eux; \
     bash compile.sh; \
     pip install --user --no-cache-dir --no-index --no-build-isolation .; \
     cd ..; \
-    rm -r loaducerf3-v1.1.3 FlotteKarte-0.2.6
-
-
-
-
-# Install the optional dependencies for the Jupyter notebooks
-RUN set -eux; \
+    rm -r loaducerf3-v1.1.3 FlotteKarte-0.2.6; \
+    #
+    # Optional dependencies for Jupyter notebooks:
+    #
     pip install --user --no-cache-dir --no-index --no-build-isolation \
             notebook cmcrameri cmocean shapely \
-            cmasher scikit-learn joblib geopandas scipy requests
-
-# PDToolbox:
-RUN set -eux; \
-    tar -xf vendor/pdtoolbox-v0.7.0.tar.xz pdtoolbox-v0.7.0; \
+            cmasher scikit-learn joblib geopandas scipy requests; \
+    #
+    # PDToolbox:
+    #
+    tar -xf vendor/compile/pdtoolbox-v0.7.0.tar.xz pdtoolbox-v0.7.0; \
     cp vendor/patch/pdtoolbox/setup.py.patch pdtoolbox-v0.7.0/; \
     cd pdtoolbox-v0.7.0; \
     patch < setup.py.patch; \
@@ -928,19 +917,10 @@ RUN set -eux; \
             bdist_wheel; \
     pip install --user --no-index --no-build-isolation \
                 dist/pdtoolbox-*.whl; \
-    #PDTOOLBOX_PORTABLE=1 pip install --user  --no-cache-dir .; \
     cd ..; \
     rm -rf pdtoolbox-v0.7.0
 
 ENV PATH = "/sci/bin:$PATH:/home/reheatfunq/.local/bin"
-
-USER root
-# Fonts:
-RUN set -eux; \
-    mkdir -p /usr/share/fonts; \
-    tar -xf vendor/fonts/Roboto.tar.xz Roboto/; \
-    mv Roboto/* /usr/share/fonts/;
-USER reheatfunq
 
 # Copy necessary directories:
 COPY ./reheatfunq/ ./reheatfunq/
@@ -959,12 +939,14 @@ RUN \
     cd ..; \
     pip install --no-cache-dir --user .; \
     rm -r build; \
-    rm -r builddir
-
-
-RUN set -eux; \
+    rm -r builddir; \
+    #
+    # Setup jupyter notebook:
+    #
     jupyter notebook --generate-config; \
-    mkdir -p /home/reheatfunq/jupyter/REHEATFUNQ/data
+    mkdir -p /home/reheatfunq/jupyter/REHEATFUNQ/data; \
+    mkdir -p /home/reheatfunq/jupyter/REHEATFUNQ/figures
+
 WORKDIR /home/reheatfunq
 COPY ./jupyter/ jupyter/
 WORKDIR /home/reheatfunq/jupyter
@@ -974,6 +956,8 @@ USER root
 RUN set -eux; \
     chown -R reheatfunq /home/reheatfunq/
 USER reheatfunq
+
+#COPY ./dev-test/docker-test-dying-kernel.py ./
 
 # Define the command that the image will execute:
 CMD jupyter notebook --no-browser --ip 0.0.0.0 --port=8888 --debug -y

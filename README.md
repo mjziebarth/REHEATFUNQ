@@ -126,6 +126,8 @@ and this project adheres to
   the analysis of a custom heat flow anomaly using the `AnomalyNearestNeighbor`
   class.
 - Add compile option to turn of machine-specific code and tuning.
+- Add `Docker-stable` image that builds all numerical code from scratch,
+  hopefully yielding .
 
 #### Changed
 - Change default unit representation in `GammaConjugatePrior.visualize`.
