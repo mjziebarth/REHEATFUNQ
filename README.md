@@ -135,6 +135,8 @@ and this project adheres to
   `A5-Uniform-Point-Density.ipynb`
 - Fix missing installs in Docker image
 - Compile Python package binaries in portable mode.
+- Replace aborts in `tanh_sinh` quadrature in `ziebarth2022a.cpp` by exceptions
+  and add a fallback for one occurrence of `tanh_sinh` runtime errors.
 
 ### [1.2.0] - 2022-12-13
 #### Added
