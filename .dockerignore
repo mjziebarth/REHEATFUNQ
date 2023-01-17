@@ -19,3 +19,6 @@ jupyter/dev
 jupyter/REHEATFUNQ/*.py
 !jupyter/REHEATFUNQ/cache.py
 !jupyter/REHEATFUNQ/plotconfig.py
+
+# Exclude the git history:
+.git/

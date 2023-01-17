@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'REHEATFUNQ'
-copyright = '2022, Deutsches GeoForschungsZentrum Potsdam & Malte J. Ziebarth'
+copyright = '2022-2023, Deutsches GeoForschungsZentrum Potsdam & Malte J. Ziebarth'
 author = 'Malte J. Ziebarth'
 release = '1.2.0'
 
@@ -15,7 +15,8 @@ release = '1.2.0'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = ['sphinx.ext.autodoc',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'sphinxcontrib.cairosvgconverter'
 ]
 
 autodoc_typehints = "none"

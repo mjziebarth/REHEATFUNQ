@@ -20,6 +20,17 @@ REHEATFUNQ source code to install REHEATFUNQ:
 ```bash
 pip install --user .
 ```
+You can also use one of two Docker files that come with this repository. Use
+```bash
+sudo docker build -t 'reheatfunq' .
+```
+to build the Docker image `Dockerfile` based on `python:slim` which includes
+updated dependencies and has a short compilation time.
+
+Alternatively, you can build the reproducible `Dockerfile-stable` with fixed
+dependencies at the state of the REHEATFUNQ description paper. See the
+[REHEATFUNQ documentation](https://mjziebarth.github.io/REHEATFUNQ/) for more
+informatio about how to build the `Dockerfile-stable` image.
 
 ## Usage
 Visit the [REHEATFUNQ documentation](https://mjziebarth.github.io/REHEATFUNQ/)
@@ -115,6 +126,8 @@ and this project adheres to
   the analysis of a custom heat flow anomaly using the `AnomalyNearestNeighbor`
   class.
 - Add compile option to turn of machine-specific code and tuning.
+- Add `Docker-stable` image that builds all numerical code from scratch,
+  hopefully yielding .
 
 #### Changed
 - Change default unit representation in `GammaConjugatePrior.visualize`.
@@ -124,6 +137,8 @@ and this project adheres to
   `A5-Uniform-Point-Density.ipynb`
 - Fix missing installs in Docker image
 - Compile Python package binaries in portable mode.
+- Replace aborts in `tanh_sinh` quadrature in `ziebarth2022a.cpp` by exceptions
+  and add a fallback for one occurrence of `tanh_sinh` runtime errors.
 
 ### [1.2.0] - 2022-12-13
 #### Added

@@ -32,6 +32,7 @@
 #include <limits>
 #include <optional>
 #include <array>
+#define BOOST_ENABLE_ASSERT_HANDLER // Make sure the asserts do not abort
 #include <boost/math/special_functions/digamma.hpp>
 #include <boost/math/special_functions/trigamma.hpp>
 #include <boost/math/special_functions/gamma.hpp>
@@ -81,6 +82,34 @@ typedef long double real_t;
 using boost::multiprecision::cpp_dec_float_50;
 using boost::multiprecision::cpp_dec_float_100;
 #endif
+
+
+#include <chrono>
+#include <thread>
+
+/* Transforming boost asserts into runtime errors: */
+namespace boost {
+
+void assertion_failed(char const * expr, char const * function,
+                      char const * file, long line)
+{
+	std::string s0(expr);
+	std::string s1(function);
+	std::string s2(file);
+	std::string s3 = std::to_string(line);
+	std::string msg("Error: '");
+	msg += s0;
+	msg += std::string("' in function '");
+	msg += s1;
+	msg += std::string("' in file '");
+	msg += s2;
+	msg += std::string("' in line ");
+	msg += s3;
+	msg += std::string(".");
+	throw std::runtime_error(msg);
+}
+
+}
 
 
 /* A custom exception type indicating that the integral is out of
@@ -1258,8 +1287,17 @@ void init_locals(const double* qi, const double* ci, size_t N,
 			} else {
 				real error;
 				tanh_sinh<real> integrator;
-				S = integrator.integrate(integrand, static_cast<real>(0),
-				                         L.ztrans, TOL_TANH_SINH, &error);
+				try {
+					S = integrator.integrate(integrand, static_cast<real>(0),
+					                         L.ztrans, TOL_TANH_SINH, &error);
+				} catch (...) {
+					/* Backup Gauss-Kronrod: */
+					typedef gauss_kronrod<real,31> GK;
+					real L1;
+					S =  GK::integrate(integrand, static_cast<real>(0),
+					                   L.ztrans, 9, TOL_TANH_SINH,
+					                   &error, &L1);
+				}
 			}
 		} catch (ScaleError<real>& s) {
 			if (s.log_scale() < 0)

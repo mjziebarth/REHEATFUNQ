@@ -22,6 +22,8 @@
 #ifndef REHEATFUNQ_PDTB_EIGENWRAP
 #define REHEATFUNQ_PDTB_EIGENWRAP
 
+#define EIGEN_MPL2_ONLY
+
 #include <eigen3/Eigen/Dense>
 
 namespace pdtoolbox {

@@ -353,47 +353,67 @@ test_performance_cpp(size_t N, size_t M, double P_MW, const dist_t& dist,
 	/* Ceiling: */
 	const size_t J = M / batch + (M % batch != 0);
 	std::vector<quantiles_t> result(M*Nq);
-	#pragma omp parallel num_threads(nthread) shared(result) \
+	bool err_thread_num = false;
+	#pragma omp parallel num_threads(nthread) shared(result, err_thread_num) \
 	        reduction(+ : improper,proper)
 	{
 		/* Generate the random number generator local to this thread: */
 		const int threadid = omp_get_thread_num();
-		if (threadid < 0 || static_cast<size_t>(threadid) > seeds.size())
-			throw std::runtime_error("Thread number wrong!");
-		const size_t seedi = seeds[threadid];
-		std::mt19937_64 generator(seedi);
+		if (threadid < 0 || static_cast<size_t>(threadid) > seeds.size()){
+			std::cerr << "encountered threadid " << threadid << " for a seed "
+			             "array of " << seeds.size() << " entries.\n";
+			err_thread_num = true;
+		}
 
-		#pragma omp for schedule(dynamic)
-		for (size_t j=0; j<J; ++j){
-			std::array<double,2*batch*Nq> res;
-			fail_t failures = _tcp_iteration_array<dvec_t,batch,Nq>(N, P_MW,
-			                                      generator, dist,
-			                                      quantiles, res, PRIOR_P,
-			                                      PRIOR_S, PRIOR_N, PRIOR_V,
-			                                      amin, tolerance);
-			/* Set the results: */
-			if (j*batch >= M){
-				for (uint_fast8_t k=0; k<M-j*batch; ++k){
-					for (uint_fast8_t l=0; l<Nq; ++l){
-						size_t m = _tcp_index<batch,Nq>(j,k,l);
-						result[m].proper = res[_tcp_index<batch,Nq>(0,k,l)];
-						result[m].improper = res[_tcp_index<batch,Nq>(1,k,l)];
+		if (!err_thread_num){
+			const size_t seedi = seeds[threadid];
+			std::mt19937_64 generator(seedi);
+
+			#pragma omp for schedule(dynamic)
+			for (size_t j=0; j<J; ++j){
+				/* Exit by full continuation if any of the threads
+				 * encountered an error: */
+				if (err_thread_num)
+					continue;
+
+				std::array<double,2*batch*Nq> res;
+				fail_t failures = \
+				    _tcp_iteration_array<dvec_t,batch,Nq>(N, P_MW, generator,
+				                                          dist, quantiles, res,
+				                                          PRIOR_P, PRIOR_S,
+				                                          PRIOR_N, PRIOR_V,
+				                                          amin, tolerance);
+				/* Set the results: */
+				if (j*batch >= M){
+					for (uint_fast8_t k=0; k<M-j*batch; ++k){
+						for (uint_fast8_t l=0; l<Nq; ++l){
+							size_t m = _tcp_index<batch,Nq>(j,k,l);
+							result[m].proper
+							   = res[_tcp_index<batch,Nq>(0,k,l)];
+							result[m].improper
+							   = res[_tcp_index<batch,Nq>(1,k,l)];
+						}
+					}
+				} else {
+					for (uint_fast8_t k=0; k<batch; ++k){
+						for (uint_fast8_t l=0; l<Nq; ++l){
+							size_t m = _tcp_index<batch,Nq>(j,k,l);
+							result[m].proper
+							   = res[_tcp_index<batch,Nq>(0,k,l)];
+							result[m].improper
+							   = res[_tcp_index<batch,Nq>(1,k,l)];
+						}
 					}
 				}
-			} else {
-				for (uint_fast8_t k=0; k<batch; ++k){
-					for (uint_fast8_t l=0; l<Nq; ++l){
-						size_t m = _tcp_index<batch,Nq>(j,k,l);
-						result[m].proper = res[_tcp_index<batch,Nq>(0,k,l)];
-						result[m].improper = res[_tcp_index<batch,Nq>(1,k,l)];
-					}
-				}
+				improper += failures.improper;
+				proper += failures.proper;
 			}
-			improper += failures.improper;
-			proper += failures.proper;
 		}
 	}
 
+	if (err_thread_num){
+		throw std::runtime_error("Thread number wrong!");
+	}
 
 	return result;
 }
