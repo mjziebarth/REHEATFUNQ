@@ -120,7 +120,7 @@ is built. The combined source code archive of this software is large (the
 :code:`Dockerfile-stable` starts by bootstrapping the GNU Compiler Collection
 and successively compiles the Python ecosystem and numeric software) and it is
 split off this git repository. Therefore, you first need to download the
-:code:`vendor-1.3.0.tar.xz` archive from
+:code:`vendor-1.3.1.tar.xz` archive from
 `GFZ Data Services <https://doi.org/10.5880/GFZ.2.6.2022.005>`__. Following
 the instructions presented therein, extract the :code:`compile` and
 :code:`wheels` subfolders into the :code:`vendor` directory of this repository.
@@ -129,11 +129,11 @@ Then, you can build and run the Docker image as above:
 
 .. code :: bash
 
-   sudo docker build -f Dockerfile-stable -t 'reheatfunq-1.3.0' .
-   sudo docker run -p XXXX:8888 reheatfunq-1.3.0
+   sudo docker build -f Dockerfile-stable -t 'reheatfunq-1.3.1' .
+   sudo docker run -p XXXX:8888 reheatfunq-1.3.1
 
 Nearly all of the dependencies of this container are contained in
-:code:`vendor-1.3.0.tar.xz` so that this image should build reproducibly in the
+:code:`vendor-1.3.1.tar.xz` so that this image should build reproducibly in the
 long-term. Nevertheless, the Debian snapshot used as a base image might be
 unavailable at some point in the future of this writing. In this case, it
 should be possible to swap the base image to another linux without great impact.
