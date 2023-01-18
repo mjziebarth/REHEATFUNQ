@@ -111,6 +111,10 @@ and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+### [Unreleased]
+#### Added
+- Clarify license in `setup.py`
+
 ### [1.3.1] - 2022-12-18
 #### Added
 - Add missing function `boost::assertion_failed_msg` that caused an undefined
