@@ -33,7 +33,8 @@ jobs:
                                   python3-numpy
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
-          pip install matplotlib pyproj meson scipy
+          pip install matplotlib pyproj meson scipy \
+                      sphinxcontrib-svg2pdfconverter cairosvg
           pip install 'mebuex @ git+https://github.com/mjziebarth/Mebuex'
           pip install 'loaducerf3 @ git+https://git.gfz-potsdam.de/ziebarth/loaducerf3'
           bash compile.sh
