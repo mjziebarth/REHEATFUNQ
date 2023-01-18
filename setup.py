@@ -38,6 +38,10 @@ setup(name='REHEATFUNQ',
                   'reheatfunq.resilience'],
       ext_modules=[regional_backend, anomaly_bayes, coverings_rdisks,
                    anomaly_anomaly, resilience_zeal2022, data_distancedist],
-      cmdclass={'build_ext' : build_ext}
+      cmdclass={'build_ext' : build_ext},
+      classifiers = [
+        'License :: OSI Approved :: GNU General Public License v3.0 or later '
+            '(GPL-3.0-or-later)'
+      ]
 )
 
