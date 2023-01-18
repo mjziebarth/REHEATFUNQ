@@ -776,7 +776,7 @@ RUN set -eux; \
     cd ..; \
     rm -rf scikit-learn-1.2.0;
 
-#COPY ./external/ ./external/
+COPY ./external/ ./external/
 
 # Python dependencies:
 RUN set -eux; \
@@ -857,6 +857,7 @@ RUN set -eux; \
            jupyter_client-7.4.8-py3-none-any.whl \
            jupyter_server-2.0.6-py3-none-any.whl \
            notebook-6.5.2-py3-none-any.whl; \
+    cd ../..; \
     #
     # loaducerf3:
     #

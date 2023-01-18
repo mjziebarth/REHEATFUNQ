@@ -111,6 +111,11 @@ and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+
+### [1.3.3] - 2022-12-18
+#### Added
+- Fixed an execution directory in `Docker-stable`.
+
 ### [1.3.2] - 2022-12-18
 #### Added
 - Clarify license in `setup.py`
