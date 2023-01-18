@@ -111,7 +111,7 @@ and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-### Unreleased
+### [1.3.0] - 2022-12-18
 #### Added
 - Add `AnomalyNearestNeighbor` class that can perform the heat flow analysis
   for arbitrary heat flow anomalies sampled at the heat flow data locations.
