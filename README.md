@@ -111,6 +111,11 @@ and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+### [Unreleased]
+#### Added
+- Add missing function `boost::assertion_failed_msg` that caused an undefined
+  symbol error on some systems.
+
 ### [1.3.0] - 2022-12-18
 #### Added
 - Add `AnomalyNearestNeighbor` class that can perform the heat flow analysis

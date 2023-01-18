@@ -109,6 +109,28 @@ void assertion_failed(char const * expr, char const * function,
 	throw std::runtime_error(msg);
 }
 
+void assertion_failed_msg(char const * expr, char const* msgc,
+                          char const * function, char const * file, long line)
+{
+	std::string s0(expr);
+	std::string s1(msgc);
+	std::string s2(function);
+	std::string s3(file);
+	std::string s4 = std::to_string(line);
+	std::string msg("Error: '");
+	msg += s0;
+	msg += std::string("'\n\twith message '");
+	msg += s1;
+	msg += std::string("'\n\tin function '");
+	msg += s2;
+	msg += std::string("'\n\tin file '");
+	msg += s3;
+	msg += std::string("'\n\tin line ");
+	msg += s4;
+	msg += std::string(".");
+	throw std::runtime_error(msg);
+}
+
 }
 
 
