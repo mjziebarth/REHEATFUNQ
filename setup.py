@@ -30,7 +30,7 @@ data_distancedist   = MesonExtension('reheatfunq.data.distancedistribution')
 
 
 setup(name='REHEATFUNQ',
-      version='1.3.1',
+      version='1.3.2',
       author='Malte J. Ziebarth',
       description='',
       packages = ['reheatfunq','reheatfunq.regional','reheatfunq.anomaly',

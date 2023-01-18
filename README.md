@@ -111,9 +111,13 @@ and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-### [Unreleased]
+### [1.3.2] - 2022-12-18
 #### Added
 - Clarify license in `setup.py`
+
+#### Changed
+- Fixed an execution order error in `Docker-stable`.
+- Small fix in `A10-Gamma-Sketch.ipynb`.
 
 ### [1.3.1] - 2022-12-18
 #### Added

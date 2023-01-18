@@ -178,6 +178,7 @@ COPY ./external/sqlite ./external/sqlite
 COPY ./include/ ./include/
 COPY ./vendor/patch/ ./vendor/patch/
 COPY ./vendor/fonts/ ./vendor/fonts/
+COPY ./vendor/wheels/ ./vendor/wheels/
 
 ENV PATH "/sci/bin:$PATH"
 ENV CPATH="/sci/include/"
@@ -524,8 +525,6 @@ RUN set -eux; \
     mv Roboto/* /usr/share/fonts/;
 
 ENV LD_LIBRARY_PATH="/sci/lib:/sci/lib64:$LD_LIBRARY_PATH"
-
-COPY ./vendor/wheels/ ./vendor/wheels/
 
 # Pythran:
 
