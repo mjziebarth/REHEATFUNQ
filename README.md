@@ -55,9 +55,9 @@ and resilience analyses of the model.
 
 The archived REHEATFUNQ software package can be cited as follows:
 
-> Ziebarth, Malte Jörn (2022): REHEATFUNQ: A Python package for the inference of
-> regional aggregate heat flow distributions and heat flow anomalies. V. 1.0.0.
-> GFZ Data Services. https://doi.org/10.5880/GFZ.2.6.2022.005
+> Ziebarth, Malte Jörn (2023): REHEATFUNQ: A Python package for the inference of
+> regional aggregate heat flow distributions and heat flow anomalies.
+> GFZ Data Services. https://doi.org/10.5880/GFZ.2.6.2023.002
 
 You can also consider adding to the citation the REHEATFUNQ version tag you
 used.

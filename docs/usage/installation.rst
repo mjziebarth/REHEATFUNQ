@@ -121,7 +121,7 @@ is built. The combined source code archive of this software is large (the
 and successively compiles the Python ecosystem and numeric software) and it is
 split off this git repository. Therefore, you first need to download the
 :code:`vendor-1.3.3.tar.xz` archive from
-`GFZ Data Services <https://doi.org/10.5880/GFZ.2.6.2022.005>`__. Following
+`GFZ Data Services <https://doi.org/10.5880/GFZ.2.6.2023.002>`__. Following
 the instructions presented therein, extract the :code:`compile` and
 :code:`wheels` subfolders into the :code:`vendor` directory of this repository.
 
