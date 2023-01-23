@@ -18,6 +18,7 @@
  * Author: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
  *
  * Copyright (C) 2022 Deutsches GeoForschungsZentrum GFZ
+ *               2023 Malte J. Ziebarth
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,123 +39,21 @@
 #include <memory>
 #include <utility>
 
+#include <quantiletree/branch.hpp>
+
 #ifndef PDTOOLBOX_QUANTILEINVERTER_HPP
 #define PDTOOLBOX_QUANTILEINVERTER_HPP
 
 namespace pdtoolbox {
 
-class QuantileTreeBranch;
-
-class QuantileTreeLeaf {
-	friend QuantileTreeBranch;
-public:
-	QuantileTreeLeaf(std::function<double(double)> pdf, double xmin,
-	                 double xmax, bool parallel=false);
-
-	QuantileTreeLeaf(const QuantileTreeLeaf& other) = default;
-	QuantileTreeLeaf(QuantileTreeLeaf&& other) = default;
-
-	/* Mostly for internal use: */
-	struct xf_t {
-		double x;
-		double f;
-	};
-	QuantileTreeLeaf(std::function<double(double)> pdf, xf_t left, xf_t right,
-	                 bool parallel=false);
-
-	/* Retrieving the integrals approximations of the G7, K15
-	 * scheme: */
-	double gauss() const;
-	double kronrod() const;
-
-	/* Boundaries: */
-	double xmin() const;
-	double xmax() const;
-
-
-	/* Splitting the interval: */
-	std::array<std::unique_ptr<QuantileTreeLeaf>,3>
-	   split(std::function<double(double)> pdf, double z0, double z1) const;
-
-	/* Estimating quantiles using trapezoidal rule (*local* quantiles
-	 * within this integral): */
-	template<uint_fast8_t n>
-	std::array<double,n> trapezoidal_quantiles(std::array<double,n>&& y) const;
-
-
-private:
-	/* Function evaluations of the Gauss-Kronrod 7-15
-	 * (plus the function evaluations at the end): */
-	std::array<double,17> gk75_lr;
-	double _xmin;
-	double _xmax;
-	double _kronrod;
-
-	/* We don't typically need to cache the evaluation of the
-	 * Gauss-Legendre quadrature since it is used only once
-	 * for error estimation:
-	 */
-	#ifdef PDTOOLBOX_QUANTILEINVERTER_CACHE_GAUSS
-	double _gauss;
-	#endif
-
-	double compute_gauss() const;
-	double compute_kronrod() const;
-};
-
-
-enum tolerance_policy {
-	OR, AND
-};
-
-class QuantileTreeBranch {
-public:
-	QuantileTreeBranch(std::function<double(double)> pdf, double xmin,
-	                   double xmax, double atol, double rtol,
-	                   tolerance_policy policy);
-
-	double integral() const;
-
-	size_t leaves() const;
-
-	/* Find the leaf that contains quantile q: */
-	std::pair<const QuantileTreeLeaf&,double> find(double q) const;
-
-	/* Mostly for internal use: */
-	QuantileTreeBranch(std::unique_ptr<QuantileTreeLeaf> leaf,
-	                   std::function<double(double)> pdf,
-	                   double atol, double rtol, tolerance_policy policy,
-	                   unsigned int descent);
-
-private:
-	/* Each branch can have a maximum of one leaf. */
-	std::unique_ptr<QuantileTreeLeaf> leaf;
-	std::unique_ptr<QuantileTreeBranch> left_branch;
-	std::unique_ptr<QuantileTreeBranch> central_branch;
-	std::unique_ptr<QuantileTreeBranch> right_branch;
-
-	/* The integral: */
-	double I;
-
-	/* Offset within the CDF: */
-	double qoff;
-
-	void check_and_split(std::function<double(double)> pdf, double atol,
-	                     double rtol, tolerance_policy policy,
-	                     unsigned int descent);
-
-	/* Set the offset of this branch and all child branches. */
-	void set_offsets(double qoff);
-};
-
-
+template<typename real>
 class QuantileInverter {
 public:
-	QuantileInverter(std::function<double(double)> pdf, double xmin,
-	                 double xmax, double atol, double rtol,
+	QuantileInverter(std::function<real(real)> pdf, real xmin,
+	                 real xmax, double atol, double rtol,
 	                 tolerance_policy policy);
 
-	double invert(double q) const;
+	real invert(real q) const;
 
 	/*
 	 * Diagnostic capabilities:
@@ -162,11 +61,141 @@ public:
 	size_t leaves() const;
 
 private:
-	QuantileTreeBranch root;
-	std::function<double(double)> pdf;
+	QuantileTreeBranch<real> root;
+	std::function<real(real)> pdf;
 	const double atol, rtol;
 	tolerance_policy policy;
 };
+
+
+template<typename real>
+QuantileInverter<real>::QuantileInverter(std::function<real(real)> pdf,
+                                         real xmin, real xmax, double atol,
+                                         double rtol, tolerance_policy policy)
+   : root(pdf, xmin, xmax, atol, rtol, policy), pdf(pdf), atol(atol),
+     rtol(rtol), policy(policy)
+{
+}
+
+
+/*
+ * The algorithm to determine the quantile should do the following:
+ *       1) Traverse the QuantileTreeBranch structure until the
+ *          leaf containing the quantile q is found.
+ *       2) Starting from that leaf spanning the interval [zl,zr], iterate
+ *          the following:
+ *          a) If the quantile q is at local quantile ql
+ *                   q = I[zl] + ql*(I[zr] - I[zl]),
+ *             find within the quantile range of the leaf (= its integral dI)
+ *             the quantiles
+ *                   z0 = I[zl] + dI * (ql - 0.05),
+ *                   z1 = I[zl] + dI * (ql + 0.05)
+ *             using the trapezoidal_quantiles function.
+ *          b) Split the leaf (within the local iterating function) at z0
+ *             and z1.
+ *          c) Find of the three split leaves the one that contains q
+ *             Most of the time, it should be the middle one (if the trapezoidal
+ *             approximation is good). Then, we decrease the bracket to
+ *             10% of its size each iteration if we area close to linear CDF
+ *             within the bracket.
+ *          d) With the containing interval [zc0, zc1], continue from a)
+ */
+template<typename real>
+real QuantileInverter<real>::invert(real q) const
+{
+	/* Find the leaf: */
+	std::pair<const QuantileTreeLeaf<real>&, real> rootleaf(root.find(q));
+	std::unique_ptr<QuantileTreeLeaf<real>>
+	   leaf(std::make_unique<QuantileTreeLeaf<real>>(rootleaf.first));
+	real qoff = rootleaf.second;
+
+	/* Now trisect: */
+	size_t steps = 0;
+	real dq = leaf->kronrod();
+	while (dq > QuantileTreeBranch<real>::compute_threshold(1.0, atol, rtol,
+	                                                        policy))
+	{
+		++steps;
+		/* The quantile span of this leaf: */
+
+		/* Sanity check: */
+		if (std::isnan(dq))
+			throw std::runtime_error("Detected NaN dq in QuantileInverter.");
+		if (std::isinf(dq))
+			throw std::runtime_error("Detected infinite dq in "
+			                         "QuantileInverter.");
+
+		/* Within this range, where does q lie relatively? This is
+		 * the local quantile z: */
+		real z = (q-qoff) / dq;
+		if (z < 0 || z > 1)
+			throw std::runtime_error("Unlikely z out of bounds detected.");
+
+		/* Estimate through trapezoidal rule where z-0.05 and z+0.05 lie: */
+		real zl = (z <= 0.01) ? 0.5 * z : std::max<real>(z-0.00125, 0.01);
+		real zr = (z >= 0.99) ? 0.5 * (z + 1.0)
+		                      : std::min<real>(z+0.00125, 0.99);
+		std::array<real,2>
+		    zi(leaf->template trapezoidal_quantiles<2>({zl, zr}));
+
+		/* Numerics check: */
+		if (zi[1] < zi[0]){
+			std::string msg("While computing quantile, the bracket flipped.\n"
+			                "  z[0]: ");
+			msg += std::to_string(zi[0]);
+			msg += "\n  z[1]: ";
+			msg += std::to_string(zi[1]);
+			msg += "\n";
+			throw std::runtime_error(msg);
+		}
+
+		/* Split at these quantiles: */
+		std::array<std::unique_ptr<QuantileTreeLeaf<real>>,3>
+		    sq3(leaf->split(pdf, zi[0], zi[1]));
+
+		/* Find the containing: */
+		real qoff_next = qoff + sq3[0]->kronrod();
+		if (q < qoff_next){
+			/* Left interval. */
+			leaf.swap(sq3[0]);
+			real dq_next = leaf->kronrod();
+			if (dq_next == dq)
+				throw std::runtime_error("Did not make progress in quantile "
+				                         "inversion iteration.");
+			dq = dq_next;
+			continue;
+		}
+		qoff = qoff_next;
+		qoff_next += sq3[1]->kronrod();
+		if (q <= qoff_next){
+			/* Central interval. */
+			leaf.swap(sq3[1]);
+			real dq_next = leaf->kronrod();
+			if (dq_next == dq)
+				throw std::runtime_error("Did not make progress in quantile "
+				                         "inversion iteration.");
+			dq = dq_next;
+			continue;
+		}
+		/* Right interval. */
+		qoff = qoff_next;
+		leaf.swap(sq3[2]);
+		real dq_next = leaf->kronrod();
+		if (dq_next == dq)
+			throw std::runtime_error("Did not make progress in quantile "
+			                         "inversion iteration.");
+		dq = dq_next;
+	}
+	return 0.5 * (leaf->xmin() + leaf->xmax());
+}
+
+
+template<typename real>
+size_t QuantileInverter<real>::leaves() const
+{
+	return root.leaves();
+}
+
 
 
 }

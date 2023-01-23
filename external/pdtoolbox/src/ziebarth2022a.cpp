@@ -1873,8 +1873,8 @@ void tail_quantiles(const double* quantiles, double* res, const size_t Nquant,
 	                  dest_tol);
 
 
-	auto integrand = [&](double z) -> double {
-		double result = 0.0;
+	auto integrand = [&](real z) -> real {
+		real result = 0.0;
 		if (z <= L.ztrans)
 			result = outer_integrand<real>(z, L) / L.norm;
 		else if (z < 1)
@@ -1886,11 +1886,13 @@ void tail_quantiles(const double* quantiles, double* res, const size_t Nquant,
 	size_t i=0;
 	try {
 		/* Initialize the quantile inverter: */
-		QuantileInverter qinv(integrand, 0.0, 1.0, dest_tol, dest_tol, OR);
+		QuantileInverter<real> qinv(integrand, 0.0, 1.0, dest_tol, dest_tol,
+		                            OR);
 
 		/* Now invert: */
 		for (; i<Nquant; ++i){
-			res[i] = L.Qmax * qinv.invert(1.0 - quantiles[i]);
+			real qi = static_cast<real>(1.0) - quantiles[i];
+			res[i] = static_cast<double>(L.Qmax * qinv.invert(qi));
 		}
 	} catch (...) {
 		tanh_sinh<double> integrator;
@@ -1973,7 +1975,7 @@ void posterior_tail_quantiles_batch(
 		locals[i].norm *= locals[i].Qmax;
 	}
 
-	auto integrand = [&](double P_H) -> double {
+	auto integrand = [&](real P_H) -> real {
 		real result = 0.0;
 		bool fail = false;
 		#pragma omp parallel for
@@ -1994,18 +1996,18 @@ void posterior_tail_quantiles_batch(
 			}
 		}
 
-		return static_cast<double>(result / qi.size());
+		return result / qi.size();
 	};
 
 	size_t i=0;
 	try {
 		/* Initialize the quantile inverter: */
-		QuantileInverter qinv(integrand, 0.0, static_cast<double>(Qmax),
-		                      dest_tol, dest_tol, OR);
+		QuantileInverter<real> qinv(integrand, 0.0, Qmax, dest_tol, dest_tol,
+		                            OR);
 
 		/* Now invert: */
 		for (; i<Nquant; ++i){
-			res[i] = qinv.invert(1.0 - quantiles[i]);
+			res[i] = static_cast<double>(qinv.invert(1.0 - quantiles[i]));
 		}
 	} catch (...) {
 		tanh_sinh<double> integrator;
