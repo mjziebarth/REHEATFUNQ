@@ -60,6 +60,28 @@ with open('docs/conf.py','r') as f:
             quote = stripped[10]
             version_sphinx = stripped.split(quote)[1]
 
+# Version in the Meson build file:
+version_meson = None
+with open('meson.build','r') as f:
+    openparen = 0
+    closeparen = 0
+    found_project = False
+    for line in f:
+        stripped = line.strip()
+        if not found_project:
+            if stripped[:8] == 'project(':
+                found_project = True
+        if found_project:
+            if 'version :' in stripped:
+                version_meson = stripped.split('version :')[1]\
+                                   .split(',')[0].split(')')[0]
+                version_meson = version_meson.split('\'')[1]
+
+            openparen += stripped.count('(')
+            closeparen += stripped.count(')')
+            if openparen == closeparen:
+                break
+
 # Check if any could not be determined:
 if version_readme is None:
     raise RuntimeError("Version in 'README.md' could not be determined.")
@@ -67,6 +89,8 @@ if version_toml is None:
     raise RuntimeError("Version in 'pyproject.toml' could not be determined.")
 if version_sphinx is None:
     raise RuntimeError("Version in 'docs/conf.py' could not be determined.")
+if version_meson is None:
+    raise RuntimeError("Version in 'meson.build' could not be determined.")
 
 # Compare:
 if version_readme != version_toml:
@@ -75,6 +99,10 @@ if version_readme != version_toml:
 
 if version_readme != version_sphinx:
     raise RuntimeError("Versions given in 'README.md' and 'docs/conf.py' "
+                       "differ.")
+
+if version_readme != version_meson:
+    raise RuntimeError("Versions given in 'README.md' and 'meson.build' "
                        "differ.")
 
 print("All three versions agree:", version_readme)
