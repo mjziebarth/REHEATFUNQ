@@ -110,6 +110,15 @@ void posterior_tail_quantiles_batch(
                     double p, double s, double n, double nu,
                     double amin, double dest_tol);
 
+void posterior_tail_quantiles_batch_barycentric_lagrange(
+                    const double* quantiles, double* res, const size_t Nquant,
+                    const std::vector<const double*>& qi,
+                    const std::vector<const double*>& ci,
+                    const std::vector<size_t>& N,
+                    double p, double s, double n, double nu,
+                    double amin, double dest_tol, precision_t precision,
+                    size_t n_chebyshev);
+
 int tail_quantiles_intcode(const double* quantiles, double* res,
                            const size_t Nquant, const double* qi,
                            const double* ci, const size_t N, const double p,

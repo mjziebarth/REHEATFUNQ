@@ -112,6 +112,19 @@ and this project adheres to
 
 
 
+### [Unreleased]
+#### Added
+- Added a method `'bli'` to `marginal_posterior_tail_quantiles_batch` that
+  uses barycentric Lagrange interpolation of the tail distribution, evaluated
+  at Chebyshev points, to represent the tail distribution when performing
+  a TOMS 748 inversion of the tail quantile. The implementation follows
+  Berruth & Trefethen (2004) *Barycentric Lagrange Interpolation*. This new
+  method is the new default in `HeatFlowAnomalyPosterior.tail_quantiles`.
+
+#### Changed
+- Rewrote `QuantileInverter` class as a templated class that can work
+  with numeric types of different precision.
+
 ### [1.3.3] - 2022-12-18
 #### Added
 - Fixed an execution directory in `Docker-stable`.

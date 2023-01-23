@@ -130,6 +130,15 @@ cdef extern from "ziebarth2022a.hpp" namespace "pdtoolbox::heatflow" nogil:
                      double p, double s, double n, double nu,
                      double amin, double dest_tol) except+
 
+    void posterior_tail_quantiles_batch_barycentric_lagrange(
+                     const double* quantiles, double* res, const size_t Nquant,
+                     const vector[const double*]& qi,
+                     const vector[const double*]& ci,
+                     const vector[size_t]& N,
+                     double p, double s, double n, double nu,
+                     double amin, double dest_tol, precision_t precision,
+                     size_t n_chebyshev) except+
+
     int tail_quantiles_intcode(const double* quantiles, double* res,
                                const size_t Nquant, const double* qi,
                                const double* ci, const size_t N, const double p,
@@ -577,6 +586,8 @@ def marginal_posterior_tail_quantiles_batch(double[::1] quantiles, double p,
                                             double s, double n, double v,
                                             list Qi, list Ci,
                                             double amin, double dest_tol,
+                                            str method, str working_precision,
+                                            size_t n_chebyshev,
                                             bool inplace = False,
                                             bool print_to_cerr = False):
     """
@@ -596,6 +607,7 @@ def marginal_posterior_tail_quantiles_batch(double[::1] quantiles, double p,
     cdef const double[::1] qi, ci
     cdef vector[const double*] qi_vec, ci_vec
     cdef vector[size_t] Nqc_i
+    cdef precision_t wp = get_working_precision(working_precision, Nqc)
     qi_vec.resize(Nqc)
     ci_vec.resize(Nqc)
     Nqc_i.resize(Nqc)
@@ -610,9 +622,20 @@ def marginal_posterior_tail_quantiles_batch(double[::1] quantiles, double p,
                                "not match.")
 
     cdef double[::1] res = quantiles if inplace else np.empty(Nqc)
-    with nogil:
-        posterior_tail_quantiles_batch(&quantiles[0], &res[0], Nquant, qi_vec,
-                                       ci_vec, Nqc_i, p, s, n, v, amin,
-                                       dest_tol)
+    if method == '1.3.3':
+        with nogil:
+            posterior_tail_quantiles_batch(&quantiles[0], &res[0], Nquant,
+                                           qi_vec, ci_vec, Nqc_i, p, s, n, v,
+                                           amin, dest_tol)
+
+    elif method == 'bli':
+        with nogil:
+            posterior_tail_quantiles_batch_barycentric_lagrange(&quantiles[0],
+                                           &res[0], Nquant, qi_vec, ci_vec,
+                                           Nqc_i, p, s, n, v, amin, dest_tol,
+                                           wp, n_chebyshev)
+    else:
+        raise ValueError("'method' must be one of '1.3.3' or 'bli'.")
+
 
     return res.base

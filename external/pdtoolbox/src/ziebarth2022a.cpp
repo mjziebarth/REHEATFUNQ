@@ -32,6 +32,7 @@
 #include <limits>
 #include <optional>
 #include <array>
+#include <numbers>
 #define BOOST_ENABLE_ASSERT_HANDLER // Make sure the asserts do not abort
 #include <boost/math/special_functions/digamma.hpp>
 #include <boost/math/special_functions/trigamma.hpp>
@@ -2025,6 +2026,136 @@ void posterior_tail_quantiles_batch(
 			                   1.0-quantiles[i], -quantiles[i], tolerance,
 			                   maxiter);
 			res[i] = 0.5 * (bracket.first + bracket.second);
+		}
+	}
+}
+
+/*
+ * Same purpose as the above function but different algorithm: Evaluate the
+ * tail distribution explicitly at Chebyshev points and perform a barycentric
+ * Lagrange interpolation to
+ */
+void posterior_tail_quantiles_batch_barycentric_lagrange(
+                     const double* quantiles, double* res, const size_t Nquant,
+                     const std::vector<const double*>& qi,
+                     const std::vector<const double*>& ci,
+                     const std::vector<size_t>& N,
+                     double p, double s, double n, double nu,
+                     double amin, double dest_tol, precision_t precision,
+                     size_t n_chebyshev)
+{
+	if (n_chebyshev <= 1)
+		throw std::runtime_error("Need at least 2 Chebyshev points.");
+
+	/* Get the maximum power: */
+	double PHmax = -std::numeric_limits<double>::infinity();
+	for (size_t i=0; i<N.size(); ++i){
+		double PHmax_i = std::numeric_limits<double>::infinity();
+		for (size_t j=0; j<N[i]; ++j){
+			if (qi[i][j] <= 0)
+				throw std::runtime_error("At least one qi is zero or negative "
+				                         "and has hence left the model "
+				                         "definition space.");
+			const double PH = qi[i][j] / ci[i][j];
+			if (PH > 0 && PH < PHmax_i){
+				PHmax_i = PH;
+			}
+		}
+		if (PHmax_i > PHmax)
+			PHmax = PHmax_i;
+	}
+	if (std::isinf(PHmax))
+		throw std::runtime_error("Found infinite maximum power in "
+			"posterior_tail_quantiles_batch_barycentric_lagrange."
+		);
+
+	/* The support for the interpolation: */
+	struct xf_t {
+		double x;
+		long double f;
+	};
+	std::vector<xf_t> support(n_chebyshev, xf_t({0.0, 0.0}));
+	{
+		/* Prepare the interpolation points: */
+		std::vector<double> x(n_chebyshev);
+		for (size_t i=0; i<n_chebyshev; ++i){
+			constexpr long double pi = std::numbers::pi_v<long double>;
+			long double z = std::cos(i * pi / (n_chebyshev-1));
+			x[i] = std::min(std::max<double>(0.5 * (1.0+z) * PHmax, 0.0),
+			                PHmax);
+		}
+
+		/* Evaluate the posterior tail: */
+		std::vector<long double> f(qi.size() * n_chebyshev);
+		posterior_tail_batch(x.data(), n_chebyshev, f.data(), qi, ci, N, p, s,
+		                     n, nu, amin, dest_tol, precision);
+
+		/* Transfer to the support vector: */
+		for (size_t i=0; i<n_chebyshev; ++i){
+			support[i].x = x[i];
+		}
+		for (size_t j=0; j<qi.size(); ++j){
+			for (size_t i=0; i<n_chebyshev; ++i){
+				support[i].f += f[n_chebyshev * j + i];
+			}
+		}
+		for (size_t i=0; i<n_chebyshev; ++i){
+			support[i].f /= qi.size();
+		}
+	}
+
+	/* Now we can interpolate: */
+	auto tail_bli = [&](double PH) -> double {
+		auto xfit = support.cbegin();
+		if (PH == xfit->x)
+			return xfit->f;
+		long double nom = 0.0;
+		long double denom = 0.0;
+		long double wi = 0.5 / (PH - xfit->x);
+		nom += wi * xfit->f;
+		denom += wi;
+		int sign = -1;
+		++xfit;
+		for (size_t i=1; i<n_chebyshev-1; ++i){
+			if (PH == xfit->x)
+				return xfit->f;
+			wi = sign * 1.0 / (PH - xfit->x);
+			nom += wi * xfit->f;
+			denom += wi;
+			sign = -sign;
+			++xfit;
+		}
+		if (PH == xfit->x)
+			return xfit->f;
+		wi = sign * 0.5 / (PH - xfit->x);
+		nom += wi * xfit->f;
+		denom += wi;
+		return std::max<double>(std::min<double>(nom / denom, 1.0), 0.0);
+	};
+
+	/* Now solve for the quantiles: */
+	for (size_t i=0; i<Nquant; ++i){
+		if (quantiles[i] == 0.0)
+			res[i] = PHmax;
+		else if (quantiles[i] == 1.0)
+			res[i] = 0.0;
+		else if (quantiles[i] > 0.0 && quantiles[i] < 1.0){
+			/* The typical case. Use TOMS 748 on a quantile
+			 * function to find the quantile.
+			 */
+			auto quantile_function = [&](double PH) -> double {
+				return tail_bli(PH) - quantiles[i];
+			};
+			std::uintmax_t max_iter(100);
+			eps_tolerance<double>
+			   eps_tol(std::numeric_limits<double>::digits - 2);
+			std::pair<double,double> bracket
+			   = toms748_solve(quantile_function, 0.0, PHmax, 1.0-quantiles[i],
+			                   -quantiles[i], eps_tol, max_iter);
+			res[i] = 0.5*(bracket.first + bracket.second);
+		} else {
+			throw std::runtime_error("Encountered quantile out of bounds "
+			                         "[0,1].");
 		}
 	}
 }
