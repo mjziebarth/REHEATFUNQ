@@ -105,5 +105,5 @@ if version_readme != version_meson:
     raise RuntimeError("Versions given in 'README.md' and 'meson.build' "
                        "differ.")
 
-print("All three versions agree:", version_readme)
+print("All four versions agree:", version_readme)
 
