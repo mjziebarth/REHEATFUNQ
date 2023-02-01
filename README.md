@@ -126,6 +126,8 @@ and this project adheres to
 - Rewrote `QuantileInverter` class as a templated class that can work
   with numeric types of different precision.
 - Improve unit labelling in `GammaConjugatePrior.visualize`.
+- Improve jupyter notebook in `jupyter/REHEATFUNQ`:
+  `03-Gamma-Conjugate-Prior-Parameters.ipynb`
 
 ### [1.3.3] - 2022-12-18
 #### Added
