@@ -9,7 +9,7 @@
 project = 'REHEATFUNQ'
 copyright = '2022-2023, Deutsches GeoForschungsZentrum Potsdam & Malte J. Ziebarth'
 author = 'Malte J. Ziebarth'
-release = '1.3.3'
+release = '1.4.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

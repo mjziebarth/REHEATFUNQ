@@ -112,7 +112,7 @@ and this project adheres to
 
 
 
-### [Unreleased]
+### [1.4.0] - 2023-02-01
 #### Added
 - Added a method `'bli'` to `marginal_posterior_tail_quantiles_batch` that
   uses barycentric Lagrange interpolation of the tail distribution, evaluated
