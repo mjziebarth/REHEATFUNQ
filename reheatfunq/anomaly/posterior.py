@@ -306,24 +306,24 @@ class HeatFlowAnomalyPosterior:
             The tolerance to which to compute the powers
             :math:`P_H`.
         working_precision : 'auto' | 'double' | 'long double', optional
-              The precision of the internal numerical computations.
-              The higher the precision, the more likely it is to
-              obtain a precise result for large data sets. The
-              trade off is a longer run time.
-              If the respective flags have been set at compile
-              time, additional options 'float128' (GCC 128bit
-              floating point), 'dec50' (boost 50-digit multiprecision),
-              and 'dec100' (boost 100-digit multiprecision) are
-              available.
-              Note: currently only used if :code:`method == 'bli'`.
+            The precision of the internal numerical computations.
+            The higher the precision, the more likely it is to
+            obtain a precise result for large data sets. The
+            trade off is a longer run time.
+            If the respective flags have been set at compile
+            time, additional options 'float128' (GCC 128bit
+            floating point), 'dec50' (boost 50-digit multiprecision),
+            and 'dec100' (boost 100-digit multiprecision) are
+            available.
+            Note: currently only used if :code:`method == 'bli'`.
         method : 'bli' | 'old', optional
             Defines which method to use for inverting the tail
             distribution for the tail quantile.
-            - 'bli'   : Use barycentric Lagrange interpolation on a
-                        number of tail distribution evaluations.
-            - '1.3.3' : An explicit method based on simultaneous
-                        PDF integration and bisection. Default
-                        method of versions 1.3.3 and before.
+              * 'bli' : Use barycentric Lagrange interpolation on a
+                number of tail distribution evaluations.
+              * '1.3.3' : An explicit method based on simultaneous PDF
+                integration and bisection. Default method of versions
+                1.3.3 and before.
         n_chebyshev : int, optional
             Number of Chebyshev points to evaluate the tail
             distribution at if the method is barycentric Lagrange
