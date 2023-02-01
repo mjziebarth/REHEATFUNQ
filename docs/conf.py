@@ -38,3 +38,11 @@ html_css_files = [
 html_theme_options = {
     "sidebar_width" : "7cm",
 }
+
+# -- Options for LaTeX output ------------------------------------------------
+latex_elements = {
+    'preamble' : r'''
+    \usepackage{enumitem}
+    \setlistdepth{10}
+    '''
+}
