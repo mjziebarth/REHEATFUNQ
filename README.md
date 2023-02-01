@@ -127,7 +127,7 @@ and this project adheres to
   with numeric types of different precision.
 - Improve unit labelling in `GammaConjugatePrior.visualize`.
 - Improve jupyter notebook in `jupyter/REHEATFUNQ`:
-  `03-Gamma-Conjugate-Prior-Parameters.ipynb`
+  `03-Gamma-Conjugate-Prior-Parameters.ipynb`, `A10-Gamma-Sketch.ipynb`
 
 ### [1.3.3] - 2022-12-18
 #### Added
