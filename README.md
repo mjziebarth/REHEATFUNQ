@@ -120,10 +120,12 @@ and this project adheres to
   a TOMS 748 inversion of the tail quantile. The implementation follows
   Berruth & Trefethen (2004) *Barycentric Lagrange Interpolation*. This new
   method is the new default in `HeatFlowAnomalyPosterior.tail_quantiles`.
+- Added background grid resolution parameters in `GammaConjugatePrior.visualize`
 
 #### Changed
 - Rewrote `QuantileInverter` class as a templated class that can work
   with numeric types of different precision.
+- Improve unit labelling in `GammaConjugatePrior.visualize`.
 
 ### [1.3.3] - 2022-12-18
 #### Added

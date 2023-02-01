@@ -440,7 +440,10 @@ class GammaConjugatePrior:
                   cmap='inferno', color_scale: Literal['log','lin'] = 'log',
                   plot_mean: bool = True, q_mean: float = 68.3,
                   q_plot: Iterable[Tuple[float,float,float,str] | float] = [],
-                  qstd_plot: Iterable[Tuple[float,float,float,str] | float] = []
+                  qstd_plot: Iterable[Tuple[float,float,float,str]
+                                      | float] = [],
+                  n_alpha: int = 101,
+                  n_beta: int = 100
         ):
         """
         Visualize this GammaConjugatePrior instance on an axis.
@@ -490,6 +493,10 @@ class GammaConjugatePrior:
            (*q*,*amin*,*amax*,*c*), where *amin* and *amax* denote the
            :math:`\\alpha`-interval within which the line should be plotted,
            and *c* is the color.
+        n_alpha : int, optional
+           The number of grid points in the :math:`\\alpha` grid axis.
+        n_beta : int, optional
+           The number of grid points in the :math:`\\beta` grid axis.
 
         Notes
         -----
@@ -514,11 +521,11 @@ class GammaConjugatePrior:
 
         # Generate the coordinate grid and evaluate the prior:
         if log_axes:
-            aplot = np.geomspace(amin, amax, 101)
-            bplot = np.geomspace(bmin, bmax, 100)
+            aplot = np.geomspace(amin, amax, int(n_alpha))
+            bplot = np.geomspace(bmin, bmax, int(n_beta))
         else:
-            aplot = np.linspace(amin, amax, 101)
-            bplot = np.linspace(bmin, bmax, 100)
+            aplot = np.linspace(amin, amax, int(n_alpha))
+            bplot = np.linspace(bmin, bmax, int(n_beta))
 
         ag, bg = np.meshgrid(aplot, bplot)
         zg = self.log_probability(ag.flatten(), bg.flatten()).reshape(ag.shape)
@@ -585,7 +592,7 @@ class GammaConjugatePrior:
             ax.set_xscale('log')
             ax.set_yscale('log')
         ax.set_xlabel('$\\alpha$')
-        ax.set_ylabel('$\\beta$')
+        ax.set_ylabel('$\\beta$ ($\\mathrm{mW}^{-1}\,\\mathrm{m}^{2}$)')
         ax.set_xlim(amin, amax)
         ax.set_ylim(bmin, bmax)
         cbar = ax.figure.colorbar(h, cax=cax)
