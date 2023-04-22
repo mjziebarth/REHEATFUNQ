@@ -125,7 +125,10 @@ split off this git repository. Therefore, you first need to download the
 the instructions presented therein, extract the :code:`compile` and
 :code:`wheels` subfolders into the :code:`vendor` directory of this repository.
 
-Then, you can build and run the Docker image as above:
+Then, you can build and run the Docker image as above (you might want to rename
+the container according to the REHEATFUNQ version you are using---unless stated
+otherwise, the following versions are compatible with
+:code:`vendor-1.3.3.tar.xz`):
 
 .. code :: bash
 

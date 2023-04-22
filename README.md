@@ -112,6 +112,10 @@ and this project adheres to
 
 
 
+### [Unreleased]
+#### Changed
+- Documentation details and fixes
+
 ### [1.4.0] - 2023-02-01
 #### Added
 - Added a method `'bli'` to `marginal_posterior_tail_quantiles_batch` that
