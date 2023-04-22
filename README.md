@@ -115,6 +115,7 @@ and this project adheres to
 ### [Unreleased]
 #### Changed
 - Documentation details and fixes
+- Github workflow fix
 
 ### [1.4.0] - 2023-02-01
 #### Added
