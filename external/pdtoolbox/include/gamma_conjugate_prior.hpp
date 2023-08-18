@@ -4,7 +4,7 @@
  * Author: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
  *
  * Copyright (C) 2021 Deutsches GeoForschungsZentrum GFZ,
- *               2022 Malte J. Ziebarth
+ *               2022-2023 Malte J. Ziebarth
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,11 +23,17 @@
  */
 
 #include <cstddef>
+#include <memory>
+#include <funccache.hpp>
 
 #ifndef PDTOOLBOX_GAMMA_CONJUGATE_PRIOR_HPP
 #define PDTOOLBOX_GAMMA_CONJUGATE_PRIOR_HPP
 
 namespace pdtoolbox {
+
+enum condition_policy_t {
+	CONDITION_WARN=0, CONDITION_ERROR=1, CONDITION_INF=2
+};
 
 class GammaConjugatePriorBase
 {
@@ -55,7 +61,29 @@ public:
 	kullback_leibler(double lp, double s, double n, double v,
 	                 double lp_ref, double s_ref, double n_ref,
 	                 double v_ref, double amin, double epsabs,
-	                 double epsrel=1e-10);
+	                 double epsrel=1e-10,
+	                 condition_policy_t on_condition_large=CONDITION_WARN);
+
+	static double
+	kullback_leibler_batch_max(const double* params, size_t N, double lp_ref,
+	                           double s_ref, double n_ref, double v_ref,
+	                           double amin, double epsabs, double epsrel=1e-10,
+	                           const long double* ln_Phis = nullptr);
+
+	/*
+	 * Helper routines to setup for cached evaluation of the minimum surprise
+	 * estimate cost function for SHGO.
+	 */
+	static std::shared_ptr<SortedCache<4,double>>
+	generate_mse_cost_function_cache(const double* params, size_t N,
+	                                 double amin, double epsabs,
+	                                 double epsrel=1e-10);
+
+	static std::shared_ptr<SortedCache<4,double>>
+	restore_mse_cost_function_cache(const double* cache_dump, size_t M,
+	                                const double* params, size_t N,
+	                                double amin, double epsabs,
+	                                double epsrel=1e-10);
 
 	static void
 	posterior_predictive_pdf(const size_t Nq, const double* q,

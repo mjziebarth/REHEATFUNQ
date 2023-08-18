@@ -32,7 +32,9 @@ from .backend import gamma_conjugate_prior_logL, \
                      gamma_conjugate_prior_mle, \
                      gamma_conjugate_prior_bulk_log_p, \
                      gamma_mle, \
-                     gamma_conjugate_prior_kullback_leibler
+                     gamma_conjugate_prior_kullback_leibler, \
+                     gamma_conjugate_prior_minimum_surprise_backend, \
+                     GCPMSECache
 
 
 class GammaConjugatePrior:
@@ -327,6 +329,48 @@ class GammaConjugatePrior:
 
 
     @staticmethod
+    def minimum_surprise_estimate_cache(hf_samples: Iterable[ArrayLike],
+                                        amin: float = 1.0
+        ) -> GCPMSECache:
+        """
+        Yields a cache for calling the
+        :py:method:`GammaConjugatePrior.minimum_surprise_estimate` method
+        multiple times with the same parameters but different optimizer
+        settings.
+
+        Parameters
+        ----------
+        hf_samples : Iterable[array_like]
+           The set of heat flow samples to which the Kullback-Leibler distance
+           from various points of the parameter space is going to be computed.
+        amin : float, optional
+            The minimum :math:`\\alpha` for which the prior is defined.
+            Has to be non-negative.
+
+        Returns
+        -------
+        cache : GCPMSECache
+           The cache object.
+        """
+        # Sanity:
+        qset = [np.ascontiguousarray(q) for q in hf_samples]
+
+        # Compute the "uninformed" estimates for each sample:
+        GCP_i = [GammaConjugatePrior(None, 0.0, 0.0, 0.0, 0.0, amin).updated(q)
+                 for q in qset]
+
+        # Extract the parameters:
+        gcp_updated_params = np.empty((len(qset), 4))
+        gcp_updated_params[:,0] = [gcp.lp for gcp in GCP_i]
+        gcp_updated_params[:,1] = [gcp.s for gcp in GCP_i]
+        gcp_updated_params[:,2] = [gcp.n for gcp in GCP_i]
+        gcp_updated_params[:,3] = [gcp.v for gcp in GCP_i]
+
+        # Cache is ready:
+        return GCPMSECache(gcp_updated_params, amin)
+
+
+    @staticmethod
     def minimum_surprise_estimate(hf_samples: Iterable[ArrayLike],
                                   pmin: float = 1.0, pmax: float = 1e5,
                                   smin: float = 0.0, smax: float = 1e3,
@@ -334,7 +378,10 @@ class GammaConjugatePrior:
                                   nv_surplus_min: float = 1e-8,
                                   nv_surplus_max: float = 2.0,
                                   amin: float = 1.0,
-                                  verbose: bool = False
+                                  shgo_kwargs: dict = {},
+                                  cache: Optional[GCPMSECache] = None,
+                                  verbose: bool = False,
+                                  return_shgo_result: bool = False,
         ) -> GammaConjugatePrior:
         """
         Compute the parameter estimate of the gamma conjugate prior (GCP)
@@ -369,8 +416,18 @@ class GammaConjugatePrior:
         amin : float, optional
             The minimum :math:`\\alpha` for which the prior is defined.
             Has to be non-negative.
+        shgo_kwargs : dict, optional
+            Additional parameters to pass to the
+            :py:func:`scipy.optimize.shgo` global optimizer.
+        cache : GCPMSECache, optional
+            A cache for the evaluation of the Kullback-Leiber distance cost
+            function. Can be used to speed up the SHGO optimization when
+            it samples a large number of times.
         verbose : bool, optional
             If :code:`True`, print some additional progress information.
+        return_shgo_result : bool, optional
+            If :code:`True`, return the :code:`scipy.optimize.OptimizeResult`
+            from the SHGO optimization.
 
         Returns
         -------
@@ -384,26 +441,12 @@ class GammaConjugatePrior:
         GCP_i = [GammaConjugatePrior(1.0, 0.0, 0.0, 0.0, amin).updated(q)
                  for q in qset]
 
-        # Cost function for the optimization:
-        def cost(x):
-            # Retrieve parameters:
-            lp = x[0]
-            s = x[1]
-            v = x[3]
-            n = v * (1.0 + exp(x[2]))
-            gcp_test = GammaConjugatePrior(None, s, n, v, lp, amin)
-
-            # Compute the Kullback-Leibler divergences:
-            try:
-                KLmax = -inf
-                for gcp in GCP_i:
-                    KL = gcp_test.kullback_leibler(gcp)
-                    KLmax = max(KLmax, KL)
-
-                return KLmax
-            except RuntimeError:
-                return inf
-
+        # Extract the parameters:
+        gcp_updated_params = np.empty((len(qset), 4))
+        gcp_updated_params[:,0] = [gcp.lp for gcp in GCP_i]
+        gcp_updated_params[:,1] = [gcp.s for gcp in GCP_i]
+        gcp_updated_params[:,2] = [gcp.n for gcp in GCP_i]
+        gcp_updated_params[:,3] = [gcp.v for gcp in GCP_i]
 
         if verbose:
             print("Optimizing...")
@@ -411,19 +454,47 @@ class GammaConjugatePrior:
                   (smin, smax),
                   (log(nv_surplus_min), log(nv_surplus_max)),
                   (vmin, vmax))
-        res = shgo(cost, bounds=bounds,
-                   minimizer_kwargs={
-                       'method'  : 'Nelder-Mead',
-                       'options' : {
-                           'fatol' : 1e-8,
-                           'xatol' : 1e-8
-                       },
-                       'bounds' : bounds
-                   },
-                   options = {
-                       "f_tol" : 1e-8
-                   },
-                   iters=3)
+
+        # Construct the keyword arguments for the SHGO routine.
+        # Here, we make sure that the user does not override the
+        # 'bounds' keyword arguments.
+        #
+        # First the default minimizer keyword arguments:
+        minimizer_kwargs = {
+            'method'  : 'Nelder-Mead',
+            'options' : {
+                'fatol' : 1e-8,
+                'xatol' : 1e-8
+            }
+        }
+        if "minimizer_kwargs" in shgo_kwargs:
+            minimizer_kwargs.update(shgo_kwargs["minimizer_kwargs"])
+            if "bounds" in minimizer_kwargs:
+                raise RuntimeError("Cannot provide bounds in 'shgo_kwargs'.")
+        minimizer_kwargs["bounds"] = bounds
+
+        # Default keyword arguments
+        kwargs = {
+            "options" : {
+                "f_tol" : 1e-8
+            },
+            "iters" : 3
+        }
+        if "bounds" in shgo_kwargs:
+            raise RuntimeError("Cannot provide bounds in 'shgo_kwargs'.")
+
+        # Override the minimizer keyword arguments:
+        kwargs.update(shgo_kwargs)
+        kwargs["minimizer_kwargs"] = minimizer_kwargs
+
+        # Optional cache:
+        cache_kwargs = {}
+        if cache is not None:
+            cache_kwargs["cache"] = cache
+
+        # Perform the optimization:
+        res = gamma_conjugate_prior_minimum_surprise_backend(gcp_updated_params,
+                  amin, bounds, kwargs, verbose, **cache_kwargs)
         if verbose:
             print("Optimization finished.\nResult:")
             print(res)
@@ -432,6 +503,8 @@ class GammaConjugatePrior:
         s = res.x[1]
         v = res.x[3]
         n = v * (1.0 + exp(res.x[2]))
+        if return_shgo_result:
+            return GammaConjugatePrior(None, s, n, v, lp, amin), res
         return GammaConjugatePrior(None, s, n, v, lp, amin)
 
 

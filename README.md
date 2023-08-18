@@ -113,10 +113,25 @@ and this project adheres to
 
 
 ### [Unreleased]
+#### Added
+- Added a function value cache for the minimum surprise estimate of the gamma
+  conjugate prior. The cache can be generated using the
+  `GammaConjugatePrior.minimum_surprise_estimate_cache` method and is tied to
+  a specific set of heat flow samples and $a_\mathrm{min}$. The function cache
+  uses binary search to speed up repetitive calls within the SHGO optimization
+  algorithm and can be pickled.
+- Added batch evaluation of the maximum Kullback-Leibler distance from a
+  reference `GammaConjugatePrior` to a set of other prior parameterizations.
+- Enable returning the `scipy.optimize.OptimizeResult` of the SHGO optimization
+  in the gamma conjugate prior minimum surprise estimate.
+
 #### Changed
 - Documentation details and fixes
 - Github workflow fix
 - Minor updates to the notebooks requested in review
+- Internal numerics: in `GammaConjugatePrior` normalization use more
+  robust determination of the maximum of the α-integration.
+- Internal: use `long double` in `GammaConjugatePrior` normalization.
 
 ### [1.4.0] - 2023-02-01
 #### Added
