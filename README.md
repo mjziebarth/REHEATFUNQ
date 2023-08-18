@@ -116,6 +116,7 @@ and this project adheres to
 #### Changed
 - Documentation details and fixes
 - Github workflow fix
+- Minor updates to the notebooks requested in review
 
 ### [1.4.0] - 2023-02-01
 #### Added
