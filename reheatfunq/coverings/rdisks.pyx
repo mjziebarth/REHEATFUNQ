@@ -164,6 +164,26 @@ def conforming_data_selection(const double[:,:] xy, double dmin_m, rng=128):
     return mask.base
 
 
+#
+# The following is a hack to circumvent Cython limitations on Ubuntu-22.04
+# (Github runner)
+#
+cdef extern from * nogil:
+    """
+    static void insert_in_m2i(
+            std::unordered_map<std::vector<bool>, size_t>& m2i,
+            const std::unordered_map<std::vector<bool>,size_t>::iterator& it,
+            const std::pair<std::vector<bool>,size_t>& value
+    )
+    {
+        m2i.insert(it, value);
+    }
+    """
+    cdef void insert_in_m2i(unordered_map[vector[cbool], size_t]& m2i,
+                            const unordered_map[vector[cbool],
+                                                size_t].iterator& it,
+                            const pair[vector[cbool],size_t] value)
+
 @cython.boundscheck(False)
 @cython.embedsignature(True)
 def bootstrap_data_selection(const double[:,::1] xy, double dmin_m, size_t B,
@@ -232,7 +252,7 @@ def bootstrap_data_selection(const double[:,::1] xy, double dmin_m, size_t B,
             it = m2i.find(value.first)
             if it == m2i.end():
                 value.second = nsubsel
-                m2i.insert(it, value)
+                insert_in_m2i(m2i, it, value)
                 nsubsel += 1
                 with gil:
                     newsample = np.empty(n, dtype=np.int64)
