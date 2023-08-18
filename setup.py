@@ -29,19 +29,7 @@ resilience_zeal2022 = MesonExtension('reheatfunq.resilience.zeal2022hfresil')
 data_distancedist   = MesonExtension('reheatfunq.data.distancedistribution')
 
 
-setup(name='REHEATFUNQ',
-      version='1.4.0',
-      author='Malte J. Ziebarth',
-      description='',
-      packages = ['reheatfunq','reheatfunq.regional','reheatfunq.anomaly',
-                  'reheatfunq.data', 'reheatfunq.coverings',
-                  'reheatfunq.resilience'],
-      ext_modules=[regional_backend, anomaly_bayes, coverings_rdisks,
+setup(ext_modules=[regional_backend, anomaly_bayes, coverings_rdisks,
                    anomaly_anomaly, resilience_zeal2022, data_distancedist],
-      cmdclass={'build_ext' : build_ext},
-      classifiers = [
-        'License :: OSI Approved :: GNU General Public License v3.0 or later '
-            '(GPL-3.0-or-later)'
-      ]
+      cmdclass={'build_ext' : build_ext}
 )
-

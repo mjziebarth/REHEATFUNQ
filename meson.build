@@ -1,6 +1,6 @@
 project('REHEATFUNQ','cpp','cython', version : '1.4.0',
         default_options : ['optimization=3'])
-add_project_arguments(['-std=c++20'], language : 'cpp')
+add_project_arguments(['-std=c++20','-msse3'], language : 'cpp')
 
 # Use natively tuned code by default - turn off by use of the 'portable'
 # option:

@@ -132,6 +132,7 @@ and this project adheres to
 - Internal numerics: in `GammaConjugatePrior` normalization use more
   robust determination of the maximum of the α-integration.
 - Internal: use `long double` in `GammaConjugatePrior` normalization.
+- Change to `pyproject.toml` build system.
 
 ### [1.4.0] - 2023-02-01
 #### Added

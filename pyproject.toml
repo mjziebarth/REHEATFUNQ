@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61", "wheel", "cython", "mebuex"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reheatfunq"
+version = "1.4.0"
+authors = [
+    {name = "Malte J. Ziebarth", email = "ziebarth@gfz-potsdam.de"},
+]
+description = """\
+   Inference of regional aggregate heat flow distributions and \
+   heat flow anomalies"""
+dependencies = [
+    "numpy",
+    "cython",
+    "pyproj",
+    "shapely",
+    "flottekarte",
+    "matplotlib",
+    "geopandas",
+    "joblib",
+    "mebuex",
+    "loaducerf3@git+https://git.gfz-potsdam.de/ziebarth/loaducerf3"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Cython",
+    "Programming Language :: C++",
+    """License :: OSI Approved :: GNU General Public License v3 or later \
+       (GPLv3+)""",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Operating System :: POSIX :: Linux"
+]
+readme = "README.md"
+license = {file="LICENSE"}
+
+[project.urls]
+"Homepage" = "https://github.com/mjziebarth/REHEATFUNQ"
+"Bug Tracker" = "https://github.com/mjziebarth/REHEATFUNQ/issues"
+"Documentation" = "https://mjziebarth.github.io/REHEATFUNQ/"
+
+[tool.setuptools]
+packages = [
+    "reheatfunq",
+    "reheatfunq.regional",
+    "reheatfunq.anomaly",
+    "reheatfunq.data",
+    "reheatfunq.coverings",
+    "reheatfunq.resilience"
+]
