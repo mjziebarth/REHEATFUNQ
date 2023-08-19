@@ -119,6 +119,14 @@ libresilience = static_library(
 python = import('python').find_installation()
 dep_py = python.dependency()
 
+# TODO REMOVE ME!
+message(run_command(
+  python,
+  ['.github/scripts/numpy-include.py'],
+  check : false
+).stdout())
+
+
 incpath_np = run_command(
   python,
   ['-c', 'import os; os.chdir(".."); import numpy; print(numpy.get_include())'],
