@@ -21,6 +21,7 @@ dependencies = [
     "geopandas",
     "joblib",
     "mebuex",
+    "scipy",
     "loaducerf3@git+https://git.gfz-potsdam.de/ziebarth/loaducerf3"
 ]
 classifiers = [
