@@ -33,6 +33,9 @@ jobs:
                                   python3-sphinx ninja-build cmake-data \
                                   cmake-extras extra-cmake-modules \
                                   python3-numpy wget
+          # Ensure the success of NumPy include determination:
+          python .github/scripts/numpy-include.py
+          # Use modern GCC:
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
           # Monkey-patched install of newer boost version:
