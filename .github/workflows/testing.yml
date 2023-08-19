@@ -35,7 +35,8 @@ jobs:
                                   git openssh-client ssh cython3 \
                                   python3-sphinx ninja-build cmake-data \
                                   cmake-extras extra-cmake-modules \
-                                  python3-numpy wget
+                                  wget
+          python3 -m pip install --user numpy
           # Ensure the success of NumPy include determination:
           python3 .github/scripts/numpy-include.py
           # Use modern GCC:
