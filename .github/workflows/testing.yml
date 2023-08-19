@@ -24,7 +24,7 @@ jobs:
           # Some basic environment information:
           echo "Current folder:"
           pwd
-          ls
+          ls -a
           echo ""
           # Install packages:
           sudo apt-get install -y libproj-dev libeigen3-dev \
