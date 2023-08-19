@@ -33,8 +33,9 @@ jobs:
                                   python3-numpy
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
-          sudo pip install matplotlib pyproj meson scipy mebuex \
-                           sphinxcontrib-svg2pdfconverter cairosvg
+          pip install --upgrade pip
+          pip install --user --no-build-isolation cairosvg \
+                         sphinxcontrib-svg2pdfconverter
           pip install --user --no-build-isolation .
     - name: Build HTML v2
       run: |

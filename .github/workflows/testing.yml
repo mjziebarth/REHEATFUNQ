@@ -42,7 +42,9 @@ jobs:
           sudo rm -r /usr/include/boost
           sudo cp -r boost-dl/boost_1_80_0/boost /usr/include
           # Python installs:
-          pip install --user --no-build-isolation .
+          pip install --upgrade pip
+          pip install --user --no-build-isolation cairosvg \
+                         sphinxcontrib-svg2pdfconverter
     - name: Lint with flake8
       run: |
         pip install flake8
