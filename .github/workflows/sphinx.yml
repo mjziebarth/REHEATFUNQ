@@ -36,7 +36,8 @@ jobs:
           pip install --upgrade pip
           pip install --user --no-build-isolation cairosvg \
                          sphinxcontrib-svg2pdfconverter
-          pip install --user --no-build-isolation .
+          sudo apt purge python3-setuptools
+          python -m pip install --user .
     - name: Build HTML v2
       run: |
           cd docs

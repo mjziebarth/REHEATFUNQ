@@ -43,17 +43,18 @@ jobs:
           sudo cp -r boost-dl/boost_1_80_0/boost /usr/include
           # Python installs:
           pip install --upgrade pip
-          pip install --user --no-build-isolation .
+          sudo apt purge python3-setuptools
+          python -m pip install --user .
     - name: Lint with flake8
       run: |
-        pip install flake8
+        python -m pip install flake8
         # stop the build if there are Python syntax errors or undefined names
         flake8 reheatfunq --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 jupyter --count --select=E9,F63,F7,F82 --show-source --statistics
     - name: Test with pytest
       run: |
         #
-        pip install pytest
+        python -m pip install pytest
         cd testing
         # Ensure that we can execute the imports:
         python test_anomaly_posterior.py
