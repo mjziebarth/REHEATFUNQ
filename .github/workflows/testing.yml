@@ -51,7 +51,8 @@ jobs:
           # Python installs:
           python3 -m pip install --upgrade pip
           sudo apt purge python3-setuptools
-          python3 -m pip install --user --verbose .
+          python3 -m pip install mebuex wheel
+          python3 -m pip install --user --no-build-isolation --verbose .
     - name: Lint with flake8
       run: |
         python3 -m pip install flake8
