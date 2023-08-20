@@ -128,10 +128,9 @@ test = run_command(
 message(test.stdout())
 message(test.stderr())
 
-
 incpath_np = run_command(
   python,
-  ['-c', 'import os; os.chdir(".."); import numpy; print(numpy.get_include())'],
+  ['numpy-include.py'],
   check : true
 ).stdout().strip()
 incdir_np = include_directories(incpath_np)
