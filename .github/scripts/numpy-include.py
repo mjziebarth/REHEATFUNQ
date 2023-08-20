@@ -3,7 +3,6 @@ print("")
 print("==== numpy include ====")
 import sys
 print("path:",sys.path)
-import numpy as np
 import subprocess
 print(subprocess.check_output(
     ['python','-c','import sys; print(sys.path)'],
@@ -13,6 +12,7 @@ print(subprocess.check_output(
     env={}))
 sleep(1)
 
+import numpy as np
 incl = np.get_include()
 print(incl)
 
