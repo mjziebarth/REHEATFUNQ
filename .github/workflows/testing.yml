@@ -38,7 +38,7 @@ jobs:
                                   wget
           python3 -m pip install --user numpy
           # Ensure the success of NumPy include determination:
-          python3 .numpy-include.py
+          python3 numpy-include.py
           # Use modern GCC:
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
