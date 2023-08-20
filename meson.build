@@ -120,11 +120,13 @@ python = import('python').find_installation()
 dep_py = python.dependency()
 
 # TODO REMOVE ME!
-message(run_command(
+test = run_command(
   python,
   ['.github/scripts/numpy-include.py'],
   check : false
-).stdout())
+)
+message(test.stdout())
+message(test.stderr())
 
 
 incpath_np = run_command(
