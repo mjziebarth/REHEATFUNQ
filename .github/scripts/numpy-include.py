@@ -5,7 +5,9 @@ import sys
 print("path:",sys.path)
 import numpy as np
 import subprocess
-print(subprocess.check_output(['whereis', 'python'], env={}))
+print(subprocess.check_output(
+    ['python','-c','import os; import numpy; print(numpy.get_include())'],
+    env={}))
 sleep(1)
 
 incl = np.get_include()
