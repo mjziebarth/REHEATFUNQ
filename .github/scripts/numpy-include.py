@@ -1,20 +1,16 @@
-from time import sleep
-print("")
-print("==== numpy include ====")
-import sys
-print("path:",sys.path)
-import subprocess
-print(subprocess.check_output(
-    ['python','-c','import sys; print(sys.path)'],
-    env={}))
-print(subprocess.check_output(
-    ['python','-c','import os; import numpy; print(numpy.get_include())'],
-    env={}))
-sleep(1)
+#
+# Invoke Python with empty environement variables to break out of the
+# build isolation.
+#
+try:
+    import numpy
+    print(numpy.get_include())
 
-import numpy as np
-incl = np.get_include()
-print(incl)
+except ImportError:
+    import subprocess
+    np_incl_byte = subprocess.check_output(
+        ['python','-c','import numpy; print(numpy.get_include())'],
+        env={}
+    )
 
-print("==== numpy include ====")
-print("")
+    print(np_incl_byte.decode().strip())
