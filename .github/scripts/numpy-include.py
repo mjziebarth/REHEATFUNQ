@@ -4,7 +4,7 @@ import sys
 print("path:",sys.path)
 import numpy as np
 import subprocess
-subprocess.run(['whereis', 'python'], check=True)
+print(subprocess.check_output(['whereis', 'python']))
 incl = np.get_include()
 print(incl)
 
