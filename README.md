@@ -124,6 +124,9 @@ and this project adheres to
   reference `GammaConjugatePrior` to a set of other prior parameterizations.
 - Enable returning the `scipy.optimize.OptimizeResult` of the SHGO optimization
   in the gamma conjugate prior minimum surprise estimate.
+- Added discovery (on failure) of system NumPy packages in isolated Python
+  build environments in `numpy-include.py`. Compile and link against that
+  system NumPy version.
 
 #### Changed
 - Documentation details and fixes

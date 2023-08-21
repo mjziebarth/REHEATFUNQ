@@ -37,8 +37,6 @@ jobs:
                                   cmake-extras extra-cmake-modules \
                                   wget
           python3 -m pip install --user numpy
-          # Ensure the success of NumPy include determination:
-          python3 numpy-include.py
           # Use modern GCC:
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
@@ -51,8 +49,6 @@ jobs:
           # Python installs:
           python3 -m pip install --upgrade pip
           sudo apt purge python3-setuptools
-          #python3 -m pip install mebuex wheel
-          #python3 -m pip install --user --no-build-isolation --verbose .
           python3 -m pip install --user --verbose .
     - name: Lint with flake8
       run: |

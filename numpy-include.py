@@ -18,7 +18,10 @@ except ImportError:
 
     np_include = np_incl_byte.decode().strip()
 
-    # Make numpy available in this isolated path:
+    # Make numpy available in the isolated environment this code is running
+    # in. Do this by symlinking the previously discovered system NumPy
+    # package into a site-package directory found in the isolated environment
+    # Python path.
     success = False
     for path in sys.path[::-1]:
         p = Path(path)
@@ -26,7 +29,6 @@ except ImportError:
             is_dir = (p / "numpy").is_dir()
             if is_dir:
                 rename((p / "numpy").resolve(), (p / "numpyold").resolve())
-            print(subprocess.check_output(['ls','-la',str(p.resolve())]).decode())
             symlink(Path(np_include).parent.parent.resolve(),
                     (p / "numpy").resolve())
             success = True

@@ -29,16 +29,17 @@ jobs:
                                   libcgal-dev libgeographic-dev build-essential\
                                   git openssh-client ssh cython3 \
                                   python3-sphinx ninja-build cmake-data \
-                                  cmake-extras extra-cmake-modules \
-                                  python3-numpy
+                                  cmake-extras extra-cmake-modules
+          python3 -m pip install --user numpy
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
           pip install --upgrade pip
           pip install --user --no-build-isolation cairosvg \
                          sphinxcontrib-svg2pdfconverter
+          # Python installs:
+          python3 -m pip install --upgrade pip
           sudo apt purge python3-setuptools
-          python3 -m pip install mebuex wheel
-          python3 -m pip install --user --no-build-isolation --verbose .
+          python3 -m pip install --user --verbose .
     - name: Build HTML v2
       run: |
           cd docs
