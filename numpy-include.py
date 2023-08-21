@@ -22,10 +22,15 @@ except ImportError:
     # in. Do this by symlinking the previously discovered system NumPy
     # package into a site-package directory found in the isolated environment
     # Python path.
+    found_site_packages = False
     success = False
     for path in sys.path[::-1]:
         p = Path(path)
-        if 'site-packages' in path and p.exists():
+        if 'site-packages' in path:
+            found_site_packages = True
+            p = Path(path)
+            if not p.exists():
+                continue
             is_dir = (p / "numpy").is_dir()
             if is_dir:
                 rename((p / "numpy").resolve(), (p / "numpyold").resolve())
@@ -35,7 +40,11 @@ except ImportError:
             break
 
     if not success:
-        raise RuntimeError("Could not link the NumPy package to the isolated "
-                           "site-packages.")
+        msg = "Could not link the NumPy package to the isolated site-packages."
+        if found_site_packages:
+            msg += " Found site-packages but did not exist."
+        else:
+            msg += " Found no site-pacakges."
+        raise RuntimeError(msg)
 
     print(np_include)
