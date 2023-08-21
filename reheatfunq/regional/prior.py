@@ -334,8 +334,8 @@ class GammaConjugatePrior:
         ) -> GCPMSECache:
         """
         Yields a cache for calling the
-        :py:method:`GammaConjugatePrior.minimum_surprise_estimate` method
-        multiple times with the same parameters but different optimizer
+        :py:method:`reheatfunq.regional.GammaConjugatePrior.minimum_surprise_estimate`
+        method multiple times with the same parameters but different optimizer
         settings.
 
         Parameters
