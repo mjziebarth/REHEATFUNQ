@@ -33,12 +33,11 @@ jobs:
           python3 -m pip install --user numpy
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
-          pip install --upgrade pip
-          pip install --user --no-build-isolation cairosvg \
-                         sphinxcontrib-svg2pdfconverter
           # Python installs:
           python3 -m pip install --upgrade pip
           sudo apt purge python3-setuptools
+          pip install --user --no-build-isolation cairosvg \
+                         sphinxcontrib-svg2pdfconverter
           python3 -m pip install --user --verbose .
     - name: Build HTML v2
       run: |
