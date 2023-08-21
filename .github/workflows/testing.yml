@@ -31,7 +31,8 @@ jobs:
           echo ""
           # Install packages:
           sudo apt-get install -y libproj-dev libeigen3-dev \
-                                  libcgal-dev libgeographic-dev build-essential\
+                                  libcgal-dev libgeographic-dev liblapacke-dev\
+                                  build-essential\
                                   git openssh-client ssh cython3 \
                                   python3-sphinx ninja-build cmake-data \
                                   cmake-extras extra-cmake-modules \
