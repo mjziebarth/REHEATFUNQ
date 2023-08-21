@@ -20,6 +20,7 @@ except ImportError:
 
     # Make numpy available in this isolated path:
     success = False
+    print(sys.path[::-1])
     for path in sys.path[::-1]:
         if 'site-packages' in path:
             p = Path(path)
