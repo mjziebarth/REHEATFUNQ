@@ -3,7 +3,7 @@
 #
 # Author: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
 #
-# Copyright (C) 2022 Malte J. Ziebarth
+# Copyright (C) 2022-2023 Malte J. Ziebarth
 #               Jupyter Development Team (see below)
 #
 # This program is free software: you can redistribute it and/or modify
@@ -30,9 +30,19 @@ RUN set -eux; \
               libcgal-dev libgeographic-dev \
               build-essential python3-sphinx ninja-build git \
               libopenblas-dev libopenblas-base liblapacke-dev libgsl-dev \
-              python3-numpy cmake fonts-roboto; \
+              python3-numpy cmake fonts-roboto wget; \
     apt-get clean; \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/*; \
+    # Monkey-patched install of newer boost version:
+    wget -q https://boostorg.jfrog.io/artifactory/main/release/1.83.0/source/boost_1_83_0.tar.bz2; \
+    echo "6478edfe2f3305127cffe8caf73ea0176c53769f4bf1585be237eb30798c3b8e boost_1_83_0.tar.bz2" \
+        | sha256sum --check; \
+    mkdir boost-dl; \
+    tar --bzip2 -xf boost_1_83_0.tar.bz2 -C boost-dl; \
+    rm boost_1_83_0.tar.bz2; \
+    rm -r /usr/include/boost; \
+    cp -r boost-dl/boost_1_83_0/boost /usr/include; \
+    rm -r boost-dl
 
 # Install Cython:
 RUN set -eux; \
@@ -48,10 +58,9 @@ WORKDIR /home/reheatfunq/REHEATFUNQ
 
 # Python dependencies:
 RUN set -eux; \
+    pip install --no-cache-dir --upgrade pip setuptools; \
     pip install --no-cache-dir --user \
-             matplotlib pyproj; \
-    pip install --no-cache-dir --user \
-            'mebuex @ git+https://github.com/mjziebarth/Mebuex';
+             matplotlib pyproj mebuex;
 RUN set -eux; \
     pip install --no-cache-dir --user \
             'loaducerf3 @ git+https://git.gfz-potsdam.de/ziebarth/loaducerf3';
@@ -60,17 +69,7 @@ RUN set -eux; \
 RUN set -eux; \
     pip install --user --no-cache-dir \
             notebook cmcrameri cmocean shapely \
-            cmasher scikit-learn joblib geopandas scipy requests
-# FlotteKarte currently needs a hotfix to install:
-RUN set -eux; \
-    git clone https://github.com/mjziebarth/FlotteKarte.git; \
-    cd FlotteKarte; \
-    meson setup builddir; \
-    cd builddir; \
-    meson configure -Dportable=true; \
-    cd ..; \
-    bash compile.sh; \
-    pip install --user --no-cache-dir .
+            cmasher scikit-learn joblib geopandas scipy requests flottekarte
 RUN set -eux; \
     PDTOOLBOX_PORTABLE=1 pip install --user  --no-cache-dir \
             'pdtoolbox @ git+https://git.gfz-potsdam.de/ziebarth/pdtoolbox.git';
@@ -81,7 +80,8 @@ COPY ./include/ ./include/
 COPY ./external/ ./external/
 COPY ./reheatfunq/ ./reheatfunq/
 COPY ./src/ ./src/
-COPY ./compile.sh ./meson.build ./setup.py ./meson_options.txt ./
+COPY ./meson.build ./setup.py ./pyproject.toml ./numpy-include.py \
+     ./meson_options.txt ./
 
 # Compile and install the package:
 RUN set -eux; \
