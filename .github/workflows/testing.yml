@@ -65,3 +65,7 @@ jobs:
         python3 test_anomaly_posterior.py
         # Run the test suite:
         pytest -s
+    - name: Build Dockerfile
+      run: |
+        sudo apt-get -y install podman
+        podman build --format docker -t reheatfunq .
