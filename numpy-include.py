@@ -21,10 +21,8 @@ except ImportError:
     # Make numpy available in this isolated path:
     success = False
     for path in sys.path[::-1]:
-        print("  ",path,":",Path(path).exists())
-    for path in sys.path[::-1]:
-        if 'site-packages' in path:
-            p = Path(path)
+        p = Path(path)
+        if 'site-packages' in path and p.exists():
             is_dir = (p / "numpy").is_dir()
             if is_dir:
                 rename((p / "numpy").resolve(), (p / "numpyold").resolve())
