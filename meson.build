@@ -122,8 +122,16 @@ dep_py = python.dependency()
 incpath_np = run_command(
   python,
   ['numpy-include.py'],
-  check : true
-).stdout().strip()
+  check : false
+)
+if incpath_np.returncode() != 0
+    message(incpath_np.stdout().strip())
+    message(incpath_np.stderr().strip())
+    error('Could not determine NumPy include path.')
+else
+    incpath_np = incpath_np.stdout().strip()
+endif
+
 incdir_np = include_directories(incpath_np)
 
 
