@@ -22,20 +22,40 @@ pip install --user .
 ```
 You can also use one of two Docker files that come with this repository. Use
 ```bash
+podman build --format docker -t reheatfunq .
+```
+or
+```bash
 sudo docker build -t 'reheatfunq' .
 ```
-to build the Docker image `Dockerfile` based on `python:slim` which includes
-updated dependencies and has a short compilation time.
+to build the container image `Dockerfile` based on `python:slim-bookworm` which
+includes updated dependencies and has a short compilation time.
 
 Alternatively, you can build the reproducible `Dockerfile-stable` with fixed
 dependencies at the state of the REHEATFUNQ description paper. See the
 [REHEATFUNQ documentation](https://mjziebarth.github.io/REHEATFUNQ/) for more
-informatio about how to build the `Dockerfile-stable` image.
+information about how to build the `Dockerfile-stable` image.
 
 ## Usage
+REHEATFUNQ can be used by importing the various module components from the
+`reheatfunq` package after installation.
+
+To run the above-mentioned container images, run
+```bash
+podman run -p XXXX:8888 reheatfunq
+```
+or
+```bash
+sudo docker run -p XXXX:8888 reheatfunq
+```
+where `XXXX` is a port of choice under which the Jupyter server will be
+accessible (i.e. `http://127.0.0.1:XXXX` with token listed in the terminal
+output of the above command).
+
 Visit the [REHEATFUNQ documentation](https://mjziebarth.github.io/REHEATFUNQ/)
-for usage instructions. A number of Jupyter notebooks are bundled in the
-[`jupyter`](jupyter/) directory of the REHEATFUNQ source distribution.
+for further usage instructions and documentation of the Python package. A
+number of Jupyter notebooks are bundled in the [`jupyter`](jupyter/) directory
+of the REHEATFUNQ source distribution.
 
 In case that visiting the website is not an option, the documentation can be
 built locally by running
@@ -136,6 +156,7 @@ and this project adheres to
   robust determination of the maximum of the α-integration.
 - Internal: use `long double` in `GammaConjugatePrior` normalization.
 - Change to `pyproject.toml` build system.
+- Fixed the build of `Dockerfile` and updated to Debian Bookworm.
 
 ### [1.4.0] - 2023-02-01
 #### Added
