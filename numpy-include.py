@@ -26,8 +26,8 @@ except ImportError:
             is_dir = (p / "numpy").is_dir()
             if is_dir:
                 rename((p / "numpy").resolve(), (p / "numpyold").resolve())
-            print(subprocess.check_output(['ls','-la']).decode())
-            symlink(Path(np_include).parent().parent().resolve(),
+            print(subprocess.check_output(['ls','-la',p.resolve()]).decode())
+            symlink(Path(np_include).parent.parent.resolve(),
                     (p / "numpy").resolve())
             success = True
             break
