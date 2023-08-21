@@ -45,16 +45,16 @@ subfolder can be created):
    pip install --user .
 
 
-Docker
-^^^^^^
+Container/Docker Images
+^^^^^^^^^^^^^^^^^^^^^^^
 REHEATFUNQ can also be used within the provided Docker images. The images
 contain a Jupyter notebook server running as user :code:`reheatfunq`, and all
 required packages are installed.
 
-Two docker images are supplied: :code:`Dockerfile` and
-:code:`Dockerfile-stable`. The former builds on the :code:`python:slim` image
-and pulls up-to-date dependencies from the web. It is more lightweight, uses
-considerably less compile time, and can utilize new features of the updated
+Two container images are supplied: :code:`Dockerfile` and
+:code:`Dockerfile-stable`. The former builds on the :code:`python:slim-bookworm`
+image and pulls up-to-date dependencies from the web. It is more lightweight,
+uses considerably less compile time, and can utilize new features of the updated
 software. On the flip side, this image might not be able to (exactly) reproduce
 the simulations from the paper if any of the important packages introduces
 changes to the numerics.
@@ -68,7 +68,14 @@ a reproducible model.
 :code:`Dockerfile`
 """"""""""""""""""
 
-To build the Docker file, run
+Two container services are covered in this documentation, Podman and Docker. To
+build the :code:`Dockerfile` container, run either
+
+.. code :: bash
+
+   podman build --format docker -t reheatfunq .
+
+or
 
 .. code :: bash
 
@@ -78,39 +85,26 @@ within the repository's root directory (:code:`sudo` may or may not be required
 depending on the Docker setup).
 
 The Jupyter notebook server is exposed at the container's 8888 port. This port
-may or may not be free on your system. To run REHEATFUNQ in the Docker
-container, first identify a free port :code:`XXXX` on your machine. Then, run
+may or may not be free on your system. To run REHEATFUNQ in the container, first
+identify a free port :code:`XXXX` on your machine. Then, run
+
+.. code :: bash
+
+   podman run -p XXXX:8888 reheatfunq
+
+or
 
 .. code :: bash
 
    sudo docker run -p XXXX:8888 reheatfunq
 
-The name of the running Docker container (e.g. :code:`hungry_stonebraker`) can
-be queried from another terminal with the following command:
+The container image does not contain all required data to run the analysis of
+the REHEATFUNQ paper. Most prominently, that includes the :code:`NGHF.csv` of
+Lucazeau [L2019]_. A convenient method to copy this (or other files you wish to
+copy) to the running container is the Jupyter server file up- and download
+dialog.
 
-.. code :: bash
-
-   sudo docker ps
-
-
-The Docker image does not contain all required data to run the analysis of the
-REHEATFUNQ paper. Most prominently, that includes the :code:`NGHF.csv` of
-Lucazeau [L2019]_. To copy this (or other files you wish to copy) to the running
-docker container (here named :code:`hungry_stonebraker`) you can use
-:code:`docker cp`:
-
-.. code :: bash
-
-   sudo docker cp /path/to/NGHF.csv hungry_stonebraker:/home/reheatfunq/jupyter/REHEATFUNQ/data/
-
-This copies the file to the directory :code:`REHEATFUNQ/data/` accessible from
-the Jupyter notebook. The Jupyter server runs within the directory
-:code:`/home/reheatfunq/jupyter/` on the docker image.
-
-Another convenient method for transfering data is the Jupyter server file
-up- and download dialog.
-
-You can shut down the docker image by quitting the Jupyter server via the web
+You can shut down the container image by quitting the Jupyter server via the web
 interface.
 
 :code:`Dockerfile-stable`
