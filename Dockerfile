@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-FROM python:slim
+FROM python:slim-bookworm
 WORKDIR /usr/src/app
 
 # Runtime dependencies:
@@ -27,9 +27,9 @@ RUN set -eux; \
     apt-get update;\
     apt-get install -y --no-install-recommends \
               libproj-dev libeigen3-dev \
-              libcgal-dev libgeographic-dev \
+              libcgal-dev libgeographiclib-dev \
               build-essential python3-sphinx ninja-build git \
-              libopenblas-dev libopenblas-base liblapacke-dev libgsl-dev \
+              libopenblas-openmp-dev liblapacke-dev libgsl-dev \
               python3-numpy cmake fonts-roboto wget; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*; \
