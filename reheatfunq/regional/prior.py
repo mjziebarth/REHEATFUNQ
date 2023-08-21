@@ -33,6 +33,7 @@ from .backend import gamma_conjugate_prior_logL, \
                      gamma_conjugate_prior_bulk_log_p, \
                      gamma_mle, \
                      gamma_conjugate_prior_kullback_leibler, \
+                     gamma_conjugate_prior_kullback_leibler_batch_max, \
                      gamma_conjugate_prior_minimum_surprise_backend, \
                      GCPMSECache
 
@@ -249,26 +250,56 @@ class GammaConjugatePrior:
                                                     self.v, self.amin, inplace)
 
 
-    def kullback_leibler(self, other: GammaConjugatePrior) -> float:
+    def kullback_leibler(self, other: GammaConjugatePrior |
+                                      Iterable[GammaConjugatePrior],
+                         amin: float = 1.0, epsabs: float = 0.0,
+                         epsrel: float = 1e-10) -> float:
         """
         Compute the Kullback-Leibler divergence to another gamma
         conjugate prior.
 
         Parameters
         ----------
-        other : GammaConjugatePrior
-            Another gamma conjugate prior.
+        other : GammaConjugatePrior | Iterable[GammaConjugatePrior]
+            Other gamma conjugate prior(s).
+        epsabs : float, optional
+            Absolute tolerance parameter passed to the quadrature routines.
+        epsrel : float, optional
+            Relative tolerance parameter passed to the quadrature routines
 
         Returns
         -------
         KL : float
-           The Kullback-Leibler divergence from this reference
-           prior PDF to ther :code:`other` PDF.
+           The maximum of the Kullback-Leibler divergences from this
+           reference prior PDF to ther :code:`other` PDF(s).
         """
-        return gamma_conjugate_prior_kullback_leibler(other.lp, other.s,
-                                                      other.n, other.v,
-                                                      self.lp, self.s, self.n,
-                                                      self.v)
+        if isinstance(other, GammaConjugatePrior):
+            if other.amin != self.amin:
+                raise RuntimeError("Trying to compute the Kullback-Leibler "
+                                   "distance between two gamma conjugate "
+                                   "priors of different amin.")
+            return gamma_conjugate_prior_kullback_leibler(other.lp, other.s,
+                                                          other.n, other.v,
+                                                          self.lp, self.s,
+                                                          self.n, self.v,
+                                                          self.amin, epsabs,
+                                                          epsrel)
+        else:
+            # Extract the parameters:
+            other = list(other)
+            other_params = np.empty((len(other), 4))
+            other_params[:,0] = [o.lp for o in other]
+            other_params[:,1] = [o.s for o in other]
+            other_params[:,2] = [o.n for o in other]
+            other_params[:,3] = [o.v for o in other]
+            if not all(o.amin == self.amin for o in other):
+                raise RuntimeError("Trying to compute the Kullback-Leibler "
+                                   "distance between two gamma conjugate "
+                                   "priors of different amin.")
+
+            return gamma_conjugate_prior_kullback_leibler_batch_max(
+                       other_params, self.lp, self.s, self.n, self.v,
+                       self.amin, epsabs, epsrel)
 
 
     @staticmethod
