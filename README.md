@@ -5,14 +5,17 @@ through the scatter that is inherent to the regional heat flow.
 
 ## Installation
 Installing REHEATFUNQ requires a number of common scientific computing packages.
-See [Dependencies](#dependencies) below for a list of dependencies that need to
-be installed to build REHEATFUNQ. Two uncommon packages that the REHEATFUNQ
-installation requires are the [Mebuex](https://github.com/mjziebarth/Mebuex) and
-the [loaducerf3](https://git.gfz-potsdam.de/ziebarth/loaducerf3) Python package.
-Both packages can be installed with the following commands after all other
+REHEATFUNQ uses a `pyproject.toml`-based build that should install all
+required dependencies automatically.
+
+If you need to install the dependencies manually, see
+[Dependencies](#dependencies) below for a list of dependencies that need to
+be installed to build REHEATFUNQ. One uncommon package that the REHEATFUNQ
+installation requires is the
+[loaducerf3](https://git.gfz-potsdam.de/ziebarth/loaducerf3) Python package.
+This package can be installed with the following command after all other
 dependencies have been installed:
 ```bash
-pip install 'mebuex @ git+https://github.com/mjziebarth/Mebuex'
 pip install 'loaducerf3 @ git+https://git.gfz-potsdam.de/ziebarth/loaducerf3'
 ```
 Then, a Pip installation can be performed within the root directory of the
