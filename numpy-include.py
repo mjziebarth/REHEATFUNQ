@@ -26,7 +26,7 @@ except ImportError:
             is_dir = (p / "numpy").is_dir()
             if is_dir:
                 rename((p / "numpy").resolve(), (p / "numpyold").resolve())
-            os.symlink(np_include, (p / "numpy").resolve())
+            symlink(np_include, (p / "numpy").resolve())
             success = True
             break
 
