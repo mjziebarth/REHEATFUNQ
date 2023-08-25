@@ -57,6 +57,19 @@ libgcp = static_library(
 
 
 #
+# R-disks:
+#
+sources_rdisks = ['src/coverings/dminpermutations.cpp']
+dependencies_rdisks = [boost_dep]
+librdisks = static_library(
+    'rdisks',
+    sources_rdisks,
+    dependencies : dependencies_rdisks,
+    include_directories : include
+)
+
+
+#
 # Anomaly:
 #
 sources_anomaly = ['src/anomaly.cpp', 'src/anomaly/ls1980.cpp',
@@ -167,7 +180,7 @@ python.extension_module('rdisks',
                         dependencies : [dep_py, numpy_random, numpy_math],
                         include_directories : [include, incdir_np],
                         override_options : ['cython_language=cpp'],
-                        #link_with : libgcp
+                        link_with : librdisks
                         )
 
 python.extension_module('anomaly',

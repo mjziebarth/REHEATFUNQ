@@ -29,11 +29,44 @@ from libcpp cimport bool as cbool
 from libcpp.vector cimport vector
 from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport pair
-from libcpp.functional cimport hash as cpphash
+from libcpp.functional cimport hash as cpphash, function
+from libcpp.memory cimport shared_ptr, make_shared
 from libc.math cimport sqrt
 from cpython.pycapsule cimport PyCapsule_IsValid, PyCapsule_GetPointer
 from numpy.random.c_distributions cimport random_interval
 from numpy cimport uint8_t
+
+cdef extern from * namespace "reheatfunq" nogil:
+    """
+    namespace reheatfunq {
+
+    std::function<size_t(size_t)>
+    generate_generator(bitgen_t* bitgen)
+    {
+        return [bitgen](size_t N) -> size_t
+        {
+            return random_interval(bitgen, N-1);
+        };
+    }
+
+    typedef std::function<size_t(size_t)> int_generator_fun_t;
+
+    }
+    """
+    cdef cppclass int_generator_fun_t:
+        pass
+
+    int_generator_fun_t generate_generator(bitgen_t* bitgen)
+
+
+cdef extern from "coverings/dminpermutations.hpp" namespace "reheatfunq" nogil:
+    vector[pair[double, vector[size_t]]] \
+        determine_restricted_samples(const double* xy, const size_t N,
+                                     const double dmin,
+                                     const size_t max_samples,
+                                     const size_t max_iter,
+                                     shared_ptr[int_generator_fun_t],
+                                     cbool extra_debug_checks) except+
 
 
 cdef get_generator_stage_1(bitgen):
@@ -274,3 +307,39 @@ def bootstrap_data_selection(const double[:,::1] xy, double dmin_m, size_t B,
     bitgen = NULL
 
     return subselections
+
+
+@cython.boundscheck(False)
+@cython.embedsignature(True)
+def all_restricted_samples(const double[:,::1] xy, double dmin,
+                           size_t max_samples, size_t max_iter,
+                           rng=127, cbool extra_debug_checks = False):
+    cdef size_t Nxy = xy.shape[0]
+    if Nxy == 0:
+        raise RuntimeError("Empty coordinates.")
+
+    # Reproducible random number generation:
+    cdef bitgen_t* bitgen
+    cdef shared_ptr[int_generator_fun_t] gen
+    if rng is not None:
+        bg = get_generator_stage_1(rng)
+        bitgen= get_generator_stage_2(bg)
+        gen = make_shared[int_generator_fun_t](generate_generator(bitgen))
+
+    cdef vector[pair[double, vector[size_t]]] rs \
+         = determine_restricted_samples(&xy[0,0], xy.shape[0], dmin,
+                                        max_samples, max_iter, gen,
+                                        extra_debug_checks)
+
+    cdef size_t i,j
+    cdef list res
+    cdef long[::1] res_i
+    res = list()
+    for i in range(rs.size()):
+        res_i = np.empty(rs[i].second.size(), dtype=np.int64)
+        with nogil:
+            for j in range(rs[i].second.size()):
+                res_i[j] = rs[i].second[j]
+        res.append((rs[i].first, res_i.base))
+    return res
+
