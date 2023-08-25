@@ -60,6 +60,8 @@ endif
 
 incdir_np = include_directories([incpath_np, incpath_np / '..' / '..' / '..'])
 
+add_project_arguments(['-I' + incpath_np + '/../../../'], language : 'cython')
+
 ################################################################################
 #                                                                              #
 #                             BUILD TARGETS                                    #
@@ -160,7 +162,8 @@ message('NumPy include directory: "' + incpath_np + '".')
 # Numpy link dependencies:
 numpy_random = meson.get_compiler('cpp').find_library(
                             'npyrandom',
-                            dirs: incpath_np / '..' / '..' / 'random' / 'lib'
+                            dirs: [incpath_np / '..' / '..' / 'random' / 'lib',
+                                   incpath_np / '..' / '..' / '..']
 )
 numpy_math = meson.get_compiler('cpp').find_library(
                             'npymath',

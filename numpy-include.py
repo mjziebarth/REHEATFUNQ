@@ -12,7 +12,8 @@ except ImportError:
     from pathlib import Path
     from os import rename, symlink
     np_incl_byte = subprocess.check_output(
-        [sys.executable,'-c','import numpy; print(numpy.get_include())'],
+        [sys.executable,'-c','import os; os.chdir(".."); import numpy; '
+                             'print(numpy.get_include())'],
         env={}
     )
 
