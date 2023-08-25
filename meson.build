@@ -40,6 +40,34 @@ endif
 
 
 #
+# Find the NumPy headers here:
+#
+python = import('python').find_installation()
+dep_py = python.dependency()
+
+incpath_np = run_command(
+  python,
+  ['numpy-include.py'],
+  check : false
+)
+if incpath_np.returncode() != 0
+    message(incpath_np.stdout().strip())
+    message(incpath_np.stderr().strip())
+    error('Could not determine NumPy include path.')
+else
+    incpath_np = incpath_np.stdout().strip()
+endif
+
+incdir_np = include_directories([incpath_np, incpath_np / '..' / '..' / '..'])
+
+################################################################################
+#                                                                              #
+#                             BUILD TARGETS                                    #
+#                                                                              #
+################################################################################
+
+
+#
 # Conjugate prior:
 #
 sources = ['external/pdtoolbox/src/ll_gamma_conjugate_prior.cpp',
@@ -127,26 +155,7 @@ libresilience = static_library(
     include_directories : include_resilience
 )
 
-
-
-python = import('python').find_installation()
-dep_py = python.dependency()
-
-incpath_np = run_command(
-  python,
-  ['numpy-include.py'],
-  check : false
-)
-if incpath_np.returncode() != 0
-    message(incpath_np.stdout().strip())
-    message(incpath_np.stderr().strip())
-    error('Could not determine NumPy include path.')
-else
-    incpath_np = incpath_np.stdout().strip()
-endif
-
-incdir_np = include_directories(incpath_np)
-
+message('NumPy include directory: "' + incpath_np + '".')
 
 # Numpy link dependencies:
 numpy_random = meson.get_compiler('cpp').find_library(

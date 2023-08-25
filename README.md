@@ -160,6 +160,8 @@ and this project adheres to
 - Internal: use `long double` in `GammaConjugatePrior` normalization.
 - Change to `pyproject.toml` build system.
 - Fixed the build of `Dockerfile` and updated to Debian Bookworm.
+- Fixed a problem with the access of NumPy headers in Cython files on some
+  systems in isolated build mode.
 
 ### [1.4.0] - 2023-02-01
 #### Added
