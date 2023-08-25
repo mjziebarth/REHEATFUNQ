@@ -150,6 +150,14 @@ and this project adheres to
 - Added discovery (on failure) of system NumPy packages in isolated Python
   build environments in `numpy-include.py`. Compile and link against that
   system NumPy version.
+- Added option to pass random number generator or seed to
+  `HeatFlowAnomalyPosterior` for repeatability.
+- Added option to pass multiple `Anomaly` instances with weights to the
+  `HeatFlowAnomalyPosterior` class. This allows the Bayesian treatment of
+  uncertainties in the heat flow anomaly model or parameters. The discrete
+  anomaly dimension is included in the treatment of the minimum distance
+  criterion by Monte-Carlo sampling. The parameter `n_bootstrap` allows
+  to control the maximum number of Monte-Carlo samples that are generated.
 
 #### Changed
 - Documentation details and fixes
