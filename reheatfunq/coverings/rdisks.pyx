@@ -32,8 +32,10 @@ from libcpp.utility cimport pair
 from libcpp.functional cimport hash as cpphash, function
 from libcpp.memory cimport shared_ptr, make_shared
 from libc.math cimport sqrt
+from libcpp.algorithm cimport lower_bound
 from cpython.pycapsule cimport PyCapsule_IsValid, PyCapsule_GetPointer
-from numpy.random.c_distributions cimport random_interval
+from numpy.random.c_distributions cimport random_interval, \
+                                          random_standard_uniform
 from numpy cimport uint8_t
 
 cdef extern from * namespace "reheatfunq" nogil:
@@ -341,5 +343,51 @@ def all_restricted_samples(const double[:,::1] xy, double dmin,
             for j in range(rs[i].second.size()):
                 res_i[j] = rs[i].second[j]
         res.append((rs[i].first, res_i.base))
+
+    bitgen = NULL
+
     return res
 
+
+@cython.boundscheck(False)
+@cython.embedsignature(True)
+def samples_from_discrete_distribution(const double[::1] w, size_t N, rng=127):
+    """
+    Sample from a discrete probability distribution.
+    """
+    # Get the RNG:
+    cdef bitgen_t* bitgen
+    bg = get_generator_stage_1(rng)
+    bitgen = get_generator_stage_2(bg)
+
+    # Return array:
+    cdef long[::1] res = np.empty(N, dtype=np.int64)
+
+    cdef double W = 0.0, z
+    cdef vector[double] cdf
+    cdef size_t i, j
+    cdef size_t M = w.shape[0]
+    with nogil:
+        # Compute the CDF:
+        cdf.resize(M)
+        for i in range(M):
+            W += w[i]
+            cdf[i] = W
+        if cdf.back() < 1.0:
+            cdf[M-1] = 1.0
+        elif cdf.back() > 1.0:
+            for i in range(M):
+                cdf[i] /= W
+
+        # Now generate the random numbers:
+        for i in range(N):
+            z = random_standard_uniform(bitgen)
+            j = lower_bound(cdf.begin(), cdf.end(), z) - cdf.begin()
+            if j < 0 or j >= M:
+                with gil:
+                    raise RuntimeError("Computed index out of bounds.")
+            res[i] = j
+
+    bitgen = NULL
+
+    return res.base
