@@ -170,6 +170,7 @@ and this project adheres to
 - Fixed the build of `Dockerfile` and updated to Debian Bookworm.
 - Fixed a problem with the access of NumPy headers in Cython files on some
   systems in isolated build mode.
+- Fix wrong buffer size in `marginal_posterior_tail_quantiles_batch`.
 
 ### [1.4.0] - 2023-02-01
 #### Added

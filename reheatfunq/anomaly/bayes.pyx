@@ -621,7 +621,7 @@ def marginal_posterior_tail_quantiles_batch(double[::1] quantiles, double p,
             raise RuntimeError("In one sample, the shape of `qi` and `ci` do "
                                "not match.")
 
-    cdef double[::1] res = quantiles if inplace else np.empty(Nqc)
+    cdef double[::1] res = quantiles if inplace else np.empty(Nquant)
     if method == '1.3.3':
         with nogil:
             posterior_tail_quantiles_batch(&quantiles[0], &res[0], Nquant,
