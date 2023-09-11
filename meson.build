@@ -157,6 +157,19 @@ libresilience = static_library(
     include_directories : include_resilience
 )
 
+
+
+#
+# Python function wrapper:
+#
+sources_pyfunwrap = ['src/utility/pyfunwrap.cpp']
+libpyfunwrap = static_library(
+    'pyfunwrap', sources_pyfunwrap,
+    dependencies : [dep_py],
+    include_directories : include
+)
+
+
 message('NumPy include directory: "' + incpath_np + '".')
 
 # Numpy link dependencies:
