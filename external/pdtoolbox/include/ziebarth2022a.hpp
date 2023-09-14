@@ -126,6 +126,12 @@ int tail_quantiles_intcode(const double* quantiles, double* res,
                            const double amin, const double dest_tol,
                            short print);
 
+int check_locals(const double* qi, const double* ci, size_t N, double p0,
+                 double s0, double n0, double v0, double amin, double dest_tol,
+                 double lp, double ls, double n, double v, double Qmax,
+                 double h0, double h1, double h2, double h3, double w,
+                 double lh0, double l1p_w);
+
 }
 
 }
