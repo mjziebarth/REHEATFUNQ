@@ -51,5 +51,6 @@ packages = [
     "reheatfunq.anomaly",
     "reheatfunq.data",
     "reheatfunq.coverings",
-    "reheatfunq.resilience"
+    "reheatfunq.resilience",
+    "reheatfunq._testing"
 ]
