@@ -120,7 +120,7 @@ sources_hfp = ['external/pdtoolbox/src/ziebarth2022a.cpp',
                'external/pdtoolbox/src/quantileinverter.cpp']
 dependencies_hfp = [openmp_dep, boost_dep]
 
-hfp_cpp_args = []
+hfp_cpp_args = ['-DBOOST_ENABLE_ASSERT_HANDLER']
 hfp_link_args = []
 if get_option('anomaly_posterior_float128')
     hfp_cpp_args += ['--std=gnu++20','-DREHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD']
@@ -134,11 +134,30 @@ if get_option('anomaly_posterior_dec100')
 endif
 
 
+libcommon = static_library(
+    'common', ['src/numerics/boostassert.cpp'],
+    dependencies : dependencies_hfp,
+    cpp_args : hfp_cpp_args,
+    link_args : hfp_link_args,
+    include_directories : include
+)
+
 libhfp = static_library(
     'hfp', sources_hfp,
     dependencies : dependencies_hfp,
     cpp_args : hfp_cpp_args,
     link_args : hfp_link_args,
+    link_with : libcommon,
+    include_directories : include
+)
+
+libhfp2 = static_library(
+    'hfp2', ['src/anomaly/variableprecisionposterior.cpp',
+             'src/anomaly/posterior.cpp'],
+    dependencies : dependencies_hfp,
+    cpp_args : hfp_cpp_args,
+    link_args : hfp_link_args,
+    link_with : libcommon,
     include_directories : include
 )
 
@@ -187,12 +206,28 @@ python.extension_module('bayes',
                         link_with : libhfp,
                         link_args : hfp_link_args)
 
+python.extension_module('postbackend',
+                        'reheatfunq/anomaly/postbackend.pyx',
+                        dependencies : [dep_py, dependencies_hfp],
+                        include_directories : include,
+                        override_options : ['cython_language=cpp'],
+                        link_with : [libhfp2, libcommon, libhfp],
+                        cpp_args : hfp_cpp_args,
+                        link_args : hfp_link_args)
+
 python.extension_module('rdisks',
                         'reheatfunq/coverings/rdisks.pyx',
                         dependencies : [dep_py, numpy_random, numpy_math],
                         include_directories : [include, incdir_np],
                         override_options : ['cython_language=cpp'],
                         link_with : librdisks
+                        )
+
+python.extension_module('poisampling',
+                        'reheatfunq/coverings/poisampling.pyx',
+                        dependencies : [dep_py, numpy_random, numpy_math],
+                        include_directories : [include, incdir_np],
+                        override_options : ['cython_language=cpp']
                         )
 
 python.extension_module('anomaly',
