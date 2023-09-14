@@ -30,6 +30,7 @@ from .bayes import marginal_posterior_pdf_batch, marginal_posterior_cdf_batch, \
                    marginal_posterior_tail_batch, \
                    marginal_posterior_tail_quantiles_batch, \
                    _support_float128, _support_dec50, _support_dec100
+from .postbackend import CppAnomalyPosterior
 
 
 # Define the capabilities of the numerical backend:
