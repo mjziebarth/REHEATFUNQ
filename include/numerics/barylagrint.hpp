@@ -475,6 +475,19 @@ private:
 			refined = refine_chebyshev(func, xmin, xmax, samples);
 		}
 
+		auto compute_fmax = [fmax](const std::vector<xf_t>& refined) -> real
+		{
+			real fm = (std::isinf(fmax))
+			          ? -std::numeric_limits<real>::infinity()
+			          : fmax;
+			for (const xf_t& xf : refined){
+				if (xf.f > fm)
+					fm = xf.f;
+			}
+			return fm;
+		};
+		const real fmax_i = compute_fmax(refined);
+
 		/*
 		 * Now we check whether we have to split the interval into sub-intervals
 		 * so as to drastically improve the minimum precision across the whole
@@ -488,8 +501,8 @@ private:
 		 * to model to desired precision using the barycentric Lagrange
 		 * interpolator if they go down to zero (without using an extensive
 		 * amount of nodes).
-		 * If there are single root-minima, we may be better off to split the
-		 * interval there.
+		 * If there are a small number of root-minima, we may be better off to
+		 * split the interval there.
 		 */
 		std::vector<xf_t> minima;
 		real fprev, fi, fnext;
@@ -527,13 +540,45 @@ private:
 				if (min.second == 0 ||
 				    !tolerance_fulfilled(error(f_int, min.second)))
 				{
-					splits.push_back(min.first);
+					/* Find the boundary of another interval in which
+					 * the function's minmax variation is lower than
+					 * the double range:
+					 */
+					const real f_up = std::min(
+					   1e-5 * min.second / std::numeric_limits<real>::epsilon(),
+					   1e5 * fmax_i * std::numeric_limits<real>::epsilon()
+					);
+					uint_fast8_t successes = 0;
+					size_t j0, j1;
+					for (j0=i-1; j0>0; --j0){
+						if (samples[j0].f >= f_up){
+							++successes;
+							break;
+						}
+					}
+					for (j1=i+1; j1>0; ++j1){
+						if (samples[j1].f >= f_up){
+							++successes;
+							break;
+						}
+					}
+					if (successes == 2){
+						std::cout << "add splits [" << samples[j1].x << ", "
+						          << samples[j0].x << "]\n";
+						splits.push_back(samples[j0].x);
+						splits.push_back(samples[j1].x);
+					} else {
+						/*
+						 * Else just split once:
+						 */
+						splits.push_back(min.first);
+					}
 				}
-				std::cout << "Found minimum f(" << min.first << ") = "
-				          << min.second << ".\n"
-				          << "  used range: [" << xl << ", " << xr << "]\n"
-				          << "  iter: " << max_iter << "\n"
-				          << std::flush;
+//				std::cout << "Found minimum f(" << min.first << ") = "
+//				          << min.second << ".\n"
+//				          << "  used range: [" << xl << ", " << xr << "]\n"
+//				          << "  iter: " << max_iter << "\n"
+//				          << std::flush;
 			}
 		}
 
