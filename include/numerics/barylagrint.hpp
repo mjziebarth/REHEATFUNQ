@@ -26,6 +26,7 @@
 #include <cmath>
 #include <stack>
 #include <limits>
+#include <numbers>
 #include <utility>
 #include <variant>
 #include <optional>
