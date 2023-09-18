@@ -37,6 +37,8 @@
 
 #include <boost/math/tools/minima.hpp>
 
+#include <numerics/kahan.hpp>
+
 namespace reheatfunq {
 namespace numerics {
 
@@ -46,6 +48,7 @@ namespace numerics {
  */
 template<typename real>
 struct BLI_summand {
+	typedef KahanAdder<real> type;
 };
 
 template<>
@@ -57,8 +60,6 @@ template<>
 struct BLI_summand<float>{
 	typedef double type;
 };
-
-//TODO Add Kahan-sum types here for long double and above:
 
 
 /*
@@ -88,6 +89,12 @@ public:
 			                         "BarycentricLagrangeInterpolator.");
 	}
 
+	template<typename fun_t>
+	PiecewiseBarycentricLagrangeInterpolator(
+	         PiecewiseBarycentricLagrangeInterpolator&& other)
+	   : xmin(other.xmin), fmin(other.fmin), fmax(other.fmax),
+	     ranges(std::move(other.ranges))
+	{}
 
 	real operator()(real x) const {
 		if (x < xmin || x > ranges.back().xmax)

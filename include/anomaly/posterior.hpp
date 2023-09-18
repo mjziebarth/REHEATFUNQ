@@ -50,6 +50,7 @@
  */
 #include <anomaly/posterior/localsandnorm.hpp>
 #include <numerics/kahan.hpp>
+#include <numerics/barylagrint.hpp>
 
 namespace reheatfunq {
 namespace anomaly {
@@ -79,7 +80,8 @@ public:
 	   : locals(init_locals(weighted_samples, p, s, n, v, amin, dest_tol)),
 	     weights(init_weights(weighted_samples, locals)),
 	     p(p), s(s), n(n), v(v), Qmax(global_Qmax(locals)),
-	     norm(compute_norm(locals, weights)), dest_tol(dest_tol)
+	     norm(compute_norm(locals, weights)), dest_tol(dest_tol),
+	     pdf_interp(init_pdf_bli(locals, weights, Qmax, norm))
 	{
 	}
 
@@ -394,11 +396,14 @@ private:
 	real norm;
 	double dest_tol;
 
+	rn::PiecewiseBarycentricLagrangeInterpolator<real> pdf_interp;
+
 	Posterior(std::vector<posterior::LocalsAndNorm<real>>&& locals,
 	          std::vector<real>&& weights, double p, double s, double n,
 	          double v, double amin, double dest_tol, real Qmax, real norm)
 	   : locals(std::move(locals)), weights(std::move(weights)), p(p), s(s),
-	     n(n), v(v), Qmax(Qmax), norm(norm)
+	     n(n), v(v), Qmax(Qmax), norm(norm),
+	     pdf_interp(init_pdf_bli(locals, weights, Qmax, norm))
 	{
 	}
 
@@ -523,9 +528,27 @@ private:
 		return Qmax;
 	}
 
+	static rn::PiecewiseBarycentricLagrangeInterpolator<real>
+	init_pdf_bli(const std::vector<posterior::LocalsAndNorm<real>>& locals,
+	             const std::vector<real>& weights,
+	             const posterior::arg<real>::type Qmax,
+	             const posterior::arg<real>::type norm)
+	{
+		auto pdf =
+		  [&locals, &weights, &norm](const posterior::arg<real>::type x) -> real
+		{
+			return pdf_single_explicit(x, locals, weights, norm);
+		};
+		return rn::PiecewiseBarycentricLagrangeInterpolator<real>(pdf, 0.0,
+		                                                          Qmax);
+	}
 
 
-	real pdf_single(const posterior::arg<real>::type x) const {
+	static real pdf_single_explicit(const posterior::arg<real>::type x,
+	                const std::vector<posterior::LocalsAndNorm<real>>& locals,
+	                const std::vector<real>& weights,
+	                const posterior::arg<real>::type norm)
+	{
 		/*
 		 * Evaluate the PDF at a single point.
 		 */
@@ -550,6 +573,15 @@ private:
 			}
 		}
 		return res;
+	}
+
+
+	real pdf_single(const posterior::arg<real>::type x) const {
+		if (x < 0)
+			return 0.0;
+		else if (x > Qmax)
+			return 0.0;
+		return pdf_interp(x);
 	}
 
 
