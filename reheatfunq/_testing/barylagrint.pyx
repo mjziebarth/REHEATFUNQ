@@ -44,7 +44,8 @@ cdef extern from "numerics/barylagrint.hpp" nogil:
         BarycentricLagrangeInterpolator(PythonFunctionWrapper pfw, double xmin,
                                         double xmax, double tol_rel,
                                         double tol_abs, double fmin,
-                                        double fmax)
+                                        double fmax, size_t max_splits,
+                                        unsigned char max_refinements)
         double operator()(double x) except+
         vector[pair[double,double]] get_samples() const
 
@@ -55,15 +56,24 @@ cdef class BarycentricLagrangeInterpolator:
     cdef unique_ptr[BLI_double_t] bli
 
     def __init__(self, fun, double xmin, double xmax, double tol_rel=1e-8,
-                 double tol_abs=inf, double fmin=-inf, double fmax=inf):
+                 double tol_abs=inf, double fmin=-inf, double fmax=inf,
+                 int max_splits=10, int max_refinements=3):
         # Get the function wrapper:
         cdef PyObject* fun_ptr = <PyObject*>fun
         cdef unique_ptr[PythonFunctionWrapper] pfw
         pfw = make_unique[PythonFunctionWrapper](fun_ptr)
 
+        if max_splits < 0:
+            raise ValueError("'max_splits' has to be non-negative.")
+        if max_refinements < 0:
+            raise ValueError("'max_refinements' has to be non-negative.")
+        if max_refinements > 255:
+            raise ValueError("'max_refinements' out of range (max 255).")
+
         with nogil:
             self.bli = make_unique[BLI_double_t](deref(pfw), xmin, xmax,
-                                                 tol_rel, tol_abs, fmin, fmax)
+                                                 tol_rel, tol_abs, fmin, fmax,
+                                                 max_splits, max_refinements)
 
     cdef double _call_double(self, double x) nogil:
         if not self.bli:
