@@ -158,6 +158,7 @@ and this project adheres to
   anomaly dimension is included in the treatment of the minimum distance
   criterion by Monte-Carlo sampling. The parameter `n_bootstrap` allows
   to control the maximum number of Monte-Carlo samples that are generated.
+- Added an internally used piecewise barycentric Lagrange interpolator class
 
 #### Changed
 - Documentation details and fixes

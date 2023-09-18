@@ -176,6 +176,29 @@ libresilience = static_library(
     include_directories : include_resilience
 )
 
+
+#
+# Testing:
+#
+sources_testing = ['src/testing/barylagrint.cpp']
+libtesting = static_library(
+    'testing', sources_testing,
+    dependencies : [openmp_dep, boost_dep],
+    include_directories : include
+)
+
+
+#
+# Python function wrapper:
+#
+sources_pyfunwrap = ['src/utility/pyfunwrap.cpp']
+libpyfunwrap = static_library(
+    'pyfunwrap', sources_pyfunwrap,
+    dependencies : [dep_py],
+    include_directories : include
+)
+
+
 message('NumPy include directory: "' + incpath_np + '".')
 
 # Numpy link dependencies:
@@ -250,4 +273,13 @@ python.extension_module('distancedistribution',
                         'reheatfunq/data/distancedistribution.pyx',
                         dependencies : [dep_py, geographiclib_dep],
                         override_options : ['cython_language=cpp'],
+                        )
+
+
+python.extension_module('barylagrint',
+                        'reheatfunq/_testing/barylagrint.pyx',
+                        dependencies : [dep_py],
+                        override_options : ['cython_language=cpp'],
+                        include_directories : [include],
+                        link_with : [libtesting, libpyfunwrap]
                         )

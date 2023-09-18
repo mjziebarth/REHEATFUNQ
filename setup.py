@@ -29,10 +29,12 @@ coverings_rdisks      = MesonExtension('reheatfunq.coverings.rdisks')
 coverings_poisampling = MesonExtension('reheatfunq.coverings.poisampling')
 resilience_zeal2022   = MesonExtension('reheatfunq.resilience.zeal2022hfresil')
 data_distancedist     = MesonExtension('reheatfunq.data.distancedistribution')
+testing_barylagrint   = MesonExtension('reheatfunq._testing.barylagrint')
 
 
 setup(ext_modules=[regional_backend, anomaly_bayes, coverings_rdisks,
                    anomaly_anomaly, resilience_zeal2022, data_distancedist,
-                   anomaly_postbackend, coverings_poisampling],
+                   anomaly_postbackend, coverings_poisampling,
+                   testing_barylagrint],
       cmdclass={'build_ext' : build_ext}
 )
