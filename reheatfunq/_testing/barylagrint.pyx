@@ -37,15 +37,16 @@ cdef extern from "testing/barylagrint.hpp" namespace "reheatfunq::testing" nogil
 
 cdef extern from "numerics/barylagrint.hpp" nogil:
     """
-    typedef reheatfunq::numerics::BarycentricLagrangeInterpolator<double>
+    typedef reheatfunq::numerics
+                      ::PiecewiseBarycentricLagrangeInterpolator<double>
             BLI_double_t;
     """
     cdef cppclass BLI_double_t:
-        BarycentricLagrangeInterpolator(PythonFunctionWrapper pfw, double xmin,
-                                        double xmax, double tol_rel,
-                                        double tol_abs, double fmin,
-                                        double fmax, size_t max_splits,
-                                        unsigned char max_refinements)
+        BLI_double_t(PythonFunctionWrapper pfw, double xmin,
+                     double xmax, double tol_rel,
+                     double tol_abs, double fmin,
+                     double fmax, size_t max_splits,
+                     unsigned char max_refinements)
         double operator()(double x) except+
         vector[vector[pair[double,double]]] get_samples() const
 

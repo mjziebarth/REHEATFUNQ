@@ -65,11 +65,11 @@ struct BLI_summand<float>{
  */
 
 template<typename real>
-class BarycentricLagrangeInterpolator
+class PiecewiseBarycentricLagrangeInterpolator
 {
 public:
 	template<typename fun_t>
-	BarycentricLagrangeInterpolator(fun_t func, real xmin, real xmax,
+	PiecewiseBarycentricLagrangeInterpolator(fun_t func, real xmin, real xmax,
 	            real tol_rel = std::sqrt(std::numeric_limits<real>::epsilon()),
 	            real tol_abs = std::numeric_limits<real>::infinity(),
 	            real fmin = -std::numeric_limits<real>::infinity(),
@@ -412,7 +412,6 @@ private:
 		/*
 		 * The main refinement loop.
 		 */
-//		constexpr unsigned int max_iter = 20; // That is already more than 1e6 samples
 		unsigned int iter = 0;
 		error_t err;
 		std::vector<error_t> new_err;

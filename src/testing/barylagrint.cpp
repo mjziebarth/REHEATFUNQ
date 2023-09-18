@@ -26,7 +26,7 @@
 namespace reheatfunq {
 namespace testing {
 
-using reheatfunq::numerics::BarycentricLagrangeInterpolator;
+using reheatfunq::numerics::PiecewiseBarycentricLagrangeInterpolator;
 
 void test_barycentric_lagrange_interpolator()
 {
@@ -36,7 +36,7 @@ void test_barycentric_lagrange_interpolator()
 	};
 
 	const double xmax = 5.0;
-	BarycentricLagrangeInterpolator<double> bli(fun, 0.0, xmax, 1e-8);
+	PiecewiseBarycentricLagrangeInterpolator<double> bli(fun, 0.0, xmax, 1e-8);
 
 	constexpr size_t N = 897389;
 	for (size_t i=0; i<N; ++i){
@@ -58,7 +58,8 @@ void test_barycentric_lagrange_interpolator()
 		double sx = std::sin(x);
 		return sx * sx;
 	};
-	BarycentricLagrangeInterpolator<double> bli2(fun2, 0.0, xmax, 1e-10);
+	PiecewiseBarycentricLagrangeInterpolator<double> bli2(fun2, 0.0, xmax,
+	                                                      1e-10);
 	for (size_t i=0; i<N; ++i){
 		double xi = i * xmax / (N-1);
 		double y_ref = fun2(xi);
@@ -87,8 +88,8 @@ void test_barycentric_lagrange_interpolator()
 			return 1.0;
 		return 0.0;
 	};
-	bli = BarycentricLagrangeInterpolator<double>(fun3, 0.0, xmax, 1e-8,
-	                                              1.0, 0.0, 1.0);
+	bli = PiecewiseBarycentricLagrangeInterpolator<double>(fun3, 0.0, xmax,
+	                                                       1e-8, 1.0, 0.0, 1.0);
 	for (size_t i=0; i<N; ++i){
 		double xi = i * xmax / (N-1);
 		double y_ref = fun3(xi);
@@ -114,7 +115,8 @@ void test_barycentric_lagrange_interpolator()
 		double dx = x - 2.0;
 		return std::exp(-0.5 * dx*dx / (0.5*0.5));
 	};
-	bli = BarycentricLagrangeInterpolator<double>(fun4, 0.0, xmax, 1e-8);
+	bli = PiecewiseBarycentricLagrangeInterpolator<double>(fun4, 0.0, xmax,
+	                                                       1e-8);
 	for (size_t i=0; i<N; ++i){
 		double xi = i * xmax / (N-1);
 		double y_ref = fun4(xi);
