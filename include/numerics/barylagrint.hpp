@@ -74,10 +74,10 @@ public:
 	            real tol_abs = std::numeric_limits<real>::infinity(),
 	            real fmin = -std::numeric_limits<real>::infinity(),
 	            real fmax = std::numeric_limits<real>::infinity(),
-	            size_t max_splits = 10)
+	            size_t max_splits = 10, unsigned char max_refinements = 3)
 	   : xmin(xmin), fmin(fmin), fmax(fmax),
 	     ranges(determine_ranges(func, xmin, xmax, tol_rel, tol_abs, fmin,
-	                             fmax, max_splits))
+	                             fmax, max_splits, max_refinements))
 	{
 		/* This check should never trigger, but let's keep it here to ensure
 		 * safety of assuming that ranges is not empty.
@@ -348,7 +348,8 @@ private:
 	static std::variant<std::vector<xf_t>,std::vector<real>,
 	                    std::vector<discontinuity_t>>
 	determine_samples(fun_t func, real xmin, real xmax, real tol_rel,
-	                  real tol_abs, real fmin, real fmax)
+	                  real tol_abs, real fmin, real fmax,
+	                  unsigned char max_iter)
 	{
 		/* Start with 9 samples: */
 		constexpr size_t n_start = 129;
@@ -409,7 +410,6 @@ private:
 		 * The main refinement loop.
 		 */
 //		constexpr unsigned int max_iter = 20; // That is already more than 1e6 samples
-		constexpr unsigned int max_iter = 5;
 		unsigned int iter = 0;
 		error_t err;
 		std::vector<error_t> new_err;
@@ -548,7 +548,8 @@ private:
 	template<typename fun_t>
 	static std::vector<subrange_t>
 	determine_ranges(fun_t func, real xmin, real xmax, real tol_rel,
-	                 real tol_abs, real fmin, real fmax, size_t max_splits)
+	                 real tol_abs, real fmin, real fmax, size_t max_splits,
+	                 unsigned char max_refinements)
 	{
 		std::vector<subrange_t> ranges;
 
@@ -568,7 +569,8 @@ private:
 			             std::vector<discontinuity_t>>
 			    res = determine_samples(func, interval_todo.top().xmin,
 			                            interval_todo.top().xmax,
-			                            tol_rel, tol_abs, fmin, fmax);
+			                            tol_rel, tol_abs, fmin, fmax,
+			                            max_refinements);
 			if (res.index() == 0){
 				std::cout << "no split!\n";
 				/*
