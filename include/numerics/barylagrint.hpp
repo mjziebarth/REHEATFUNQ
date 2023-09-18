@@ -105,11 +105,14 @@ public:
 		return interpolate(x, it->samples, fmin, fmax);
 	}
 
-	std::vector<std::pair<real, real>> get_samples() const {
-		std::vector<std::pair<real, real>> res(ranges[0].samples.size());
-		for (size_t i=0; i<ranges[0].samples.size(); ++i){
-			res[i] = std::make_pair(ranges[0].samples[i].x,
-			                        ranges[0].samples[i].f);
+	std::vector<std::vector<std::pair<real, real>>> get_samples() const {
+		std::vector<std::vector<std::pair<real,real>>> res(ranges.size());
+		for (size_t i=0; i<ranges.size(); ++i){
+			res[i].resize(ranges[i].samples.size());
+			for (size_t j=0; j<ranges[i].samples.size(); ++j){
+				res[i][j] = std::make_pair(ranges[i].samples[j].x,
+				                           ranges[i].samples[j].f);
+			}
 		}
 		return res;
 	}

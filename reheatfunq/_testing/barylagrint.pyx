@@ -47,7 +47,7 @@ cdef extern from "numerics/barylagrint.hpp" nogil:
                                         double fmax, size_t max_splits,
                                         unsigned char max_refinements)
         double operator()(double x) except+
-        vector[pair[double,double]] get_samples() const
+        vector[vector[pair[double,double]]] get_samples() const
 
 cdef class BarycentricLagrangeInterpolator:
     """
@@ -120,16 +120,20 @@ cdef class BarycentricLagrangeInterpolator:
         """
         if not self.bli:
             raise RuntimeError("Interpolator not initialized.")
-        cdef vector[pair[double,double]] S
+        cdef vector[vector[pair[double,double]]] S
         S = deref(self.bli).get_samples()
-        cdef double[:,::1] res = np.empty((S.size(),2))
-        cdef size_t i
-        with nogil:
-            for i in range(S.size()):
-                res[i,0] = S[i].first
-                res[i,1] = S[i].second
+        cdef double[:,::1] res_i
+        cdef size_t i,j
+        cdef list res = list()
+        for i in range(S.size()):
+            res_i = np.empty((S[i].size(), 2))
+            res.append(res_i.base)
+            with nogil:
+                for j in range(S[i].size()):
+                    res_i[j,0] = S[i][j].first
+                    res_i[j,1] = S[i][j].second
 
-        return res.base
+        return res
 
 
 
