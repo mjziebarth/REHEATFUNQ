@@ -117,7 +117,7 @@ void test_barycentric_lagrange_interpolator()
 		double dx = x - 2.0;
 		return std::exp(-0.5 * dx*dx / (0.5*0.5));
 	};
-	bli = BarycentricLagrangeInterpolator<double>(fun3, 0.0, xmax, 1e-8);
+	bli = BarycentricLagrangeInterpolator<double>(fun4, 0.0, xmax, 1e-8);
 	for (size_t i=0; i<N; ++i){
 		double xi = i * xmax / (N-1);
 		double y_ref = fun4(xi);
@@ -128,9 +128,6 @@ void test_barycentric_lagrange_interpolator()
 			                         "exp(-(x-2)**2 / (2 * 0.5**2)).");
 		}
 	}
-
-
-	throw std::runtime_error("blabla.");
 }
 
 }

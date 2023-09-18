@@ -28,8 +28,11 @@
 #include <limits>
 #include <utility>
 #include <variant>
+#include <optional>
 #include <iostream>
+#include <iomanip>
 #include <stdexcept>
+
 
 #include <boost/math/tools/minima.hpp>
 
@@ -211,8 +214,6 @@ private:
 	struct error_t {
 		real abs = 0.0;
 		real rel = 0.0;
-		size_t iabs = 0;
-		size_t irel = 0;
 	};
 
 	static error_t error(real f, real f_ref)
@@ -222,21 +223,130 @@ private:
 		 *  value is zero).
 		 */
 		error_t err;
-		err.abs = std::abs(f - f_ref);
+		err.abs = std::fabs(f - f_ref);
 		if (f_ref == 0){
 			if (f != 0)
 				err.rel = 1.0;
 			else
 				err.rel = 0.0;
 		} else {
-			err.rel = err.abs / std::abs(f_ref);
+			err.rel = err.abs / std::fabs(f_ref);
 		}
 		return err;
+	}
+
+	struct discontinuity_t {
+		real x;
+
+		bool operator>(const discontinuity_t& other) const {
+			return x > other.x;
+		}
 	};
 
+	/*
+	 * This function tries to identify a possible discontinuity in an interval
+	 * range. The discontinuity needs to accumulate more than 50% of the
+	 * function value change in the interval.
+	 * Note that it tries to identify exactly one discontinuity. If there is
+	 * more than one, it may not work or it may return the one that accumulates
+	 * more than 50% of the function change in the interval.
+	 */
+	template<typename fun_t>
+	static std::optional<discontinuity_t>
+	find_discontinuity(fun_t func, const size_t il,
+	                   const size_t n_chebyshev, const real xmin,
+	                   const real xmax, const real fmin, const real fmax)
+	{
+		/* Add the initial interval as to do: */
+		struct interval_t {
+			size_t il = 0;
+			real xl = 0;
+			real xr = 0;
+			real fl = 0;
+			real fr = 0;
+
+			interval_t() = default;
+
+			interval_t(size_t il, real xl, real xr, real fl, real fr)
+			   : il(il), xl(xl), xr(xr), fl(fl), fr(fr) {};
+		};
+		std::stack<interval_t> todo;
+		std::stack<interval_t> next_todo;
+		std::stack<discontinuity_t> identified;
+		{
+			real xl = chebyshev_point(il, n_chebyshev, xmin, xmax);
+			real xr = chebyshev_point(il+1, n_chebyshev, xmin, xmax);
+			real xm = chebyshev_point(2*il+1, 2*(n_chebyshev-1)+1, xmin, xmax);
+			if (xl == xm || xr == xm)
+				throw std::runtime_error("Precision of `x` data point exceeded."
+				                         " Cannot perform required refinement "
+				                         "in find_discontinuity.");
+			todo.emplace(il, xl, xr, func(xl), func(xr));
+		}
+
+		/* Start the refinement loop: */
+		const real df_0 = std::fabs(todo.top().fl - todo.top().fr);
+		const size_t max_refinements = std::numeric_limits<real>::digits;
+		size_t n_cheb_i = n_chebyshev;
+		bool exit = false;
+		for (uint_fast8_t r=0; r<max_refinements; ++r){
+			n_cheb_i = 2 * (n_cheb_i - 1) + 1;
+			while (!todo.empty()){
+				/* Split the interval: */
+				const size_t ix = 2 * todo.top().il + 1;
+				auto x = chebyshev_point(ix, n_cheb_i, xmin, xmax);
+				if (x == todo.top().xl || x == todo.top().xr){
+					/* Identify the discontinuity closer than what might be
+					 * possible by the Chebyshev grid evaluation:
+					 */
+					const bool order = todo.top().xl < todo.top().xr;
+					x = todo.top().xl;
+					real xnext = std::nextafter(x, todo.top().xr);
+					while ((xnext < todo.top().xr) == order &&
+					       std::fabs(todo.top().fl - func(xnext)) < 0.5 * df_0)
+					{
+						x = xnext;
+					}
+					identified.push(discontinuity_t(x));
+				} else {
+					const real fx = func(x);
+
+					/* Now check the subintervals for discontinuities: */
+					if (std::fabs(todo.top().fl - fx) > 0.5 * df_0){
+						next_todo.emplace(2 * todo.top().il, todo.top().xl,
+						                  x, todo.top().fl, fx);
+					}
+					if (std::fabs(todo.top().fr - fx) > 0.5 * df_0){
+						next_todo.emplace(ix, x, todo.top().xr,
+						                  fx, todo.top().fr);
+					}
+				}
+				todo.pop();
+			}
+
+			/* New todo: */
+			todo.swap(next_todo);
+
+			if (exit || todo.empty()){
+				break;
+			}
+
+		}
+		/*
+		 * Note: If there are multiple discontinuities in the interval, the
+		 * resolution of the sampling is probably not great enough since
+		 * it implies more than 100% of df_0 allocated in sub-intervals
+		 * (i.e. non-monotony).
+		 */
+		if (identified.size() == 1){
+			return identified.top();
+		}
+		return std::optional<discontinuity_t>();
+	}
 
 	template<typename fun_t>
-	static std::variant<std::vector<xf_t>,std::vector<real>>
+	static std::variant<std::vector<xf_t>,std::vector<real>,
+	                    std::vector<discontinuity_t>>
 	determine_samples(fun_t func, real xmin, real xmax, real tol_rel,
 	                  real tol_abs, real fmin, real fmax)
 	{
@@ -254,34 +364,33 @@ private:
 		std::vector<xf_t> refined(refine_chebyshev(func, xmin, xmax, samples));
 
 		/* The function that computes the error in interpolation: */
-		auto max_error = [fmin, fmax](const std::vector<xf_t>& samples,
-		                              const std::vector<xf_t>& refined)
-		   -> error_t
+		auto estimate_errors = [fmin, fmax](const std::vector<xf_t>& samples,
+		                                    const std::vector<xf_t>& refined)
+		   -> std::vector<error_t>
 		{
-			for (size_t i=0; i<refined.size(); ++i){
-				if ((i % 2) == 0){
-					if (refined[i] != samples[i / 2])
-						throw std::runtime_error("refined not correctly copied.");
-				} else {
-
-				}
-			}
-
-			error_t err({.abs=0.0, .rel=0.0, .iabs=0, .irel=0});
+			std::vector<error_t> errors((refined.size()-1) / 2);
 			/*
 			 * Each even data point (when first element is index with 1)
 			 * is new. These data points are controlled.
 			 */
+			auto it = errors.begin();
 			for (size_t i=1; i<refined.size(); i += 2){
 				real fint = interpolate(refined[i].x, samples, fmin, fmax);
-				error_t err_i = error(fint, refined[i].f);
+				*it = error(fint, refined[i].f);
+				++it;
+			}
+			return errors;
+		};
+
+		auto max_error = [](const std::vector<error_t>& errors) -> error_t
+		{
+			error_t err({.abs=0.0, .rel=0.0});
+			for (const error_t& err_i : errors){
 				if (err_i.abs > err.abs){
 					err.abs = err_i.abs;
-					err.iabs = i;
 				}
 				if (err_i.rel > err.rel){
 					err.rel = err_i.rel;
-					err.irel = i;
 				}
 			}
 			return err;
@@ -293,8 +402,6 @@ private:
 		auto tolerance_fulfilled
 		   = [tol_rel, tol_abs](const error_t& err) -> bool
 		{
-			std::cout << "  err_abs = " << err.abs << ", err_rel = "
-			          << err.rel << "\n";
 			return (10 * err.abs <= tol_abs) && (10 * err.rel <= tol_rel);
 		};
 
@@ -303,18 +410,69 @@ private:
 		 */
 //		constexpr unsigned int max_iter = 20; // That is already more than 1e6 samples
 		constexpr unsigned int max_iter = 5;
-		unsigned int i = 0;
+		unsigned int iter = 0;
 		error_t err;
-		while (!tolerance_fulfilled(err = max_error(samples, refined))
-		       && (i++ < max_iter))
+		std::vector<error_t> new_err;
+		std::vector<error_t> old_err;
+		while (!tolerance_fulfilled(
+		           err = max_error(new_err = estimate_errors(samples, refined))
+		          )
+		       && (iter++ < max_iter))
 		{
-			/* TODO: Here we need to test for discontinuities! */
-			throw std::runtime_error("TODO: NEED TO TEST FOR DISCONTINUITIES.");
+			/* Test for discontinuities.
+			 * The discontinuity check uses the property that a discontinuity
+			 * stays constant throughout refinement. In contrast, any smooth
+			 * part will eventually continuously reduce its error with
+			 * increased sampling.
+			 */
+			if (!old_err.empty()){
+				/*  */
+				std::cout << "old_err.size() : " << old_err.size() << "\n";
+				std::cout << "new_err.size() : " << new_err.size() << "\n";
+				std::cout << "samples.size() : " << samples.size() << "\n";
+				std::cout << std::flush;
+				std::vector<discontinuity_t> discontinuities;
+				for (size_t i=0; i<new_err.size(); ++i){
+					/* Restrict these checks to those intervals in which the
+					 * tolerance criteria is not fulfilled:
+					 */
+					if (!tolerance_fulfilled(new_err[i])){
+						if (new_err[i].abs > 0.9 * old_err[i / 2].abs)
+						{
+							/* Test for the discontinuity. */
+							std::optional<discontinuity_t> disco(
+							    find_discontinuity(func, i, new_err.size()+1,
+							                       xmin, xmax, fmin, fmax)
+							);
+							if (disco){
+								std::cout << "found discontinuity in interval ["
+									<< chebyshev_point(i+1, new_err.size()+1,
+									                   xmin, xmax)
+									<< ", "
+									<< chebyshev_point(i, new_err.size()+1,
+									                   xmin, xmax)
+									<< "]\n";
+								/* Is a discontinuity! */
+								discontinuities.push_back(*disco);
+							}
+						}
+					}
+				}
+				if (!discontinuities.empty()){
+					std::cout << std::setprecision(16);
+					std::cout << "Returning discontinuities [";
+					for (const discontinuity_t& d : discontinuities){
+						std::cout << d.x << ", ";
+					}
+					std::cout << "]\n" << std::flush;
+					return discontinuities;
+				}
+			}
 
+			/* Refinement: */
+			old_err.swap(new_err);
 			samples.swap(refined);
 			refined = refine_chebyshev(func, xmin, xmax, samples);
-			std::cout << "Refined to " << refined.size() << " nodes.\n"
-			          << std::flush;
 		}
 
 		/*
@@ -380,10 +538,6 @@ private:
 		}
 
 		/*
-		 * Identify
-		 */
-
-		/*
 		 * Finally, return either the refined vector or the splits:
 		 */
 		if (splits.empty())
@@ -399,32 +553,65 @@ private:
 		std::vector<subrange_t> ranges;
 
 		size_t iter = 0;
-		std::stack<real> interval_todo;
-		interval_todo.push(xmax);
+		struct interval_t {
+			real xmin;
+			real xmax;
+			interval_t(real xmin, real xmax) : xmin(xmin), xmax(xmax) {};
+		};
+		std::stack<interval_t> interval_todo;
+		interval_todo.emplace(xmin, xmax);
 		while (!interval_todo.empty() && iter < max_splits){
-			std::variant<std::vector<xf_t>,std::vector<real>>
-			    res = determine_samples(func, xmin, interval_todo.top(),
+			std::cout << std::setprecision(16);
+			std::cout << "determine_samples([" << interval_todo.top().xmin
+			          << ", " << interval_todo.top().xmax << "])\n";
+			std::variant<std::vector<xf_t>,std::vector<real>,
+			             std::vector<discontinuity_t>>
+			    res = determine_samples(func, interval_todo.top().xmin,
+			                            interval_todo.top().xmax,
 			                            tol_rel, tol_abs, fmin, fmax);
 			if (res.index() == 0){
+				std::cout << "no split!\n";
 				/*
 				 * Successfully determined the samples for this interval.
 				 */
 				ranges.emplace_back();
 				ranges.back().samples.swap(std::get<0>(res));
-				ranges.back().xmax = interval_todo.top();
+				ranges.back().xmax = interval_todo.top().xmax;
 				/*
 				 * Proceed to the next interval on the stack:
 				 */
-				xmin = interval_todo.top();
 				interval_todo.pop();
 			} else if (res.index() == 1){
+				std::cout << "split!\n";
 				/*
 				 * Split(s) was/were requested.
 				 */
 				std::sort(std::get<1>(res).begin(), std::get<1>(res).end(),
 				          std::greater<real>());
-				for (const real& s : std::get<1>(res))
-					interval_todo.push(s);
+				real xmax_i = interval_todo.top().xmax;
+				real xmin_i = interval_todo.top().xmin;
+				interval_todo.pop();
+				if (xmax_i <= xmin_i)
+					throw std::runtime_error("xmax_i <= xmin_i in index 2.");
+				for (const real& s : std::get<1>(res)){
+					interval_todo.emplace(s, xmax_i);
+					xmax_i = s;
+				}
+				interval_todo.emplace(xmin_i, xmax_i);
+			} else if (res.index() == 2){
+				std::cout << "discontinuity split!\n";
+				std::sort(std::get<2>(res).begin(), std::get<2>(res).end(),
+				          std::greater<discontinuity_t>());
+				real xmax_i = interval_todo.top().xmax;
+				real xmin_i = interval_todo.top().xmin;
+				if (xmax_i <= xmin_i)
+					throw std::runtime_error("xmax_i <= xmin_i in index 2.");
+				interval_todo.pop();
+				for (const discontinuity_t& s : std::get<2>(res)){
+					interval_todo.emplace(s.x, xmax_i);
+					xmax_i = std::nextafter(s.x, xmin_i);
+				}
+				interval_todo.emplace(xmin_i, xmax_i);
 			} else {
 				throw std::runtime_error("Variant initialization exception in "
 				                         "the BarycentricLagrangeInterpolator "
