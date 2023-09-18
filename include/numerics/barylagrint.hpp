@@ -430,10 +430,6 @@ private:
 			 */
 			if (!old_err.empty()){
 				/*  */
-				std::cout << "old_err.size() : " << old_err.size() << "\n";
-				std::cout << "new_err.size() : " << new_err.size() << "\n";
-				std::cout << "samples.size() : " << samples.size() << "\n";
-				std::cout << std::flush;
 				std::vector<discontinuity_t> discontinuities;
 				for (size_t i=0; i<new_err.size(); ++i){
 					/* Restrict these checks to those intervals in which the
@@ -448,13 +444,6 @@ private:
 							                       xmin, xmax, fmin, fmax)
 							);
 							if (disco){
-								std::cout << "found discontinuity in interval ["
-									<< chebyshev_point(i+1, new_err.size()+1,
-									                   xmin, xmax)
-									<< ", "
-									<< chebyshev_point(i, new_err.size()+1,
-									                   xmin, xmax)
-									<< "]\n";
 								/* Is a discontinuity! */
 								discontinuities.push_back(*disco);
 							}
@@ -462,12 +451,6 @@ private:
 					}
 				}
 				if (!discontinuities.empty()){
-					std::cout << std::setprecision(16);
-					std::cout << "Returning discontinuities [";
-					for (const discontinuity_t& d : discontinuities){
-						std::cout << d.x << ", ";
-					}
-					std::cout << "]\n" << std::flush;
 					return discontinuities;
 				}
 			}
@@ -566,8 +549,6 @@ private:
 						}
 					}
 					if (successes == 2){
-						std::cout << "add splits [" << samples[j1].x << ", "
-						          << samples[j0].x << "]\n";
 						splits.push_back(samples[j0].x);
 						splits.push_back(samples[j1].x);
 					} else {
@@ -577,11 +558,6 @@ private:
 						splits.push_back(min.first);
 					}
 				}
-//				std::cout << "Found minimum f(" << min.first << ") = "
-//				          << min.second << ".\n"
-//				          << "  used range: [" << xl << ", " << xr << "]\n"
-//				          << "  iter: " << max_iter << "\n"
-//				          << std::flush;
 			}
 		}
 
@@ -610,9 +586,6 @@ private:
 		std::stack<interval_t> interval_todo;
 		interval_todo.emplace(xmin, xmax);
 		while (!interval_todo.empty() && iter < max_splits){
-			std::cout << std::setprecision(16);
-			std::cout << "determine_samples([" << interval_todo.top().xmin
-			          << ", " << interval_todo.top().xmax << "])\n";
 			std::variant<std::vector<xf_t>,std::vector<real>,
 			             std::vector<discontinuity_t>>
 			    res = determine_samples(func, interval_todo.top().xmin,
@@ -620,7 +593,6 @@ private:
 			                            tol_rel, tol_abs, fmin, fmax,
 			                            max_refinements);
 			if (res.index() == 0){
-				std::cout << "no split!\n";
 				/*
 				 * Successfully determined the samples for this interval.
 				 */
@@ -632,7 +604,6 @@ private:
 				 */
 				interval_todo.pop();
 			} else if (res.index() == 1){
-				std::cout << "split!\n";
 				/*
 				 * Split(s) was/were requested.
 				 */
@@ -649,7 +620,6 @@ private:
 				}
 				interval_todo.emplace(xmin_i, xmax_i);
 			} else if (res.index() == 2){
-				std::cout << "discontinuity split!\n";
 				std::sort(std::get<2>(res).begin(), std::get<2>(res).end(),
 				          std::greater<discontinuity_t>());
 				real xmax_i = interval_todo.top().xmax;

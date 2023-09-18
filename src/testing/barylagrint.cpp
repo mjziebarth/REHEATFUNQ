@@ -53,7 +53,6 @@ void test_barycentric_lagrange_interpolator()
 	 * Function 2:
 	 * f(x) = sin(x)**2
 	 */
-	std::cout << "\n--- function 2 ---\n";
 	auto fun2 = [](long double x) -> long double
 	{
 		double sx = std::sin(x);
@@ -82,7 +81,6 @@ void test_barycentric_lagrange_interpolator()
 	 * Function 3:
 	 * f(x) = Theta(x - 2.0)
 	 */
-	std::cout << "\n--- function 3 ---\n";
 	auto fun3 = [](double x) -> double
 	{
 		if (x > 2.0)
@@ -111,7 +109,6 @@ void test_barycentric_lagrange_interpolator()
 	 * Function 4:
 	 * f(x) = exp(-(x-2.0)**2 / (2 * 0.5**2))
 	 */
-	std::cout << "\n--- function 4 ---\n";
 	auto fun4 = [](double x) -> double
 	{
 		double dx = x - 2.0;
