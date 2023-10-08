@@ -89,6 +89,7 @@ public:
 		return Qmax;
 	}
 
+	template<bool use_bli=true>
 	void pdf(std::vector<double>& PH) const
 	{
 		const size_t Nx = PH.size();
@@ -110,7 +111,7 @@ public:
 				continue;
 			}
 			try {
-				result[i] = pdf_single(PH[i]);
+				result[i] = pdf_single<use_bli>(PH[i]);
 			} catch (const std::exception& e) {
 				except = e;
 			}
@@ -120,219 +121,282 @@ public:
 			throw except;
 	}
 
+	template<bool use_bli=true>
 	void cdf(std::vector<double>& PH, bool parallel=true,
 	         bool adaptive=false) const
 	{
 		const size_t Nx = PH.size();
-		std::vector<real> result(PH.size());
 
-		/*
-		 * Compute the CDF via successive integration over the intervals.
-		 * The approach varies depending on whether the input points are sorted
-		 * or not.
-		 */
-		if (std::is_sorted(PH.cbegin(), PH.cend()))
-		{
-			/* Already sorted. */
-			cdf_sorted<false>(PH, result, adaptive, parallel);
+		if (use_bli){
+			if (!cdf_interp)
+				cdf_interp.emplace(init_cdf_bli(locals, weights, Qmax, norm));
 
-			for (size_t i=0; i<Nx; ++i)
-				PH[i] = result[i];
+			/*
+			 * OMP-compatible exception propagation code:
+			 */
+			std::exception_ptr error;
+
+			#pragma omp parallel if(parallel)
+			for (size_t i=0; i<Nx; ++i){
+				if (error)
+					continue;
+				std::exception_ptr local_error;
+				try {
+					/*
+					 * The actual numerical code:
+					 */
+					PH[i] = (*cdf_interp)(PH[i]);
+				} catch (...) {
+					local_error = std::current_exception();
+				}
+				if (local_error){
+					#pragma omp critical
+					{
+						error = local_error;
+					}
+				}
+			}
+
+			/* Handle potential errors that occurred: */
+			if (error){
+				std::string msg = "An error occurred while computing the "
+				                  "posterior CDF: ";
+				try {
+					std::rethrow_exception(error);
+				} catch (const std::runtime_error& e) {
+					msg += e.what();
+				}
+				throw std::runtime_error(msg);
+			}
 
 		} else {
-			/*
-			 * Create the ordering for successive integration:
-			 */
-			struct order_t {
-				double x;
-				size_t i;
-			};
-			std::vector<order_t> order(Nx);
-			for (size_t i=0; i<Nx; ++i){
-				order[i].i = i;
-				order[i].x = PH[i];
-			}
-			std::sort(order.begin(), order.end(),
-			          [&PH](order_t o0, order_t o1) -> bool
-			          {
-			              return o0.x < o1.x;
-			          });
-			for (size_t i=0; i<Nx; ++i){
-				PH[i] = order[i].x;
-			}
+			std::vector<real> result(PH.size());
 
 			/*
-			 * Call the algorithm on the ordered vector:
+			 * Compute the CDF via successive integration over the intervals.
+			 * The approach varies depending on whether the input points are sorted
+			 * or not.
 			 */
-			cdf_sorted<false>(PH, result, adaptive, parallel);
+			if (std::is_sorted(PH.cbegin(), PH.cend()))
+			{
+				/* Already sorted. */
+				cdf_sorted<false>(PH, result, adaptive, parallel);
 
-			/*
-			 * Transfer the results:
-			 */
-			for (size_t i=0; i<Nx; ++i)
-				PH[order[i].i] = result[i];
+				for (size_t i=0; i<Nx; ++i)
+					PH[i] = result[i];
+
+			} else {
+				/*
+				 * Create the ordering for successive integration:
+				 */
+				struct order_t {
+					double x;
+					size_t i;
+				};
+				std::vector<order_t> order(Nx);
+				for (size_t i=0; i<Nx; ++i){
+					order[i].i = i;
+					order[i].x = PH[i];
+				}
+				std::sort(order.begin(), order.end(),
+				          [&PH](order_t o0, order_t o1) -> bool
+				          {
+				              return o0.x < o1.x;
+				          });
+				for (size_t i=0; i<Nx; ++i){
+					PH[i] = order[i].x;
+				}
+
+				/*
+				 * Call the algorithm on the ordered vector:
+				 */
+				cdf_sorted<false>(PH, result, adaptive, parallel);
+
+				/*
+				 * Transfer the results:
+				 */
+				for (size_t i=0; i<Nx; ++i)
+					PH[order[i].i] = result[i];
+			}
 		}
 	}
 
 
-	template<typename real_in=double>
+	template<typename real_in=double, bool use_bli=true>
 	void tail(std::vector<real_in>& PH, bool parallel=true,
 	          bool adaptive=false) const
 	{
 		const size_t Nx = PH.size();
-		std::vector<real> result(PH.size());
 
-		/*
-		 * Compute the CDF via successive integration over the intervals.
-		 * The approach varies depending on whether the input points are sorted
-		 * or not.
-		 */
-		if (std::is_sorted(PH.cbegin(), PH.cend()))
-		{
-			/* Already sorted. */
-			std::cout << "sorted.\n" << std::flush;
-			cdf_sorted<true>(PH, result, adaptive, parallel);
+		if (use_bli){
+			if (!tail_interp)
+				tail_interp.emplace(init_tail_bli(locals, weights, Qmax, norm));
 
-			for (size_t i=0; i<Nx; ++i)
-				PH[i] = result[i];
+			/*
+			 * OMP-compatible exception propagation code:
+			 */
+			std::exception_ptr error;
+
+			#pragma omp parallel if(parallel)
+			for (size_t i=0; i<Nx; ++i){
+				if (error)
+					continue;
+				std::exception_ptr local_error;
+				try {
+					/*
+					 * The actual numerical code:
+					 */
+					PH[i] = (*tail_interp)(PH[i]);
+				} catch (...) {
+					local_error = std::current_exception();
+				}
+				if (local_error){
+					#pragma omp critical
+					{
+						error = local_error;
+					}
+				}
+			}
+
+			/* Handle potential errors that occurred: */
+			if (error){
+				std::string msg = "An error occurred while computing the "
+				                  "posterior tail CDF: ";
+				try {
+					std::rethrow_exception(error);
+				} catch (const std::runtime_error& e) {
+					msg += e.what();
+				}
+				throw std::runtime_error(msg);
+			}
 
 		} else {
-			/*
-			 * Create the ordering for successive integration:
-			 */
-			std::cout << "not sorted.\n" << std::flush;
-			struct order_t {
-				double x;
-				size_t i;
-			};
-			std::vector<order_t> order(Nx);
-			for (size_t i=0; i<Nx; ++i){
-				order[i].i = i;
-				order[i].x = PH[i];
-			}
-			std::sort(order.begin(), order.end(),
-			          [&PH](order_t o0, order_t o1) -> bool
-			          {
-			              return o0.x < o1.x;
-			          });
-			for (size_t i=0; i<Nx; ++i){
-				PH[i] = order[i].x;
-			}
+			std::vector<real> result(PH.size());
 
 			/*
-			 * Call the algorithm on the ordered vector:
+			 * Compute the CDF via successive integration over the intervals.
+			 * The approach varies depending on whether the input points are sorted
+			 * or not.
 			 */
-			cdf_sorted<true>(PH, result, adaptive, parallel);
+			if (std::is_sorted(PH.cbegin(), PH.cend()))
+			{
+				/* Already sorted. */
+				std::cout << "sorted.\n" << std::flush;
+				cdf_sorted<true>(PH, result, adaptive, parallel);
 
-			/*
-			 * Transfer the results:
-			 */
-			for (size_t i=0; i<Nx; ++i)
-				PH[order[i].i] = result[i];
+				for (size_t i=0; i<Nx; ++i)
+					PH[i] = result[i];
+
+			} else {
+				/*
+				 * Create the ordering for successive integration:
+				 */
+				std::cout << "not sorted.\n" << std::flush;
+				struct order_t {
+					double x;
+					size_t i;
+				};
+				std::vector<order_t> order(Nx);
+				for (size_t i=0; i<Nx; ++i){
+					order[i].i = i;
+					order[i].x = PH[i];
+				}
+				std::sort(order.begin(), order.end(),
+				          [&PH](order_t o0, order_t o1) -> bool
+				          {
+				              return o0.x < o1.x;
+				          });
+				for (size_t i=0; i<Nx; ++i){
+					PH[i] = order[i].x;
+				}
+
+				/*
+				 * Call the algorithm on the ordered vector:
+				 */
+				cdf_sorted<true>(PH, result, adaptive, parallel);
+
+				/*
+				 * Transfer the results:
+				 */
+				for (size_t i=0; i<Nx; ++i)
+					PH[order[i].i] = result[i];
+			}
 		}
 	}
 
+	template<bool use_bli=true>
 	void tail_quantiles(std::vector<double>& quantiles, size_t n_chebyshev=100,
 	                    bool parallel=true, bool adaptive=false) const
 	{
-		if (n_chebyshev <= 1)
-			throw std::runtime_error("Need at least 2 Chebyshev points.");
-
-		/* The support for the interpolation: */
-		struct xf_t {
-			double x;
-			real f;
-		};
-		std::vector<xf_t> support(n_chebyshev, xf_t({0.0, 0.0}));
-		{
-			/* Prepare the interpolation points: */
-			for (size_t i=0; i<n_chebyshev; ++i){
-				constexpr long double pi = std::numbers::pi_v<long double>;
-				real z = std::cos(i * pi / (n_chebyshev-1));
-				support[i].x = std::min(std::max<double>(0.5 * (1.0+z) * Qmax,
-				                                         0.0),
-				                        (double)Qmax);
-			}
+		if (use_bli){
+			if (!tail_interp)
+				tail_interp.emplace(init_tail_bli(locals, weights, Qmax, norm));
 
 			/*
-			 * Evaluate the posterior tail.
-			 * We fill f with x values - but in reverse order since `x`
-			 * is monotonously decreasing.
+			 * OMP-compatible exception propagation code:
 			 */
-			std::vector<real> f(n_chebyshev);
-			for (size_t i=0; i<n_chebyshev; ++i){
-				f[i] = support[n_chebyshev-i-1].x;
-			}
-			tail<real>(f, parallel, adaptive);
+			std::exception_ptr error;
 
-			/* Transfer to the support vector: */
-			for (size_t i=0; i<n_chebyshev; ++i){
-				support[i].f = f[n_chebyshev - i - 1];
-			}
-		}
+			#pragma omp parallel if(parallel)
+			for (size_t i=0; i<quantiles.size(); ++i){
+				if (error)
+					continue;
 
-		/* Now we can interpolate: */
-		auto tail_bli = [&support,n_chebyshev](double PH) -> double {
-			auto xfit = support.cbegin();
-			if (PH == xfit->x)
-				return xfit->f;
-			rn::KahanAdder<real> nom(0.0);
-			rn::KahanAdder<real> denom(0.0);
-			real wi = 0.5 / (PH - xfit->x);
-			nom += wi * xfit->f;
-			denom += wi;
-			int sign = -1;
-			++xfit;
-			for (size_t i=1; i<n_chebyshev-1; ++i){
-				if (PH == xfit->x)
-					return xfit->f;
-				wi = sign * 1.0 / (PH - xfit->x);
-				nom += wi * xfit->f;
-				denom += wi;
-				sign = -sign;
-				++xfit;
+				std::exception_ptr local_error;
+				if (quantiles[i] == 0.0)
+					quantiles[i] = Qmax;
+				else if (quantiles[i] == 1.0)
+					quantiles[i] = 0.0;
+				else if (quantiles[i] > 0.0 && quantiles[i] < 1.0){
+					/* The typical case. Use TOMS 748 on a quantile
+					 * function to find the quantile.
+					 */
+					const real qi = quantiles[i];
+					auto quantile_function =
+					[this,qi](real PH) -> real
+					{
+						return (*tail_interp)(PH) - qi;
+					};
+					std::uintmax_t max_iter(100);
+					bmt::eps_tolerance<real>
+					   eps_tol(std::numeric_limits<real>::digits - 2);
+					try {
+						std::pair<real,real> bracket
+						   = bmt::toms748_solve(quantile_function,
+						                    static_cast<real>(0.0), Qmax,
+						                    static_cast<real>(1.0-quantiles[i]),
+						                    static_cast<real>(-quantiles[i]),
+						                    eps_tol, max_iter);
+						quantiles[i] = 0.5*(bracket.first + bracket.second);
+					} catch (...) {
+						local_error = std::current_exception();
+					}
+				} else {
+					local_error = std::make_exception_ptr(
+					    std::runtime_error("Encountered quantile out of bounds "
+					                       "[0,1]."));
+				}
+				if (local_error){
+					#pragma omp critical
+					{
+						error = local_error;
+					}
+				}
 			}
-			if (PH == xfit->x)
-				return xfit->f;
-			wi = sign * 0.5 / (PH - xfit->x);
-			nom += wi * xfit->f;
-			denom += wi;
-			return std::max<double>(
-			          std::min<double>(static_cast<double>(nom)
-			                           / static_cast<double>(denom),
-			                           1.0),
-			          0.0
-			);
-		};
 
-		/* Now solve for the quantiles: */
-		for (size_t i=0; i<quantiles.size(); ++i){
-			if (quantiles[i] == 0.0)
-				quantiles[i] = Qmax;
-			else if (quantiles[i] == 1.0)
-				quantiles[i] = 0.0;
-			else if (quantiles[i] > 0.0 && quantiles[i] < 1.0){
-				/* The typical case. Use TOMS 748 on a quantile
-				 * function to find the quantile.
-				 */
-				const double qi = quantiles[i];
-				auto quantile_function =
-				[&tail_bli,qi](double PH) -> double
-				{
-					return tail_bli(PH) - qi;
-				};
-				std::uintmax_t max_iter(100);
-				bmt::eps_tolerance<double>
-				   eps_tol(std::numeric_limits<double>::digits - 2);
-				std::pair<double,double> bracket
-				   = bmt::toms748_solve(quantile_function, 0.0, (double)Qmax,
-				                        1.0-quantiles[i], -quantiles[i],
-				                        eps_tol, max_iter);
-				quantiles[i] = 0.5*(bracket.first + bracket.second);
-			} else {
-				throw std::runtime_error("Encountered quantile out of bounds "
-				                         "[0,1].");
+			/* Handle potential errors that occurred: */
+			if (error){
+				std::string msg = "An error occurred while computing the "
+				                  "posterior tail quantiles: ";
+				try {
+					std::rethrow_exception(error);
+				} catch (const std::runtime_error& e) {
+					msg += e.what();
+				}
+				throw std::runtime_error(msg);
 			}
+		} else {
+			tail_quantiles_old(quantiles, n_chebyshev, parallel, adaptive);
 		}
 	}
 
@@ -397,6 +461,10 @@ private:
 	double dest_tol;
 
 	rn::PiecewiseBarycentricLagrangeInterpolator<real> pdf_interp;
+	mutable std::optional<rn::PiecewiseBarycentricLagrangeInterpolator<real>>
+	    cdf_interp;
+	mutable std::optional<rn::PiecewiseBarycentricLagrangeInterpolator<real>>
+	    tail_interp;
 
 	Posterior(std::vector<posterior::LocalsAndNorm<real>>&& locals,
 	          std::vector<real>&& weights, double p, double s, double n,
@@ -544,6 +612,79 @@ private:
 	}
 
 
+	static rn::PiecewiseBarycentricLagrangeInterpolator<real>
+	init_cdf_bli(const std::vector<posterior::LocalsAndNorm<real>>& locals,
+	             const std::vector<real>& weights,
+	             const posterior::arg<real>::type Qmax,
+	             const posterior::arg<real>::type norm)
+	{
+		auto pdf =
+		  [&locals, &weights, &norm](const posterior::arg<real>::type x) -> real
+		{
+			return pdf_single_explicit(x, locals, weights, norm);
+		};
+		auto cdf = [pdf, Qmax](const posterior::arg<real>::type x) -> real
+		{
+			if (x <= 0)
+				return 0.0;
+			else if (x >= Qmax)
+				return 1.0;
+
+			/* Integrate: */
+			const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
+			bmq::tanh_sinh<real> integrator;
+			real error, L1;
+			size_t lvl;
+			real I = integrator.integrate(pdf, 0.0, x, TOL_TANH_SINH, &error,
+			                              &L1, &lvl);
+			if (error / L1 > TOL_TANH_SINH)
+				throw std::runtime_error("Large error in init_cdf_bli.");
+			return std::min<real>(std::max<real>(I, 0.0), 1.0);
+		};
+		const real tol_rel = std::sqrt(std::numeric_limits<real>::epsilon());
+		const real tol_abs = std::numeric_limits<real>::infinity();
+		return rn::PiecewiseBarycentricLagrangeInterpolator<real>(cdf, 0.0,
+		                                  Qmax, tol_rel, tol_abs, 0.0, 1.0);
+	}
+
+
+	static rn::PiecewiseBarycentricLagrangeInterpolator<real>
+	init_tail_bli(const std::vector<posterior::LocalsAndNorm<real>>& locals,
+	              const std::vector<real>& weights,
+	              const posterior::arg<real>::type Qmax,
+	              const posterior::arg<real>::type norm)
+	{
+		auto pdf =
+		  [&locals, &weights, &norm](const posterior::arg<real>::type x) -> real
+		{
+			return pdf_single_explicit(x, locals, weights, norm);
+		};
+		auto tail = [pdf, Qmax](const posterior::arg<real>::type x) -> real
+		{
+			if (x <= 0)
+				return 1.0;
+			else if (x >= Qmax)
+				return 0.0;
+
+			/* Integrate: */
+			const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
+			bmq::tanh_sinh<real> integrator;
+			real error, L1;
+			size_t lvl;
+			real I = integrator.integrate(pdf, x, Qmax, TOL_TANH_SINH, &error,
+			                              &L1, &lvl);
+			if (error / L1 > TOL_TANH_SINH)
+				throw std::runtime_error("Large error in init_tail_bli.");
+			return std::min<real>(std::max<real>(I, 0.0), 1.0);
+		};
+		const real tol_rel = std::sqrt(std::numeric_limits<real>::epsilon());
+		const real tol_abs = std::numeric_limits<real>::infinity();
+		return rn::PiecewiseBarycentricLagrangeInterpolator<real>(tail, 0.0,
+		                                  Qmax, tol_rel, tol_abs, 0.0, 1.0);
+	}
+
+
+
 	static real pdf_single_explicit(const posterior::arg<real>::type x,
 	                const std::vector<posterior::LocalsAndNorm<real>>& locals,
 	                const std::vector<real>& weights,
@@ -576,7 +717,11 @@ private:
 	}
 
 
+	template<bool use_bli>
 	real pdf_single(const posterior::arg<real>::type x) const {
+		if (use_bli){
+			return pdf_single_explicit(x, locals, weights, norm);
+		}
 		if (x < 0)
 			return 0.0;
 		else if (x > Qmax)
@@ -585,7 +730,7 @@ private:
 	}
 
 
-	template<bool tail, typename real_in=double>
+	template<bool tail, typename real_in=double, bool use_bli=true>
 	void cdf_sorted(const std::vector<real_in>& x,
 	                std::vector<real>& res, bool adaptive,
 	                bool parallel) const
@@ -597,7 +742,7 @@ private:
 		typedef bmq::gauss<real,7> GL;
 
 		auto integrand = [this](const posterior::arg<real>::type x) -> real {
-			return pdf_single(x);
+			return pdf_single<use_bli>(x);
 		};
 
 		/* Start from 0.0: */
@@ -664,6 +809,111 @@ private:
 			for (size_t i=1; i<x.size(); ++i){
 				cdfi += res[i];
 				res[i] = cdfi;
+			}
+		}
+	}
+
+	void tail_quantiles_old(std::vector<double>& quantiles,
+	                        size_t n_chebyshev, bool parallel,
+	                        bool adaptive) const
+	{
+		if (n_chebyshev <= 1)
+			throw std::runtime_error("Need at least 2 Chebyshev points.");
+
+		/* The support for the interpolation: */
+		struct xf_t {
+			double x;
+			real f;
+		};
+		std::vector<xf_t> support(n_chebyshev, xf_t({0.0, 0.0}));
+		{
+			/* Prepare the interpolation points: */
+			for (size_t i=0; i<n_chebyshev; ++i){
+				constexpr long double pi = std::numbers::pi_v<long double>;
+				real z = std::cos(i * pi / (n_chebyshev-1));
+				support[i].x = std::min(std::max<double>(0.5 * (1.0+z) * Qmax,
+				                                         0.0),
+				                        (double)Qmax);
+			}
+
+			/*
+			 * Evaluate the posterior tail.
+			 * We fill f with x values - but in reverse order since `x`
+			 * is monotonously decreasing.
+			 */
+			std::vector<real> f(n_chebyshev);
+			for (size_t i=0; i<n_chebyshev; ++i){
+				f[i] = support[n_chebyshev-i-1].x;
+			}
+			tail<real>(f, parallel, adaptive);
+
+			/* Transfer to the support vector: */
+			for (size_t i=0; i<n_chebyshev; ++i){
+				support[i].f = f[n_chebyshev - i - 1];
+			}
+		}
+
+		/* Now we can interpolate: */
+		auto tail_bli = [&support,n_chebyshev](double PH) -> double {
+			auto xfit = support.cbegin();
+			if (PH == xfit->x)
+				return xfit->f;
+			rn::KahanAdder<real> nom(0.0);
+			rn::KahanAdder<real> denom(0.0);
+			real wi = 0.5 / (PH - xfit->x);
+			nom += wi * xfit->f;
+			denom += wi;
+			int sign = -1;
+			++xfit;
+			for (size_t i=1; i<n_chebyshev-1; ++i){
+				if (PH == xfit->x)
+					return xfit->f;
+				wi = sign * 1.0 / (PH - xfit->x);
+				nom += wi * xfit->f;
+				denom += wi;
+				sign = -sign;
+				++xfit;
+			}
+			if (PH == xfit->x)
+				return xfit->f;
+			wi = sign * 0.5 / (PH - xfit->x);
+			nom += wi * xfit->f;
+			denom += wi;
+			return std::max<double>(
+			          std::min<double>(static_cast<double>(nom)
+			                           / static_cast<double>(denom),
+			                           1.0),
+			          0.0
+			);
+		};
+
+		/* Now solve for the quantiles: */
+		for (size_t i=0; i<quantiles.size(); ++i){
+			if (quantiles[i] == 0.0)
+				quantiles[i] = Qmax;
+			else if (quantiles[i] == 1.0)
+				quantiles[i] = 0.0;
+			else if (quantiles[i] > 0.0 && quantiles[i] < 1.0){
+				/* The typical case. Use TOMS 748 on a quantile
+				 * function to find the quantile.
+				 */
+				const double qi = quantiles[i];
+				auto quantile_function =
+				[&tail_bli,qi](double PH) -> double
+				{
+					return tail_bli(PH) - qi;
+				};
+				std::uintmax_t max_iter(100);
+				bmt::eps_tolerance<double>
+				   eps_tol(std::numeric_limits<double>::digits - 2);
+				std::pair<double,double> bracket
+				   = bmt::toms748_solve(quantile_function, 0.0, (double)Qmax,
+				                        1.0-quantiles[i], -quantiles[i],
+				                        eps_tol, max_iter);
+				quantiles[i] = 0.5*(bracket.first + bracket.second);
+			} else {
+				throw std::runtime_error("Encountered quantile out of bounds "
+				                         "[0,1].");
 			}
 		}
 	}
