@@ -141,18 +141,24 @@ public:
 				if (error)
 					continue;
 				std::exception_ptr local_error;
-				try {
-					/*
-					 * The actual numerical code:
-					 */
-					PH[i] = (*cdf_interp)(PH[i]);
-				} catch (...) {
-					local_error = std::current_exception();
-				}
-				if (local_error){
-					#pragma omp critical
-					{
-						error = local_error;
+				if (PH[i] <= 0.0)
+					PH[i] = 0.0;
+				else if (PH[i] >= Qmax)
+					PH[i] = 1.0;
+				else {
+					try {
+						/*
+						 * The actual numerical code:
+						 */
+						PH[i] = (*cdf_interp)(PH[i]);
+					} catch (...) {
+						local_error = std::current_exception();
+					}
+					if (local_error){
+						#pragma omp critical
+						{
+							error = local_error;
+						}
 					}
 				}
 			}
