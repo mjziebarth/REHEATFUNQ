@@ -42,6 +42,8 @@
 
 #include <chrono>
 #include <thread>
+#include <string>
+#include <sstream>
 
 
 
@@ -726,8 +728,17 @@ private:
 			size_t lvl;
 			real I = integrator.integrate(pdf, x, Qmax, TOL_TANH_SINH, &error,
 			                              &L1, &lvl);
-			if (error / L1 > TOL_TANH_SINH)
-				throw std::runtime_error("Large error in init_tail_bli.");
+			if (error / L1 > TOL_TANH_SINH){
+				std::stringstream msg;
+				msg << "Large error in init_tail_bli. At x=";
+				msg << std::setprecision(20);
+				msg << x << ", z=" << x / Qmax;
+				msg << ".\nerror =" << error;
+				msg << ".\nL1    =" << L1
+				    << ".\nlevel =" << lvl << "\n";
+				msg << ".\nxmax  =" << locals[0].ztrans * locals[0].Qmax << "\n";
+				throw std::runtime_error(msg.str());
+			}
 			return std::min<real>(std::max<real>(I, 0.0), 1.0);
 		};
 		const real tol_rel = std::sqrt(std::numeric_limits<real>::epsilon());
