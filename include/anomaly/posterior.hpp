@@ -714,7 +714,7 @@ private:
 		{
 			return pdf_single_explicit(x, locals, weights, norm);
 		};
-		auto tail = [pdf, Qmax](const posterior::arg<real>::type x) -> real
+		auto tail = [pdf, Qmax, &locals](const posterior::arg<real>::type x) -> real
 		{
 			if (x <= 0)
 				return 1.0;
