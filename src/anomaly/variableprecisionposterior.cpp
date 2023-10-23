@@ -372,3 +372,78 @@ VariablePrecisionPosterior::validate(
 	}
 	throw std::runtime_error("This code is not reached.");
 }
+
+
+void VariablePrecisionPosterior::get_locals(size_t l, double& lp, double& ls,
+		double& n, double& v, double& amin, double& Qmax, std::vector<double>& ki,
+	    double& h0, double& h1, double& h2, double& h3, double& w, double& lh0,
+		double& l1p_w, double& log_scale, double& ymax, double& norm) const
+{
+	switch (precision){
+		case precision_t::WP_DOUBLE:
+			return posterior_double->get_locals(l, lp, ls, n, v, amin, Qmax, ki,
+			                                    h0, h1, h2, h3, w, lh0, l1p_w,
+			                                         log_scale, ymax, norm);
+		case precision_t::WP_LONG_DOUBLE:
+			return posterior_long_double->get_locals(l, lp, ls, n, v, amin, Qmax,
+			                                         ki, h0, h1, h2, h3, w, lh0,
+			                                         l1p_w, log_scale, ymax, norm);
+		case precision_t::WP_FLOAT_128:
+			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
+			return posterior_float128->get_locals(l, lp, ls, n, v, amin, Qmax, ki,
+			                                      h0, h1, h2, h3, w, lh0, l1p_w,
+			                                      log_scale, ymax, norm);
+			#else
+			throw std::runtime_error("Code not compiled with float128 support.");
+			#endif
+		case precision_t::WP_BOOST_DEC_50:
+			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50
+			return posterior_dec50->get_locals(l, lp, ls, n, v, amin, Qmax, ki,
+			                                   h0, h1, h2, h3, w, lh0, l1p_w,
+			                                   log_scale, ymax, norm);
+			#else
+			throw std::runtime_error("Code not compiled with boost dec50 support.");
+			#endif
+			break;
+		case precision_t::WP_BOOST_DEC_100:
+			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100
+			return posterior_dec100->get_locals(l, lp, ls, n, v, amin, Qmax, ki,
+			                                    h0, h1, h2, h3, w, lh0, l1p_w,
+			                                    log_scale, ymax, norm);
+			#else
+			throw std::runtime_error("Code not compiled with boost dec100 support.");
+			#endif
+			break;
+		default:
+			break;
+	}
+	throw std::runtime_error("This code is not reached.");
+}
+
+
+void VariablePrecisionPosterior::get_C(double a, size_t l, double& C0,
+     double& C1, double& C2, double& C3
+) const
+{
+	switch (precision){
+		case precision_t::WP_DOUBLE:
+			return posterior_double->get_C(a, l, C0, C1, C2, C3);
+		case precision_t::WP_LONG_DOUBLE:
+			return posterior_long_double->get_C(a, l, C0, C1, C2, C3);
+		case precision_t::WP_FLOAT_128:
+			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
+			return posterior_float128->get_C(a, l, C0, C1, C2, C3);
+			#endif
+		case precision_t::WP_BOOST_DEC_50:
+			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50
+			return posterior_dec50->get_C(a, l, C0, C1, C2, C3);
+			#endif
+		case precision_t::WP_BOOST_DEC_100:
+			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100
+			return posterior_dec100->get_C(a, l, C0, C1, C2, C3);
+			#endif
+		default:
+			break;
+	}
+	throw std::runtime_error("This code is not reached.");
+}

@@ -445,6 +445,53 @@ public:
 	              double p0, double s0, double n0, double v0,
 	              double dest_tol) const;
 
+	void get_locals(size_t l, double& lp, double& ls, double& n, double& v,
+	                double& amin, double& Qmax, std::vector<double>& ki,
+	                double& h0, double& h1, double& h2, double& h3,
+	                double& w, double& lh0, double& l1p_w, double& log_scale,
+					double& ymax, double& norm) const
+	{
+		if (l >= locals.size())
+			throw std::runtime_error("Index 'l' out of bounds.");
+		lp = locals[l].lp;
+		ls = locals[l].ls;
+		n = locals[l].n;
+		v = locals[l].v;
+		amin = locals[l].amin;
+		Qmax = locals[l].Qmax;
+		ki.resize(locals[l].ki.size());
+		for (size_t i=0; i<locals[l].ki.size(); ++i){
+			ki[i] = locals[l].ki[i];
+		}
+		h0 = locals[l].h[0];
+		h1 = locals[l].h[1];
+		h2 = locals[l].h[2];
+		h3 = locals[l].h[3];
+		w = locals[l].w;
+		lh0 = locals[l].lh0;
+		l1p_w = locals[l].l1p_w;
+		log_scale = locals[l].log_scale.log_integrand;
+		ymax = locals[l].ymax;
+		norm = locals[l].norm;
+	}
+
+	/*
+	 * Debugging facilities.
+	 */
+	void get_C(real a, size_t l,
+	           double& C0, double& C1, double& C2, double& C3) const
+	{
+		if (l >= locals.size())
+			throw std::runtime_error("Index 'l' out of bounds.");
+		posterior::C1_t c1(a, locals[l]);
+		posterior::C2_t c2(a, locals[l]);
+		posterior::C3_t c3(a, locals[l]);
+		// Save the values:
+		C0 = 1.0;
+		C1 = c1.deriv0;
+		C2 = c2.deriv0;
+		C3 = c3.deriv0;
+	}
 
 private:
 

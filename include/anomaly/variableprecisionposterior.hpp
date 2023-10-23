@@ -83,6 +83,17 @@ public:
 	              double p0, double s0, double n0, double v0,
 	                      double dest_tol) const;
 
+	/*
+	 * Debug output:
+	 */
+	void get_locals(size_t l, double& lp, double& ls, double& n, double& v,
+	                double& amin, double& Qmax, std::vector<double>& ki,
+	                double& h0, double& h1, double& h2, double& h3,
+	                double& w, double& lh0, double& l1p_w, double& log_scale,
+					double& ymax, double& norm) const;
+
+	void get_C(double a, size_t l, double& C0, double& C1, double& C2,
+	           double& C3) const;
 
 private:
 	const precision_t precision;

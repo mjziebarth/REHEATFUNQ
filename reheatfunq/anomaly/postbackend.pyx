@@ -32,6 +32,8 @@ from libcpp.vector cimport vector
 from libcpp.memory cimport shared_ptr, make_shared
 from cython.operator cimport dereference as deref
 
+from numpy._typing import NDArray
+
 # The higher precision arithmetics for the posterior-internal
 # code are activated via compile-time defines.
 # We grab them here for later querying in Python code:
@@ -98,6 +100,15 @@ cdef extern from "anomaly/variableprecisionposterior.hpp" \
 
         bool validate(const vector[vector[qc_t]]& qc_set, double p0, double s0,
                       double n0, double v0, double dest_tol) except+
+
+        void get_locals(size_t l, double& lp, double& ls, double& n, double& v,
+	                    double& amin, double& Qmax, vector[double]& ki,
+	                    double& h0, double& h1, double& h2, double& h3,
+	                    double& w, double& lh0, double& l1p_w, double& log_scale,
+                        double& ymax, double& norm) except+
+
+        void get_C(double a, size_t l, double& C0, double& C1, double& C2,
+                   double& C3) except+
 
 
 #
@@ -296,3 +307,69 @@ cdef class CppAnomalyPosterior:
                 res[i] = work[i]
 
         return res.base
+
+    def _get_locals(self, size_t l):
+        """
+
+        """
+        if not self.post:
+            raise RuntimeError("Not properly initialized.")
+
+        cdef double lp, ls, n, v, amin, Qmax, h0, h1, h2, h3, w, lh0, l1p_w, \
+                    log_scale, ymax, norm
+        # This line prevents an unecessary Cython compiler warning:
+        lp = ls = n = v = amin = Qmax = h0 = h1 = h2 = h3 = w = lh0 = l1p_w \
+           = log_scale = ymax = norm = 0.0
+        cdef vector[double] ki
+        with nogil:
+            deref(self.post).get_locals(l, lp, ls, n, v, amin, Qmax, ki, h0,
+                                        h1, h2, h3, w, lh0, l1p_w, log_scale,
+                                        ymax, norm)
+
+        # Transfer to numpy array:
+        cdef double[::1] ki_np = np.zeros(ki.size())
+        cdef size_t i
+        with nogil:
+            for i in range(ki.size()):
+                ki_np[i] = ki[i]
+
+        # Transfer to data class:
+        from dataclasses import dataclass
+        @dataclass
+        class Locals:
+            lp: float
+            ls: float
+            n: float
+            v: float
+            amin: float
+            Qmax: float
+            ki: NDArray[np.float64]
+            h0: float
+            h1: float
+            h2: float
+            h3: float
+            w: float
+            lh0: float
+            l1p_w: float
+            log_scale: float
+            ymax: float
+            norm: float
+
+
+        return Locals(lp, ls, n, v, amin, Qmax, ki_np, h0, h1, h2, h3, w, lh0, l1p_w,
+                      log_scale, ymax, norm)
+
+
+
+
+    def _get_C(self, double a, size_t l):
+        """
+
+        """
+        if not self.post:
+            raise RuntimeError("Not properly initialized.")
+        cdef double[:] C = np.empty(4)
+        with nogil:
+            deref(self.post).get_C(a, l, C[0], C[1], C[2], C[3]);
+
+        return C.base
