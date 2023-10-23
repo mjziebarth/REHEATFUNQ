@@ -152,7 +152,9 @@ private:
 		/*
 		 * Taylor integral from z=1-ymax to z=1
 		 */
-		real full_taylor_integral(a_integral_large_z<true>(L.ymax, S, L));
+		real full_taylor_integral(
+		        a_integral_large_z<true>(L.ymax, S, L.log_scale.log_integrand, L)
+		);
 
 
 		return {.S=S, .full_taylor_integral=full_taylor_integral,
@@ -192,7 +194,9 @@ private:
 		/*
 		 * Taylor integral from z=1-ymax to z=1
 		 */
-		real full_taylor_integral(a_integral_large_z<true>(L.ymax, S, L));
+		real full_taylor_integral(
+		        a_integral_large_z<true>(L.ymax, S, L.log_scale.log_integrand, L)
+		);
 
 
 		return {.S=S, .full_taylor_integral=full_taylor_integral,

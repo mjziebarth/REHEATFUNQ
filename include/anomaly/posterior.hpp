@@ -773,7 +773,9 @@ private:
 				       * weights[j] / (Qmax_j * norm);
 			} else {
 				res += posterior::a_integral_large_z<false,real>(1.0 - zi,
-				           locals[j].norm, locals[j])
+				           locals[j].norm,
+				           locals[j].log_scale.log_integrand,
+				           locals[j])
 				       * weights[j] / (Qmax_j * norm);
 			}
 		}

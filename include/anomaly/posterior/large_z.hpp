@@ -544,6 +544,7 @@ real y_taylor_transition(const Locals<real>& L,
 template<bool y_integrated, typename real>
 real a_integral_large_z(const typename arg<real>::type ym,
                         const typename arg<real>::type S_cmp,
+                        const typename arg<real>::type log_scale,
                         const Locals<real>& L)
 {
 	/*
@@ -561,7 +562,6 @@ real a_integral_large_z(const typename arg<real>::type ym,
 
 	/* Set the integrand's non-varying parameters: */
 	const real ly = rm::log(ym);
-	const real lScmp = rm::log(S_cmp);
 
 	/* Integration setup for 'a' integrals:: */
 	real error, L1, S;
@@ -572,16 +572,16 @@ real a_integral_large_z(const typename arg<real>::type ym,
 	{
 		real S0
 		   = a_integral_large_z_integrand<C_t::C0,y_integrated,real>
-		         (a, ly, lScmp, L);
+		         (a, ly, log_scale, L);
 		real S1
 		   = a_integral_large_z_integrand<C_t::C1,y_integrated,real>
-		         (a, ly, lScmp, L);
+		         (a, ly, log_scale, L);
 		real S2
 		   = a_integral_large_z_integrand<C_t::C2,y_integrated,real>
-		         (a, ly, lScmp, L);
+		         (a, ly, log_scale, L);
 		real S3
 		   = a_integral_large_z_integrand<C_t::C3,y_integrated,real>
-		         (a, ly, lScmp, L);
+		         (a, ly, log_scale, L);
 		return S0 + S1 + S2 + S3;
 	};
 
@@ -597,7 +597,7 @@ real a_integral_large_z(const typename arg<real>::type ym,
 	}
 	if (rm::isinf(S) || rm::isnan(S))
 		throw ScaleError<real>("a_integral_large_z", 0.0);
-	if (error > 1e-14 * std::max(L1, S_cmp))
+	if (error > std::max(TOL_TANH_SINH * L1, 1e-14 * S_cmp))
 		throw PrecisionError<real>("a_integral_large_z_S3", error, L1);
 
 	return S;
