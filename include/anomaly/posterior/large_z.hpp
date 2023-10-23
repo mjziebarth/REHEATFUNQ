@@ -44,6 +44,8 @@
 #include <boost/math/quadrature/gauss_kronrod.hpp>
 
 #include <utility>
+#include <cstdint>
+#include <string>
 
 
 /*
@@ -266,39 +268,34 @@ a_integral_large_z_log_integrand(const typename arg<real>::type a,
 {
 	const real va = L.v * a;
 
+	/* A function to compute sign and logarithm of absolute of a
+	 * real number:
+	 */
+	auto signed_log = [](const typename arg<real>::type Cx, int8_t& sign, real& lC){
+		if (Cx < 0){
+			sign = -1;
+			lC = log(-Cx);
+		} else {
+			lC = log(Cx);
+		}
+	};
+
 	// Compute C:
 	real lC = 0.0;
 	int8_t sign = 1;
-	if (C == C_t::C0){
-		/* C0 = 1 */
-		lC = 0.0;
-	} else if (C == C_t::C1) {
-		/* C1 */
-		const C1_t C1(a, L);
-		if (C1.deriv0 < 0){
-			sign = -1;
-			lC = log(-C1.deriv0);
-		} else {
-			lC = log(C1.deriv0);
-		}
-	} else if (C == C_t::C2){
-		/* C2 */
-		const C2_t C2(a, L);
-		if (C2.deriv0 < 0){
-			sign = -1;
-			lC = rm::log(-C2.deriv0);
-		} else {
-			lC = rm::log(C2.deriv0);
-		}
-	} else if (C == C_t::C3){
-		/* C3 */
-		const C3_t C3(a, L);
-		if (C3.deriv0 < 0){
-			sign = -1;
-			lC = rm::log(-C3.deriv0);
-		} else {
-			lC = rm::log(C3.deriv0);
-		}
+	switch (C){
+		case C0:
+			lC = 0.0;
+			break;
+		case C1:
+			signed_log(C1_t(a, L).deriv0, sign, lC);
+			break;
+		case C2:
+			signed_log(C2_t(a, L).deriv0, sign, lC);
+			break;
+		case C3:
+			signed_log(C3_t(a, L).deriv0, sign, lC);
+			break;
 	}
 
 	/* Check if we might want to return -inf: */
@@ -316,7 +313,7 @@ a_integral_large_z_log_integrand(const typename arg<real>::type a,
 	// from the y power integration or
 	//     C * y^(a+m-1)
 	// if not integrated
-	constexpr unsigned char m = C;
+	constexpr short m = C;
 	if (y_integrated){
 		// Integrated:
 		lC += (a + m) * ly - rm::log(a+m);
@@ -325,7 +322,7 @@ a_integral_large_z_log_integrand(const typename arg<real>::type a,
 		lC += (a + m - 1) * ly;
 	}
 
-	// Term ( s_tilde / (1-w) ) ^ va
+	// Term ( s_tilde * (1-w) ) ^ (-va)
 	lC -= va * (L.ls + L.l1p_w);
 
 	// Remaining summands:
@@ -349,35 +346,17 @@ real a_integral_large_z_integrand(const typename arg<real>::type a,
 	    = a_integral_large_z_log_integrand<C,y_integrated, real>
 	           (a, ly, log_integrand_max, L);
 	if (rm::isnan(res.log_abs)){
-		if (C == C_t::C0)
-			throw std::runtime_error("NaN result in "
-			                         "a_integral_large_z_integrand_0");
-		else if (C == C_t::C1)
-			throw std::runtime_error("NaN result in "
-			                         "a_integral_large_z_integrand_1");
-		else if (C == C_t::C2)
-			throw std::runtime_error("NaN result in "
-			                         "a_integral_large_z_integrand_2");
-		else if (C == C_t::C3)
-			throw std::runtime_error("NaN result in "
-			                         "a_integral_large_z_integrand_3");
+		std::string msg("NaN result in a_integral_large_z_integrand_");
+		msg += std::to_string((uint_fast8_t)C);
+		throw std::runtime_error(msg);
 	}
 
 	// Compute the result and test for finity:
 	real result = rm::exp(res.log_abs);
 	if (rm::isinf(result)){
-		if (C == C_t::C0)
-			throw ScaleError<real>("a_integral_large_z_integrand_0",
-			                       res.log_abs);
-		else if (C == C_t::C1)
-			throw ScaleError<real>("a_integral_large_z_integrand_1",
-			                       res.log_abs);
-		else if (C == C_t::C2)
-			throw ScaleError<real>("a_integral_large_z_integrand_2",
-			                       res.log_abs);
-		else if (C == C_t::C3)
-			throw ScaleError<real>("a_integral_large_z_integrand_3",
-			                       res.log_abs);
+		std::string msg("a_integral_large_z_integrand_");
+		msg += std::to_string((uint_fast8_t)C);
+		throw ScaleError<real>(msg.c_str(), res.log_abs);
 	}
 
 	return result;
