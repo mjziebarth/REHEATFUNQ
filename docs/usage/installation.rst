@@ -119,3 +119,32 @@ and installs libraries to the :code:`/sci` directory.
 In case that swapping the base image is neccessary but does not work out of the
 box, it is likely that the initial user setup or the installation of build tools
 to bootstrap :code:`gcc` has to be adjusted.
+
+
+Known Issues
+^^^^^^^^^^^^
+
+Cython 3.0.4 compile failure (REHEATFUNQ v1.4.0)
+""""""""""""""""""""""""""""""""""""""""""""""""
+With Cython version 3.0.4 (potentially also other versions), REHEATFUNQ v1.4.0
+may fail to install locally with a (fairly extensive) error message that boils
+down to the following error:
+
+.. code :: bash
+
+   reheatfunq/coverings/rdisks.pyx:235:27: Cannot assign type 'iterator' to 'const_iterator'
+
+On Cython 3.0.4, this issue can be fixed by editing line 213 of the file
+:code:`reheatfunq/coverings/rdisks.pyx` from
+
+.. code :: cython
+
+       cdef unordered_map[vector[cbool],size_t].iterator it
+
+to
+
+.. code :: cython
+
+       cdef unordered_map[vector[cbool],size_t].const_iterator it
+
+Local install should now proceed normally.
