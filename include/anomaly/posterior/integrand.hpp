@@ -201,11 +201,16 @@ real outer_integrand(const typename arg<real>::type z, const Locals<real>& L,
 			real error1, L11;
 			bmq::tanh_sinh<real> int0;
 			bmq::exp_sinh<real> int1;
-			S = int0.integrate(integrand, L.amin, lImax.a,
-			                   TOL_TANH_SINH, &error, &L1, &lvl0)
-			  + int1.integrate(integrand, lImax.a,
-			                   std::numeric_limits<real>::infinity(),
-			                   TOL_TANH_SINH, &error1, &L11, &lvl1);
+			real S0 = int0.integrate(integrand, L.amin, lImax.a,
+			                         TOL_TANH_SINH, &error, &L1, &lvl0);
+			real S1 = int1.integrate(integrand, lImax.a,
+			                         std::numeric_limits<real>::infinity(),
+			                         TOL_TANH_SINH, &error1, &L11, &lvl1);
+			if (rm::isinf(S0))
+				throw std::runtime_error("S0 is inf in outer_integrand.");
+			if (rm::isinf(S1))
+				throw std::runtime_error("S1 is inf in outer_integrand.");
+			S = S0 + S1;
 			L1 += L11;
 			error += error1;
 		} else {
@@ -227,6 +232,14 @@ real outer_integrand(const typename arg<real>::type z, const Locals<real>& L,
 		throw ScaleError<real>("outer_integrand", log_scale);
 	}
 
+	if (S == 0.0){
+		/* If S is zero, we believe that also the rescale does not change this
+		 * (as the rescale should bring S to a finite value at the maximum).
+		 * Return 0.
+		 */
+		return 0.0;
+	}
+
 	/* Error checking: */
 	constexpr double ltol = std::log(1e-5);
 	const real cmp_err
@@ -235,6 +248,17 @@ real outer_integrand(const typename arg<real>::type z, const Locals<real>& L,
 	if (rm::log(error) > ltol + cmp_err){
 		/* Check if this is relevant: */
 		throw PrecisionError<real>("outer_integrand", error, L1);
+	}
+
+	real res(S * rm::exp(lImax.logI - log_scale));
+	if (rm::isnan(res)){
+		std::string msg("Result is NaN in outer_integrand.\nS = ");
+		msg += std::to_string(S);
+		msg += "\nlImax = ";
+		msg += std::to_string(lImax.logI);
+		msg += "\nlog_scale = ";
+		msg += std::to_string(log_scale);
+		throw std::runtime_error(msg);
 	}
 
 	return S * rm::exp(lImax.logI - log_scale);

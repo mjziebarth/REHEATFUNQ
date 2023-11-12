@@ -31,6 +31,7 @@
 
 
 namespace reheatfunq {
+namespace numerics {
 
 template<typename real>
 class CDFEval {
@@ -315,6 +316,7 @@ void CDFEval<real>::add_outside_mass(const real mass, bool above)
 #endif
 }
 
-}
+} // namespace numerics
+} // namespace reheatfunq
 
 #endif

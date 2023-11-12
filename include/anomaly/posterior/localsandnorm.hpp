@@ -68,7 +68,50 @@ public:
 	     ztrans(1.0 - ymax)
 	{}
 
+	LocalsAndLogScale(const arg<real>::type lp, const arg<real>::type ls,
+	                  const arg<real>::type n, const arg<real>::type v,
+	                  const arg<real>::type amin, const arg<real>::type Qmax,
+	                  std::vector<real>&& ki, const std::array<real,4>& h,
+	                  const arg<real>::type w, const arg<real>::type lh0,
+	                  const arg<real>::type l1p_w, const arg<real>::type log_scale_a,
+	                  const arg<real>::type log_scale_z,
+	                  const arg<real>::type log_scale_log_integrand,
+	                  const arg<real>::type ymax, const arg<real>::type ztrans)
+	   : Locals<real>(lp, ls, n, v, amin, Qmax, std::move(ki), h, w, lh0, l1p_w),
+	     log_scale({.a=log_scale_a, .z=log_scale_z,
+	                .log_integrand=log_scale_log_integrand}),
+	     ymax(ymax), ztrans(ztrans)
+	{}
+
+	template<typename istream>
+	LocalsAndLogScale(istream& in) : Locals<real>(in)
+	{
+		in.read(&log_scale.a, sizeof(real));
+		in.read(&log_scale.z, sizeof(real));
+		in.read(&log_scale.log_integrand, sizeof(real));
+		in.read(&ymax, sizeof(real));
+		in.read(&ztrans, sizeof(real));
+	}
+
 	LocalsAndLogScale() {};
+
+	template<typename ostream>
+	void write(ostream& out) const {
+		/* Write parent class: */
+		Locals<real>::write(out);
+
+		/* These attributes:*/
+		out.write(&log_scale.a, sizeof(real));
+		out.write(&log_scale.z, sizeof(real));
+		out.write(&log_scale.log_integrand, sizeof(real));
+		out.write(&ymax, sizeof(real));
+		out.write(&ztrans, sizeof(real));
+		out << log_scale.a;
+		out << log_scale.z;
+		out << log_scale.log_integrand;
+		out << ymax;
+		out << ztrans;
+	}
 };
 
 
@@ -84,12 +127,11 @@ public:
 	struct integrals_t {
 		real S;
 		real full_taylor_integral;
-		std::optional<reheatfunq::CDFEval<real>> cdf_eval;
+		std::optional<reheatfunq::numerics::CDFEval<real>> cdf_eval;
 	};
 	/*
 	 * Attributes:
 	 */
-//	const real Iref;
 	integrals_t integrals;
 	real norm;
 
@@ -98,14 +140,14 @@ public:
 	              const arg<real>::type v, const arg<real>::type amin,
 	              double dest_tol)
 	   : LocalsAndLogScale<real>(qc, p, s, n, v, amin, dest_tol),
-//	     Iref(outer_integrand(
-//	              LocalsAndLogScale<real>::log_scale.z,
-//	              *this,
-//	              LocalsAndLogScale<real>::log_scale.log_integrand,
-//	              0.0)),
 	     integrals(compute_integrals(*this)),
 	     norm(integrals.S + integrals.full_taylor_integral)
-	{}
+	{
+		if (rm::isinf(norm) || rm::isnan(norm))
+			throw std::runtime_error("Could not compute finite norm.");
+		if (norm == 0)
+			throw std::runtime_error("Computed zero norm.");
+	}
 
 	LocalsAndNorm(const std::vector<qc_t>& qc, const arg<real>::type p,
 	              const arg<real>::type s, const arg<real>::type n,
@@ -113,12 +155,34 @@ public:
 	              const double* x, const size_t Nx,
 	              double dest_tol)
 	   : LocalsAndLogScale<real>(qc, p, s, n, v, amin, dest_tol),
-//	     Iref(outer_integrand(LocalsAndLogScale<real>::log_scale.z, *this)),
 	     integrals(compute_integrals(*this, x, Nx, dest_tol)),
 	     norm(integrals.S + integrals.full_taylor_integral)
-	{}
+	{
+		if (rm::isinf(norm) || rm::isnan(norm))
+			throw std::runtime_error("Could not compute finite norm.");
+		if (norm == 0)
+			throw std::runtime_error("Computed zero norm.");
+	}
 
 	LocalsAndNorm() {};
+
+	template<typename istream>
+	LocalsAndNorm(istream& in) : LocalsAndLogScale<real>(in) {
+		in.read(&integrals.S, sizeof(real));
+		in.read(&integrals.full_taylor_integral, sizeof(real));
+		in.read(&norm, sizeof(real));
+	}
+
+	template<typename ostream>
+	void write(ostream& out) const {
+		/* Write the parent class: */
+		 LocalsAndLogScale<real>::write(out);
+		
+		/* The additions: */
+		out.write(&integrals.S, sizeof(real));
+		out.write(&integrals.full_taylor_integral, sizeof(real));
+		out.write(&norm, sizeof(real));
+	}
 
 
 private:
@@ -127,7 +191,7 @@ private:
 	{
 		const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
 
-		auto integrand = [&](real z) -> real
+		auto integrand = [&L](real z) -> real
 		{
 			return outer_integrand(z, L, L.log_scale.log_integrand);
 		};
@@ -156,51 +220,14 @@ private:
 		        a_integral_large_z<true>(L.ymax, S, L.log_scale.log_integrand, L)
 		);
 
-
-		return {.S=S, .full_taylor_integral=full_taylor_integral,
-		        .cdf_eval=std::optional<CDFEval<real>>()};
-	}
-
-	static real compute_integrals(const LocalsAndLogScale<real>& L,
-	                              const double* x, size_t Nx, double dest_tol)
-	{
-		const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
-
-		std::map<real,real> cache;
-
-		auto integrand = [&](real z) -> real
-		{
-			auto it = cache.lower_bound(z);
-			if (it == cache.end() || it->first != z){
-				real val = outer_integrand(z, L);
-				it = cache.insert(it, std::make_pair(z, val));
-			}
-			return it->second;
-		};
-
-		// 1.1: Double numerical integration in z range [0,1-ymax]:
-		/* This is called for the CDF: */
-		std::vector<real> z;
-		z.reserve(Nx);
-		for (size_t i=0; i<Nx; ++i){
-			real zi = static_cast<real>(x[i]) / L.Qmax;
-			if (zi <= L.ztrans)
-				z.push_back(zi);
-		}
-		CDFEval<real> cdf_eval(z, integrand, 0.0, L.ztrans,
-		                       0.0, dest_tol);
-		real S = cdf_eval.norm();
-
-		/*
-		 * Taylor integral from z=1-ymax to z=1
-		 */
-		real full_taylor_integral(
-		        a_integral_large_z<true>(L.ymax, S, L.log_scale.log_integrand, L)
-		);
+		if (rm::isnan(S))
+			throw std::runtime_error("`z`-body integral S is NaN.");
+		if (rm::isnan(full_taylor_integral))
+			throw std::runtime_error("large-`z`, `full_taylor_integral` is NaN");
 
 
 		return {.S=S, .full_taylor_integral=full_taylor_integral,
-		        .cdf_eval=cdf_eval};
+		        .cdf_eval=std::optional<reheatfunq::numerics::CDFEval<real>>()};
 	}
 };
 

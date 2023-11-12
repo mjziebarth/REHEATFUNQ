@@ -108,7 +108,65 @@ public:
 	      )
 	{}
 
+	/*
+	 * Initialize from previously calculated parameters:
+	 */
+	Locals(const arg<real>::type lp, const arg<real>::type ls,
+	       const arg<real>::type n, const arg<real>::type v,
+	       const arg<real>::type amin, const arg<real>::type Qmax,
+	       std::vector<real>&& ki, const std::array<real,4>& h,
+	       const arg<real>::type w, const arg<real>::type lh0,
+	       const arg<real>::type l1p_w)
+	   : lp(lp), ls(ls), n(n), v(v), amin(amin), Qmax(Qmax),
+	     ki(std::move(ki)), h(h), w(w), lh0(lh0), l1p_w(l1p_w)
+	{}
+
+	template<typename istream>
+	Locals(istream& in) : ki(0) {
+		in.get(&lp, sizeof(real));
+		in.get(&ls, sizeof(real));
+		in.get(&n, sizeof(real));
+		in.get(&v, sizeof(real));
+		in.get(&amin, sizeof(real));
+		in.get(&Qmax, sizeof(real));
+		size_t N_ki;
+		in.get(&N_ki, sizeof(size_t));
+		ki.resize(N_ki);
+		for (size_t i=0; i<N_ki; ++i){
+			in.get(&ki[i], sizeof(real));
+		}
+		for (uint_fast8_t i=0; i<4; ++i){
+			in.get(&h[i], sizeof(real));
+		}
+		in.get(&w, sizeof(real));
+		in.get(&lh0, sizeof(real));
+		in.get(&l1p_w, sizeof(real));
+	}
+
 	Locals() {};
+
+
+	template<typename ostream>
+	void write(ostream& out) const {
+		// Locals:
+		out.write(&lp, sizeof(real));
+		out.write(&ls, sizeof(real));
+		out.write(&n, sizeof(real));
+		out.write(&v, sizeof(real));
+		out.write(&amin, sizeof(real));
+		out.write(&Qmax, sizeof(real));
+		size_t N_ki = ki.size();
+		out.write(&N_ki, sizeof(size_t));
+		for (real k : ki){
+			out.write(&k, sizeof(real));
+		}
+		for (real hi : h){
+			out.write(&hi, sizeof(real));
+		}
+		out.write(&w, sizeof(real));
+		out.write(&lh0, sizeof(real));
+		out.write(&l1p_w, sizeof(real));
+	}
 
 
 private:

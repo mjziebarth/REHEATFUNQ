@@ -22,23 +22,28 @@
 #include <anomaly/variableprecisionposterior.hpp>
 
 using reheatfunq::anomaly::VariablePrecisionPosterior;
+using reheatfunq::anomaly::pdf_algorithm_t;
 
 
 VariablePrecisionPosterior::VariablePrecisionPosterior(
     const std::vector<weighted_sample_t>& weighted_samples,
     double p, double s, double n, double v, double amin,
-    double dest_tol, precision_t precision)
+    double rtol, precision_t precision, pdf_algorithm_t algorithm,
+    size_t bli_max_splits, uint8_t bli_max_refinements)
    : precision(precision)
 {
 	if (precision == precision_t::WP_DOUBLE){
-		posterior_double.emplace(weighted_samples, p, s, n, v, amin, dest_tol);
+		posterior_double.emplace(weighted_samples, p, s, n, v, amin, rtol,
+		                         algorithm, bli_max_splits, bli_max_refinements);
 	} else if (precision == precision_t::WP_LONG_DOUBLE){
 		posterior_long_double.emplace(weighted_samples, p, s, n, v, amin,
-		                              dest_tol);
+		                              rtol, algorithm,
+		                              bli_max_splits, bli_max_refinements);
 	} else if (precision == precision_t::WP_FLOAT_128){
 		#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
 		posterior_float128.emplace(weighted_samples, p, s, n, v, amin,
-		                           dest_tol);
+		                           rtol, algorithm,
+		                           bli_max_splits, bli_max_refinements);
 		#else
 		throw std::runtime_error("REHEATFUNQ is compiled without support for "
 		                         "boost float128.");
@@ -46,7 +51,8 @@ VariablePrecisionPosterior::VariablePrecisionPosterior(
 	} else if (precision == precision_t::WP_BOOST_DEC_50){
 		#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50
 		posterior_dec50.emplace(weighted_samples, p, s, n, v, amin,
-		                        dest_tol);
+		                        rtol, algorithm,
+		                        bli_max_splits, bli_max_refinements);
 		#else
 		throw std::runtime_error("REHEATFUNQ is compiled without support for "
 		                         "boost cpp_dec_float_50.");
@@ -54,7 +60,8 @@ VariablePrecisionPosterior::VariablePrecisionPosterior(
 	} else if (precision == precision_t::WP_BOOST_DEC_100){
 		#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100
 		posterior_dec100.emplace(weighted_samples, p, s, n, v, amin,
-		                         dest_tol);
+		                         rtol, algorithm,
+		                         bli_max_splits, bli_max_refinements);
 		#else
 		throw std::runtime_error("REHEATFUNQ is compiled without support for "
 		                         "boost cpp_dec_float_100.");
@@ -94,31 +101,32 @@ double VariablePrecisionPosterior::get_Qmax() const
 
 
 
-void VariablePrecisionPosterior::pdf_inplace(std::vector<double>& PH) const
+void VariablePrecisionPosterior::pdf_inplace(std::vector<double>& PH,
+                                             bool parallel) const
 {
 	/*
 	 * The relevant optionals have been initialized on start.
 	 */
 	switch (precision){
 		case precision_t::WP_DOUBLE:
-			posterior_double->pdf(PH);
+			posterior_double->pdf(PH, parallel);
 			return;
 		case precision_t::WP_LONG_DOUBLE:
-			posterior_long_double->pdf(PH);
+			posterior_long_double->pdf(PH, parallel);
 			return;
 		case precision_t::WP_FLOAT_128:
 			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
-			posterior_float128->pdf(PH);
+			posterior_float128->pdf(PH, parallel);
 			return;
 			#endif
 		case precision_t::WP_BOOST_DEC_50:
 			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50
-			posterior_dec50->pdf(PH);
+			posterior_dec50->pdf(PH, parallel);
 			return;
 			#endif
 		case precision_t::WP_BOOST_DEC_100:
 			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100
-			posterior_dec100->pdf(PH);
+			posterior_dec100->pdf(PH, parallel);
 			return;
 			#endif
 		default:
@@ -128,41 +136,41 @@ void VariablePrecisionPosterior::pdf_inplace(std::vector<double>& PH) const
 }
 
 std::vector<double>
-VariablePrecisionPosterior::pdf(const std::vector<double>& PH) const
+VariablePrecisionPosterior::pdf(const std::vector<double>& PH,
+                                bool parallel) const
 {
 	std::vector<double> result = PH;
-	pdf_inplace(result);
+	pdf_inplace(result, parallel);
 	return result;
 }
 
 
 void VariablePrecisionPosterior::cdf_inplace(std::vector<double>& PH,
-                                             bool parallel,
-                                             bool adaptive) const
+                                             bool parallel) const
 {
 	/*
 	 * The relevant optionals have been initialized on start.
 	 */
 	switch (precision){
 		case precision_t::WP_DOUBLE:
-			posterior_double->cdf(PH, parallel, adaptive);
+			posterior_double->cdf(PH, parallel);
 			return;
 		case precision_t::WP_LONG_DOUBLE:
-			posterior_long_double->cdf(PH, parallel, adaptive);
+			posterior_long_double->cdf(PH, parallel);
 			return;
 		case precision_t::WP_FLOAT_128:
 			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
-			posterior_float128->cdf(PH, parallel, adaptive);
+			posterior_float128->cdf(PH, parallel);
 			return;
 			#endif
 		case precision_t::WP_BOOST_DEC_50:
 			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50
-			posterior_dec50->cdf(PH, parallel, adaptive);
+			posterior_dec50->cdf(PH, parallel);
 			return;
 			#endif
 		case precision_t::WP_BOOST_DEC_100:
 			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100
-			posterior_dec100->cdf(PH, parallel, adaptive);
+			posterior_dec100->cdf(PH, parallel);
 			return;
 			#endif
 		default:
@@ -173,42 +181,40 @@ void VariablePrecisionPosterior::cdf_inplace(std::vector<double>& PH,
 
 std::vector<double>
 VariablePrecisionPosterior::cdf(const std::vector<double>& PH,
-                                bool parallel,
-                                bool adaptive) const
+                                bool parallel) const
 {
 	std::vector<double> result = PH;
-	cdf_inplace(result, parallel, adaptive);
+	cdf_inplace(result, parallel);
 	return result;
 }
 
 
 void VariablePrecisionPosterior::tail_inplace(std::vector<double>& PH,
-                                              bool parallel,
-                                              bool adaptive) const
+                                              bool parallel) const
 {
 	/*
 	 * The relevant optionals have been initialized on start.
 	 */
 	switch (precision){
 		case precision_t::WP_DOUBLE:
-			posterior_double->tail(PH, parallel, adaptive);
+			posterior_double->tail(PH, parallel);
 			return;
 		case precision_t::WP_LONG_DOUBLE:
-			posterior_long_double->tail(PH, parallel, adaptive);
+			posterior_long_double->tail(PH, parallel);
 			return;
 		case precision_t::WP_FLOAT_128:
 			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
-			posterior_float128->tail(PH, parallel, adaptive);
+			posterior_float128->tail(PH, parallel);
 			return;
 			#endif
 		case precision_t::WP_BOOST_DEC_50:
 			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50
-			posterior_dec50->tail(PH, parallel, adaptive);
+			posterior_dec50->tail(PH, parallel);
 			return;
 			#endif
 		case precision_t::WP_BOOST_DEC_100:
 			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100
-			posterior_dec100->tail(PH, parallel, adaptive);
+			posterior_dec100->tail(PH, parallel);
 			return;
 			#endif
 		default:
@@ -219,49 +225,41 @@ void VariablePrecisionPosterior::tail_inplace(std::vector<double>& PH,
 
 std::vector<double>
 VariablePrecisionPosterior::tail(const std::vector<double>& PH,
-                                 bool parallel,
-                                 bool adaptive) const
+                                 bool parallel) const
 {
 	std::vector<double> result = PH;
-	tail_inplace(result, parallel, adaptive);
+	tail_inplace(result, parallel);
 	return result;
 }
 
 
 void VariablePrecisionPosterior::tail_quantiles_inplace(
            std::vector<double>& quantiles,
-           size_t n_chebyshev,
-           bool parallel,
-           bool adaptive) const
+           bool parallel) const
 {
 	/*
 	 * The relevant optionals have been initialized on start.
 	 */
 	switch (precision){
 		case precision_t::WP_DOUBLE:
-			posterior_double->tail_quantiles(quantiles, n_chebyshev, parallel,
-			                                 adaptive);
+			posterior_double->tail_quantiles(quantiles, parallel);
 			return;
 		case precision_t::WP_LONG_DOUBLE:
-			posterior_long_double->tail_quantiles(quantiles, n_chebyshev,
-			                                      parallel, adaptive);
+			posterior_long_double->tail_quantiles(quantiles, parallel);
 			return;
 		case precision_t::WP_FLOAT_128:
 			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
-			posterior_float128->tail_quantiles(quantiles, n_chebyshev, parallel,
-			                                   adaptive);
+			posterior_float128->tail_quantiles(quantiles, parallel);
 			return;
 			#endif
 		case precision_t::WP_BOOST_DEC_50:
 			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50
-			posterior_dec50->tail_quantiles(quantiles, n_chebyshev, parallel,
-			                                adaptive);
+			posterior_dec50->tail_quantiles(quantiles, parallel);
 			return;
 			#endif
 		case precision_t::WP_BOOST_DEC_100:
 			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100
-			posterior_dec100->tail_quantiles(quantiles, n_chebyshev, parallel,
-			                                 adaptive);
+			posterior_dec100->tail_quantiles(quantiles, parallel);
 			return;
 			#endif
 		default:
@@ -272,12 +270,10 @@ void VariablePrecisionPosterior::tail_quantiles_inplace(
 
 std::vector<double>
 VariablePrecisionPosterior::tail_quantiles(const std::vector<double>& quantiles,
-	                                       size_t n_chebyshev,
-	                                       bool parallel,
-	                                       bool adaptive) const
+	                                       bool parallel) const
 {
 	std::vector<double> result = quantiles;
-	tail_quantiles_inplace(result, n_chebyshev, parallel, adaptive);
+	tail_quantiles_inplace(result, parallel);
 	return result;
 }
 
@@ -345,27 +341,27 @@ VariablePrecisionPosterior::add_samples(
 bool
 VariablePrecisionPosterior::validate(
      const std::vector<std::vector<posterior::qc_t>>& qc_set,
-     double p0, double s0, double n0, double v0, double dest_tol
+     double p0, double s0, double n0, double v0, double rtol
 ) const
 {
 	switch (precision){
 		case precision_t::WP_DOUBLE:
-			return posterior_double->validate(qc_set, p0, s0, n0, v0, dest_tol);
+			return posterior_double->validate(qc_set, p0, s0, n0, v0, rtol);
 		case precision_t::WP_LONG_DOUBLE:
 			return posterior_long_double->validate(qc_set, p0, s0, n0, v0,
-			                                       dest_tol);
+			                                       rtol);
 		case precision_t::WP_FLOAT_128:
 			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
 			return posterior_float128->validate(qc_set, p0, s0, n0, v0,
-			                                    dest_tol);
+			                                    rtol);
 			#endif
 		case precision_t::WP_BOOST_DEC_50:
 			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50
-			return posterior_dec50->validate(qc_set, p0, s0, n0, v0, dest_tol);
+			return posterior_dec50->validate(qc_set, p0, s0, n0, v0, rtol);
 			#endif
 		case precision_t::WP_BOOST_DEC_100:
 			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100
-			return posterior_dec100->validate(qc_set, p0, s0, n0, v0, dest_tol);
+			return posterior_dec100->validate(qc_set, p0, s0, n0, v0, rtol);
 			#endif
 		default:
 			break;

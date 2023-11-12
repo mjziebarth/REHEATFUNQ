@@ -67,7 +67,7 @@ using pdtoolbox::OR;
 using pdtoolbox::AND;
 using pdtoolbox::cnst_sqrt;
 
-using reheatfunq::CDFEval;
+using reheatfunq::numerics::CDFEval;
 
 /*
  * Use a high precision floating point format.

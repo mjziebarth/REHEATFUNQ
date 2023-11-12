@@ -35,6 +35,16 @@ cdef extern from "utility/pyfunwrap.hpp" namespace "reheatfunq::utility" nogil:
 cdef extern from "testing/barylagrint.hpp" namespace "reheatfunq::testing" nogil:
     void test_barycentric_lagrange_interpolator() except+
 
+cdef extern from "numerics/intervall.hpp" nogil:
+    """
+    typedef reheatfunq::numerics
+                      ::PointInInterval<double>
+           PII_t;
+    """
+    cdef cppclass PII_t:
+        PII_t(double,double,double)
+
+
 cdef extern from "numerics/barylagrint.hpp" nogil:
     """
     typedef reheatfunq::numerics
@@ -47,7 +57,7 @@ cdef extern from "numerics/barylagrint.hpp" nogil:
                      double tol_abs, double fmin,
                      double fmax, size_t max_splits,
                      unsigned char max_refinements)
-        double operator()(double x) except+
+        double operator()(PII_t) except+
         vector[vector[pair[double,double]]] get_samples() const
 
 cdef class BarycentricLagrangeInterpolator:
@@ -55,6 +65,8 @@ cdef class BarycentricLagrangeInterpolator:
     BarycentricLagrangeInterpolator
     """
     cdef unique_ptr[BLI_double_t] bli
+    cdef double xmin
+    cdef double xmax
 
     def __init__(self, fun, double xmin, double xmax, double tol_rel=1e-8,
                  double tol_abs=inf, double fmin=-inf, double fmax=inf,
@@ -75,12 +87,14 @@ cdef class BarycentricLagrangeInterpolator:
             self.bli = make_unique[BLI_double_t](deref(pfw), xmin, xmax,
                                                  tol_rel, tol_abs, fmin, fmax,
                                                  max_splits, max_refinements)
+            self.xmin = xmin
+            self.xmax = xmax
 
     cdef double _call_double(self, double x) nogil:
         if not self.bli:
             with gil:
                 raise RuntimeError("Interpolator not initialized.")
-        return deref(self.bli)(x)
+        return deref(self.bli)(PII_t(x, x-self.xmin, self.xmax-x))
 
     @cython.boundscheck(False)
     cdef void _call_buffer(self, const double[::1] x, double[::1] dest) nogil:
@@ -93,7 +107,7 @@ cdef class BarycentricLagrangeInterpolator:
                 raise RuntimeError("Shapes of input and output buffer do not "
                                    "match in BarycentricLagrangeInterpolator.")
         for i in range(x.shape[0]):
-            dest[i] = deref(self.bli)(x[i])
+            dest[i] = deref(self.bli)(PII_t(x[i], x[i]-self.xmin, self.xmax-x[i]))
 
     def __call__(self, x):
         cdef cbool is_float = False
@@ -161,7 +175,7 @@ def barycentric_lagrange_interpolate(const double[::1] x, fun, double xmin,
     cdef double[::1] res = np.empty(x.shape[0])
     with nogil:
         for i in range(x.shape[0]):
-            res[i] = deref(bli)(x[i])
+            res[i] = deref(bli)(PII_t(x[i], x[i]-xmin, xmax-x[i]))
 
     return res.base
 

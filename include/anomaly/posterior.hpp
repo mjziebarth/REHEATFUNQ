@@ -36,6 +36,7 @@
 #define BOOST_ENABLE_ASSERT_HANDLER // Make sure the asserts do not abort
 #include <vector>
 #include <algorithm>
+#include <memory>
 #include <boost/math/quadrature/gauss_kronrod.hpp>
 #include <boost/math/quadrature/gauss.hpp>
 #include <boost/math/tools/roots.hpp>
@@ -44,6 +45,7 @@
 #include <thread>
 #include <string>
 #include <sstream>
+#include <type_traits>
 
 
 
@@ -52,6 +54,7 @@
  */
 #include <anomaly/posterior/localsandnorm.hpp>
 #include <numerics/kahan.hpp>
+#include <numerics/simpson.hpp>
 #include <numerics/barylagrint.hpp>
 
 namespace reheatfunq {
@@ -72,33 +75,50 @@ struct weighted_sample_t {
 
 };
 
-template<typename real>
+enum pdf_algorithm_t {
+	EXPLICIT = 0,
+	BARYCENTRIC_LAGRANGE = 1,
+	ADAPTIVE_SIMPSON = 2
+};
+
+template<typename real, pdf_algorithm_t pdf_algorithm=BARYCENTRIC_LAGRANGE>
 class Posterior {
 public:
 
 	Posterior(const std::vector<weighted_sample_t>& weighted_samples,
 	          double p, double s, double n, double v, double amin,
-	          double dest_tol)
-	   : locals(init_locals(weighted_samples, p, s, n, v, amin, dest_tol)),
+	          double rtol, size_t bli_max_splits,
+	          uint8_t bli_max_refinements)
+	   : locals(init_locals(weighted_samples, p, s, n, v, amin, rtol)),
 	     weights(init_weights(weighted_samples, locals)),
 	     p(p), s(s), n(n), v(v), Qmax(global_Qmax(locals)),
-	     norm(compute_norm(locals, weights)), dest_tol(dest_tol),
-	     pdf_interp(init_pdf_bli(locals, weights, Qmax, norm))
+	     norm(compute_norm(locals, weights)), rtol(rtol),
+	     bli_max_splits(bli_max_splits),
+	     bli_max_refinements(bli_max_refinements)
 	{
+		if (pdf_algorithm == BARYCENTRIC_LAGRANGE){
+			pdf_interp = init_pdf_bli(locals, weights, Qmax, norm,
+			                          bli_max_splits, bli_max_refinements,
+			                          rtol);
+		} else if (pdf_algorithm == ADAPTIVE_SIMPSON){
+			init_simpson_quadrature();
+		}
 	}
 
 	double get_Qmax() const {
 		return Qmax;
 	}
 
-	template<bool use_bli=true>
-	void pdf(std::vector<double>& PH) const
+	/*
+	 * The probability density function (PDF)
+	 */
+	void pdf(std::vector<double>& PH, bool parallel=true) const
 	{
 		const size_t Nx = PH.size();
 		std::vector<double>& result = PH;
 
 		std::optional<std::exception> except;
-		#pragma omp parallel for schedule(guided)
+		#pragma omp parallel for schedule(guided) if(parallel)
 		for (size_t i=0; i<Nx; ++i){
 			if (except)
 				continue;
@@ -113,7 +133,9 @@ public:
 				continue;
 			}
 			try {
-				result[i] = pdf_single<use_bli>(PH[i]);
+				result[i] = pdf_single(
+					rn::PointInInterval<real>(PH[i], PH[i], Qmax-PH[i])
+				);
 			} catch (const std::exception& e) {
 				except = e;
 			}
@@ -123,138 +145,38 @@ public:
 			throw except;
 	}
 
-	template<bool use_bli=true>
-	void cdf(std::vector<double>& PH, bool parallel=true,
-	         bool adaptive=false) const
+	template<bool use_saq=true>
+	void cdf(std::vector<double>& PH, bool parallel=true) const
 	{
 		const size_t Nx = PH.size();
 
-		if (use_bli){
-			if (!cdf_interp)
-				cdf_interp.emplace(init_cdf_bli(locals, weights, Qmax, norm));
+		if (!saq)
+			init_simpson_quadrature();
 
-			/*
-			 * OMP-compatible exception propagation code:
-			 */
-			std::exception_ptr error;
+		/*
+			* OMP-compatible exception propagation code:
+			*/
+		std::exception_ptr error;
 
-			#pragma omp parallel if(parallel)
-			for (size_t i=0; i<Nx; ++i){
-				if (error)
-					continue;
-				std::exception_ptr local_error;
-				if (PH[i] <= 0.0)
-					PH[i] = 0.0;
-				else if (PH[i] >= Qmax)
-					PH[i] = 1.0;
-				else {
-					try {
-						/*
-						 * The actual numerical code:
-						 */
-						PH[i] = (*cdf_interp)(PH[i]);
-					} catch (...) {
-						local_error = std::current_exception();
-					}
-					if (local_error){
-						#pragma omp critical
-						{
-							error = local_error;
-						}
-					}
-				}
-			}
-
-			/* Handle potential errors that occurred: */
-			if (error){
-				std::string msg = "An error occurred while computing the "
-				                  "posterior CDF: ";
-				try {
-					std::rethrow_exception(error);
-				} catch (const std::runtime_error& e) {
-					msg += e.what();
-				}
-				throw std::runtime_error(msg);
-			}
-
-		} else {
-			std::vector<real> result(PH.size());
-
-			/*
-			 * Compute the CDF via successive integration over the intervals.
-			 * The approach varies depending on whether the input points are sorted
-			 * or not.
-			 */
-			if (std::is_sorted(PH.cbegin(), PH.cend()))
-			{
-				/* Already sorted. */
-				cdf_sorted<false>(PH, result, adaptive, parallel);
-
-				for (size_t i=0; i<Nx; ++i)
-					PH[i] = result[i];
-
-			} else {
-				/*
-				 * Create the ordering for successive integration:
-				 */
-				struct order_t {
-					double x;
-					size_t i;
-				};
-				std::vector<order_t> order(Nx);
-				for (size_t i=0; i<Nx; ++i){
-					order[i].i = i;
-					order[i].x = PH[i];
-				}
-				std::sort(order.begin(), order.end(),
-				          [&PH](order_t o0, order_t o1) -> bool
-				          {
-				              return o0.x < o1.x;
-				          });
-				for (size_t i=0; i<Nx; ++i){
-					PH[i] = order[i].x;
-				}
-
-				/*
-				 * Call the algorithm on the ordered vector:
-				 */
-				cdf_sorted<false>(PH, result, adaptive, parallel);
-
-				/*
-				 * Transfer the results:
-				 */
-				for (size_t i=0; i<Nx; ++i)
-					PH[order[i].i] = result[i];
-			}
-		}
-	}
-
-
-	template<typename real_in=double, bool use_bli=true>
-	void tail(std::vector<real_in>& PH, bool parallel=true,
-	          bool adaptive=false) const
-	{
-		const size_t Nx = PH.size();
-
-		if (use_bli){
-			if (!tail_interp)
-				tail_interp.emplace(init_tail_bli(locals, weights, Qmax, norm));
-
-			/*
-			 * OMP-compatible exception propagation code:
-			 */
-			std::exception_ptr error;
-
-			#pragma omp parallel if(parallel)
-			for (size_t i=0; i<Nx; ++i){
-				if (error)
-					continue;
-				std::exception_ptr local_error;
+		#pragma omp parallel for if(parallel)
+		for (size_t i=0; i<Nx; ++i){
+			if (error)
+				continue;
+			std::exception_ptr local_error;
+			if (PH[i] <= 0.0)
+				PH[i] = 0.0;
+			else if (PH[i] >= Qmax)
+				PH[i] = 1.0;
+			else {
 				try {
 					/*
-					 * The actual numerical code:
-					 */
-					PH[i] = (*tail_interp)(PH[i]);
+						* The actual numerical code:
+						*/
+					PH[i] = saq->integral(
+						rn::PointInInterval<real>(
+							PH[i], PH[i], Qmax - PH[i]
+						)
+					);
 				} catch (...) {
 					local_error = std::current_exception();
 				}
@@ -265,146 +187,148 @@ public:
 					}
 				}
 			}
+		}
 
-			/* Handle potential errors that occurred: */
-			if (error){
-				std::string msg = "An error occurred while computing the "
-				                  "posterior tail CDF: ";
-				try {
-					std::rethrow_exception(error);
-				} catch (const std::runtime_error& e) {
-					msg += e.what();
-				}
-				throw std::runtime_error(msg);
+		/* Handle potential errors that occurred: */
+		if (error){
+			std::string msg = "An error occurred while computing the "
+			                  "posterior CDF: ";
+			try {
+				std::rethrow_exception(error);
+			} catch (const std::runtime_error& e) {
+				msg += e.what();
 			}
-
-		} else {
-			std::vector<real> result(PH.size());
-
-			/*
-			 * Compute the CDF via successive integration over the intervals.
-			 * The approach varies depending on whether the input points are sorted
-			 * or not.
-			 */
-			if (std::is_sorted(PH.cbegin(), PH.cend()))
-			{
-				/* Already sorted. */
-				std::cout << "sorted.\n" << std::flush;
-				cdf_sorted<true>(PH, result, adaptive, parallel);
-
-				for (size_t i=0; i<Nx; ++i)
-					PH[i] = result[i];
-
-			} else {
-				/*
-				 * Create the ordering for successive integration:
-				 */
-				std::cout << "not sorted.\n" << std::flush;
-				struct order_t {
-					double x;
-					size_t i;
-				};
-				std::vector<order_t> order(Nx);
-				for (size_t i=0; i<Nx; ++i){
-					order[i].i = i;
-					order[i].x = PH[i];
-				}
-				std::sort(order.begin(), order.end(),
-				          [&PH](order_t o0, order_t o1) -> bool
-				          {
-				              return o0.x < o1.x;
-				          });
-				for (size_t i=0; i<Nx; ++i){
-					PH[i] = order[i].x;
-				}
-
-				/*
-				 * Call the algorithm on the ordered vector:
-				 */
-				cdf_sorted<true>(PH, result, adaptive, parallel);
-
-				/*
-				 * Transfer the results:
-				 */
-				for (size_t i=0; i<Nx; ++i)
-					PH[order[i].i] = result[i];
-			}
+			throw std::runtime_error(msg);
 		}
 	}
 
-	template<bool use_bli=true>
-	void tail_quantiles(std::vector<double>& quantiles, size_t n_chebyshev=100,
-	                    bool parallel=true, bool adaptive=false) const
+
+	template<typename real_in=double, bool use_saq=true>
+	void tail(std::vector<real_in>& PH, bool parallel=true) const
 	{
-		if (use_bli){
-			if (!tail_interp)
-				tail_interp.emplace(init_tail_bli(locals, weights, Qmax, norm));
+		const size_t Nx = PH.size();
 
-			/*
-			 * OMP-compatible exception propagation code:
-			 */
-			std::exception_ptr error;
+		if (!saq)
+			init_simpson_quadrature();
 
-			#pragma omp parallel if(parallel)
-			for (size_t i=0; i<quantiles.size(); ++i){
-				if (error)
-					continue;
+		/*
+		* OMP-compatible exception propagation code:
+		*/
+		std::exception_ptr error;
 
-				std::exception_ptr local_error;
-				if (quantiles[i] == 0.0)
-					quantiles[i] = Qmax;
-				else if (quantiles[i] == 1.0)
-					quantiles[i] = 0.0;
-				else if (quantiles[i] > 0.0 && quantiles[i] < 1.0){
-					/* The typical case. Use TOMS 748 on a quantile
-					 * function to find the quantile.
-					 */
-					const real qi = quantiles[i];
-					auto quantile_function =
-					[this,qi](real PH) -> real
-					{
-						return (*tail_interp)(PH) - qi;
-					};
-					std::uintmax_t max_iter(100);
-					bmt::eps_tolerance<real>
-					   eps_tol(std::numeric_limits<real>::digits - 2);
-					try {
-						std::pair<real,real> bracket
-						   = bmt::toms748_solve(quantile_function,
-						                    static_cast<real>(0.0), Qmax,
-						                    static_cast<real>(1.0-quantiles[i]),
-						                    static_cast<real>(-quantiles[i]),
-						                    eps_tol, max_iter);
-						quantiles[i] = 0.5*(bracket.first + bracket.second);
-					} catch (...) {
-						local_error = std::current_exception();
-					}
-				} else {
-					local_error = std::make_exception_ptr(
-					    std::runtime_error("Encountered quantile out of bounds "
-					                       "[0,1]."));
-				}
-				if (local_error){
-					#pragma omp critical
-					{
-						error = local_error;
-					}
+		#pragma omp parallel for if(parallel)
+		for (size_t i=0; i<Nx; ++i){
+			if (error)
+				continue;
+			std::exception_ptr local_error;
+			try {
+				/*
+				 * The actual numerical code:
+				 */
+				PH[i] = saq->integral(
+				    rn::PointInInterval<real>(
+				        PH[i], PH[i], Qmax - PH[i]
+				    ),
+				    true
+				);
+			} catch (...) {
+				local_error = std::current_exception();
+			}
+			if (local_error){
+				#pragma omp critical
+				{
+					error = local_error;
 				}
 			}
+		}
 
-			/* Handle potential errors that occurred: */
-			if (error){
-				std::string msg = "An error occurred while computing the "
-				                  "posterior tail quantiles: ";
+		/* Handle potential errors that occurred: */
+		if (error){
+			std::string msg = "An error occurred while computing the "
+								"posterior tail CDF: ";
+			try {
+				std::rethrow_exception(error);
+			} catch (const std::runtime_error& e) {
+				msg += e.what();
+			}
+			throw std::runtime_error(msg);
+		}
+	}
+
+	template<bool use_saq=true>
+	void tail_quantiles(std::vector<double>& quantiles,
+	                    bool parallel=true) const
+	{
+		if (!saq){
+			init_simpson_quadrature();
+		}
+
+		/*
+			* OMP-compatible exception propagation code:
+			*/
+		std::exception_ptr error;
+
+		#pragma omp parallel for if(parallel)
+		for (size_t i=0; i<quantiles.size(); ++i){
+			if (error)
+				continue;
+
+			std::exception_ptr local_error;
+			if (quantiles[i] == 0.0)
+				quantiles[i] = Qmax;
+			else if (quantiles[i] == 1.0)
+				quantiles[i] = 0.0;
+			else if (quantiles[i] > 0.0 && quantiles[i] < 1.0){
+				/* The typical case. Use TOMS 748 on a quantile
+					* function to find the quantile.
+					*/
+				const real qi = quantiles[i];
+				auto quantile_function =
+				[this,qi](real PH_back) -> real
+				{
+					const real PH = this->Qmax - PH_back;
+					return saq->integral(
+						rn::PointInInterval<real>(PH, PH, PH_back),
+						true
+					) - qi;
+				};
+				std::uintmax_t max_iter(100);
+				bmt::eps_tolerance<real>
+					eps_tol(std::numeric_limits<real>::digits - 2);
 				try {
-					std::rethrow_exception(error);
-				} catch (const std::runtime_error& e) {
-					msg += e.what();
+					std::pair<real,real> bracket
+						= bmt::toms748_solve(quantile_function,
+										static_cast<real>(0.0), Qmax,
+										static_cast<real>(-quantiles[i]),
+										static_cast<real>(1.0-quantiles[i]),
+										eps_tol, max_iter);
+					quantiles[i] = 0.5*(bracket.first + bracket.second);
+				} catch (...) {
+					local_error = std::current_exception();
 				}
-				throw std::runtime_error(msg);
+			} else {
+				local_error = std::make_exception_ptr(
+					std::runtime_error("Encountered quantile out of bounds "
+										"[0,1]."));
 			}
-		} else {
-			tail_quantiles_old(quantiles, n_chebyshev, parallel, adaptive);
+			if (local_error){
+				#pragma omp critical
+				{
+					error = local_error;
+				}
+			}
+		}
+
+		/* Handle potential errors that occurred: */
+		if (error){
+			std::string msg = "An error occurred while computing the "
+								"posterior tail quantiles: ";
+			try {
+				std::rethrow_exception(error);
+			} catch (const std::runtime_error& e) {
+				msg += e.what();
+			}
+			throw std::runtime_error(msg);
 		}
 	}
 
@@ -422,7 +346,7 @@ public:
 		/* Parameters for the new samples */
 		std::vector<posterior::LocalsAndNorm<real>>
 		   new_locals(init_locals(weighted_samples, p, s, n, v, locals[0].amin,
-		                         dest_tol));
+		                         rtol));
 		std::vector<real>
 		   new_weights(init_weights(weighted_samples, new_locals));
 
@@ -436,7 +360,8 @@ public:
 		real res_norm(compute_norm(res_locals, res_weights));
 
 		return Posterior(std::move(res_locals), std::move(res_weights), p, s,
-		                 n, v, locals[0].amin, dest_tol, res_Qmax, res_norm);
+		                 n, v, locals[0].amin, rtol, res_Qmax, res_norm,
+		                 bli_max_splits, bli_max_refinements);
 	}
 
 
@@ -445,7 +370,7 @@ public:
 	 */
 	bool validate(const std::vector<std::vector<posterior::qc_t>>& qc_set,
 	              double p0, double s0, double n0, double v0,
-	              double dest_tol) const;
+	              double rtol) const;
 
 	void get_locals(size_t l, double& lp, double& ls, double& n, double& v,
 	                double& amin, double& Qmax, std::vector<double>& ki,
@@ -495,6 +420,31 @@ public:
 		C3 = c3.deriv0;
 	}
 
+	/*
+	 * Serialization:
+	 */
+//	template<typename istream>
+//	Posterior(istream& in) : locals(0), weights(0)
+
+	template<typename ostream>
+	void write(ostream& out) const {
+		size_t L_n = locals.size();
+		out.write(&L_n, sizeof(size_t));
+		for (size_t i=0; i<locals.size(); ++i){
+			locals[i].write(out);
+		}
+		for (real w : weights){
+			out.write(&w, sizeof(real));
+		}
+		out.write(&p, sizeof(double));
+		out.write(&s, sizeof(double));
+		out.write(&n, sizeof(double));
+		out.write(&v, sizeof(double));
+		out.write(&Qmax, sizeof(real));
+		out.write(&norm, sizeof(real));
+		out.write(&rtol, sizeof(double));
+	}
+
 private:
 
 	std::vector<posterior::LocalsAndNorm<real>> locals;
@@ -513,27 +463,34 @@ private:
 	double v;
 	real Qmax;
 	real norm;
-	double dest_tol;
+	double rtol;
+	size_t bli_max_splits;
+	uint8_t bli_max_refinements;
 
-	rn::PiecewiseBarycentricLagrangeInterpolator<real> pdf_interp;
-	mutable std::optional<rn::PiecewiseBarycentricLagrangeInterpolator<real>>
-	    cdf_interp;
-	mutable std::optional<rn::PiecewiseBarycentricLagrangeInterpolator<real>>
-	    tail_interp;
+	mutable std::optional<rn::PiecewiseBarycentricLagrangeInterpolator<real>> pdf_interp;
+	mutable std::optional<rn::SimpsonAdaptiveQuadrature<real, real>> saq;
 
 	Posterior(std::vector<posterior::LocalsAndNorm<real>>&& locals,
 	          std::vector<real>&& weights, double p, double s, double n,
-	          double v, double amin, double dest_tol, real Qmax, real norm)
+	          double v, double amin, double rtol, real Qmax, real norm,
+	          size_t bli_max_splits, uint8_t bli_max_refinements)
 	   : locals(std::move(locals)), weights(std::move(weights)), p(p), s(s),
-	     n(n), v(v), Qmax(Qmax), norm(norm),
-	     pdf_interp(init_pdf_bli(locals, weights, Qmax, norm))
+	     n(n), v(v), Qmax(Qmax), norm(norm), rtol(rtol),
+	     bli_max_splits(bli_max_splits), bli_max_refinements(bli_max_refinements)
 	{
+		if (pdf_algorithm == BARYCENTRIC_LAGRANGE){
+			pdf_interp = init_pdf_bli(locals, weights, Qmax, norm,
+			                          bli_max_splits, bli_max_refinements,
+			                          rtol);
+		} else if (pdf_algorithm == ADAPTIVE_SIMPSON){
+			init_simpson_quadrature();
+		}
 	}
 
 	static std::vector<posterior::LocalsAndNorm<real>>
 	init_locals(const std::vector<weighted_sample_t>& weighted_samples,
 	            const double p, const double s, const double n, const double v,
-	            const double amin, const double dest_tol)
+	            const double amin, const double rtol)
 	{
 		const size_t N = weighted_samples.size();
 
@@ -555,7 +512,7 @@ private:
 				try {
 					locals[i] = posterior::LocalsAndNorm<real>(ws.sample, p, s,
 					                                           n, v, amin,
-					                                           dest_tol);
+					                                           rtol);
 				} catch (...) {
 					local_error = std::current_exception();
 				}
@@ -655,103 +612,53 @@ private:
 	init_pdf_bli(const std::vector<posterior::LocalsAndNorm<real>>& locals,
 	             const std::vector<real>& weights,
 	             const posterior::arg<real>::type Qmax,
-	             const posterior::arg<real>::type norm)
+	             const posterior::arg<real>::type norm,
+	             size_t max_splits, uint8_t max_refinements,
+	             double rtol
+	             )
 	{
 		auto pdf =
-		  [&locals, &weights, &norm](const posterior::arg<real>::type x) -> real
+		  [&locals, &weights, Qmax, norm](const rn::PointInInterval<real>& x) -> real
 		{
-			return pdf_single_explicit(x, locals, weights, norm);
+			return pdf_single_explicit(x, locals, weights, Qmax, norm);
 		};
-		return rn::PiecewiseBarycentricLagrangeInterpolator<real>(pdf, 0.0,
-		                                                          Qmax);
+		const real tol_rel = rtol;
+		const real tol_abs = rtol / Qmax;
+		return rn::PiecewiseBarycentricLagrangeInterpolator<real>(
+		           pdf, 0.0, Qmax, tol_rel, tol_abs, 0.0,
+		           std::numeric_limits<real>::infinity(),
+		           max_splits, max_refinements
+		);
 	}
 
 
-	static rn::PiecewiseBarycentricLagrangeInterpolator<real>
-	init_cdf_bli(const std::vector<posterior::LocalsAndNorm<real>>& locals,
-	             const std::vector<real>& weights,
-	             const posterior::arg<real>::type Qmax,
-	             const posterior::arg<real>::type norm)
-	{
-		auto pdf =
-		  [&locals, &weights, &norm](const posterior::arg<real>::type x) -> real
-		{
-			return pdf_single_explicit(x, locals, weights, norm);
-		};
-		auto cdf = [pdf, Qmax](const posterior::arg<real>::type x) -> real
-		{
-			if (x <= 0)
-				return 0.0;
-			else if (x >= Qmax)
-				return 1.0;
-
-			/* Integrate: */
-			const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
-			bmq::tanh_sinh<real> integrator;
-			real error, L1;
-			size_t lvl;
-			real I = integrator.integrate(pdf, 0.0, x, TOL_TANH_SINH, &error,
-			                              &L1, &lvl);
-			if (error / L1 > TOL_TANH_SINH)
-				throw std::runtime_error("Large error in init_cdf_bli.");
-			return std::min<real>(std::max<real>(I, 0.0), 1.0);
-		};
-		const real tol_rel = std::sqrt(std::numeric_limits<real>::epsilon());
-		const real tol_abs = std::numeric_limits<real>::infinity();
-		return rn::PiecewiseBarycentricLagrangeInterpolator<real>(cdf, 0.0,
-		                                  Qmax, tol_rel, tol_abs, 0.0, 1.0);
+	void init_simpson_quadrature() const {
+		if (pdf_algorithm == pdf_algorithm_t::BARYCENTRIC_LAGRANGE){
+			if (!pdf_interp)
+				throw std::runtime_error("Unexpectedly, `pdf_interp` is not initialized.");
+			auto pdf =
+			[this](real x) -> real
+			{
+				rn::PointInInterval<real> x_pii(x, x, Qmax-x);
+				return (*pdf_interp)(x_pii);
+			};
+			saq.emplace(pdf, static_cast<real>(0.0), Qmax);
+		} else {
+			auto pdf =
+			[this](real x) -> real
+			{
+				rn::PointInInterval<real> x_pii(x, x, Qmax-x);
+				return pdf_single_explicit(x_pii, locals, weights, Qmax, norm);
+			};
+			saq.emplace(pdf, static_cast<real>(0.0), Qmax);
+		}
 	}
 
 
-	static rn::PiecewiseBarycentricLagrangeInterpolator<real>
-	init_tail_bli(const std::vector<posterior::LocalsAndNorm<real>>& locals,
-	              const std::vector<real>& weights,
-	              const posterior::arg<real>::type Qmax,
-	              const posterior::arg<real>::type norm)
-	{
-		auto pdf =
-		  [&locals, &weights, &norm](const posterior::arg<real>::type x) -> real
-		{
-			return pdf_single_explicit(x, locals, weights, norm);
-		};
-		auto tail = [pdf, Qmax, &locals](const posterior::arg<real>::type x) -> real
-		{
-			if (x <= 0)
-				return 1.0;
-			else if (x >= Qmax)
-				return 0.0;
-
-			/* Integrate: */
-			const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
-			bmq::tanh_sinh<real> integrator;
-			real error, L1;
-			size_t lvl;
-			real I = integrator.integrate(pdf, x, Qmax, TOL_TANH_SINH, &error,
-			                              &L1, &lvl);
-			if (error / L1 > TOL_TANH_SINH){
-				std::stringstream msg;
-				msg << "Large error in init_tail_bli. At x=";
-				msg << std::setprecision(20);
-				msg << x << ", z=" << x / Qmax;
-				msg << ".\nerror =" << error;
-				msg << ".\nL1    =" << L1
-				    << ".\nlevel =" << lvl << "\n";
-				msg << ".\nxmax  =" << locals[0].ztrans * locals[0].Qmax << "\n";
-				throw std::runtime_error(msg.str());
-			}
-			return std::min<real>(std::max<real>(I, 0.0), 1.0);
-		};
-		const real tol_rel = std::sqrt(std::numeric_limits<real>::epsilon());
-		const real tol_abs = std::numeric_limits<real>::infinity();
-		return rn::PiecewiseBarycentricLagrangeInterpolator<real>(tail, 0.0,
-		                                  Qmax, tol_rel, tol_abs, 0.0, 1.0);
-	}
-
-
-
-	static real pdf_single_explicit(const posterior::arg<real>::type x,
+	static real pdf_single_explicit(const rn::PointInInterval<real>& x,
 	                const std::vector<posterior::LocalsAndNorm<real>>& locals,
 	                const std::vector<real>& weights,
+	                const posterior::arg<real>::type Qmax,
 	                const posterior::arg<real>::type norm)
 	{
 		/*
@@ -767,223 +674,84 @@ private:
 			}
 			if (zi > 1.0 || zi < 0.0)
 				continue;
+			real sj;
 			if (zi <= locals[j].ztrans){
-				res += posterior::outer_integrand<real>(zi, locals[j],
+				sj = posterior::outer_integrand<real>(zi, locals[j],
 				             locals[j].log_scale.log_integrand)
 				       * weights[j] / (Qmax_j * norm);
+				if (rm::isnan(sj)){
+					std::string msg("Found NaN at sub-PDF evaluation (zi=");
+					msg += std::to_string(zi);
+					msg += ")";
+					throw std::runtime_error(msg);
+				}
 			} else {
-				res += posterior::a_integral_large_z<false,real>(1.0 - zi,
+				const real yi = (Qmax_j == Qmax)
+				    ? x.from_back / Qmax
+				    : 1.0 - zi;
+				sj = posterior::a_integral_large_z<false,real>(
+					       yi,
 				           locals[j].norm,
 				           locals[j].log_scale.log_integrand,
 				           locals[j])
 				       * weights[j] / (Qmax_j * norm);
+				if (rm::isnan(sj)){
+					std::string msg("Found NaN at sub-PDF evaluation (zi=");
+					msg += std::to_string(zi);
+					msg += " - large z)";
+					msg += "\nQmax_j: ";
+					msg += std::to_string(Qmax_j);
+					msg += "\nnorm:   ";
+					msg += std::to_string(norm);
+					msg += "\nw[j]:   ";
+					msg += std::to_string(weights[j]);
+					throw std::runtime_error(msg);
+				}
 			}
+			res += sj;
 		}
+		real resr(res);
+		if (rm::isnan(resr))
+			throw std::runtime_error("Found NaN PDF evaluation.");
 		return res;
 	}
 
-
-	template<bool use_bli>
-	real pdf_single(const posterior::arg<real>::type x) const {
-		if (use_bli){
-			return pdf_single_explicit(x, locals, weights, norm);
-		}
+	/*
+	 * Differnt specializations of the PDF evaluated on a single value.
+	 * The specializations iterate the backends available in `pdf_algorithm_t`:
+	 */
+	template<pdf_algorithm_t pa = pdf_algorithm>
+	real pdf_single(const std::enable_if_t<pa==BARYCENTRIC_LAGRANGE,
+	                                       rn::PointInInterval<real>>& x) const
+	{
 		if (x < 0)
 			return 0.0;
 		else if (x > Qmax)
 			return 0.0;
-		return pdf_interp(x);
+		return (*pdf_interp)(x);
 	}
 
-
-	template<bool tail, typename real_in=double, bool use_bli=true>
-	void cdf_sorted(const std::vector<real_in>& x,
-	                std::vector<real>& res, bool adaptive,
-	                bool parallel) const
+	template<pdf_algorithm_t pa = pdf_algorithm>
+	real pdf_single(const std::enable_if_t<pa==ADAPTIVE_SIMPSON,
+	                                       rn::PointInInterval<real>>& x) const
 	{
-		if (x.size() == 0)
-			return;
-		const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
-		typedef bmq::gauss_kronrod<real,15> GK;
-		typedef bmq::gauss<real,7> GL;
-
-		auto integrand = [this](const posterior::arg<real>::type x) -> real {
-			return pdf_single<use_bli>(x);
-		};
-
-		/* Start from 0.0: */
-		if (parallel){
-			std::optional<std::runtime_error> rerr;
-			#pragma omp parallel for
-			for (size_t i=0; i<x.size(); ++i){
-				if (rerr)
-					continue;
-				real_in last_x, next_x;
-				if (tail){
-					last_x = x[i];
-					next_x = (i == x.size()-1) ? Qmax : x[i+1];
-				} else {
-					last_x = (i == 0) ? 0.0 : x[i-1];
-					next_x = x[i];
-				}
-				real error, L1;
-				try {
-					if (adaptive)
-						res[i] = GK::integrate(integrand, last_x, next_x, 9,
-						                       TOL_TANH_SINH, &error, &L1);
-					else
-						res[i] = GL::integrate(integrand, last_x, next_x, &L1);
-				} catch (const std::runtime_error& e){
-					#pragma omp critical
-					{
-						rerr = e;
-					}
-				}
-			}
-			if (rerr)
-				throw *rerr;
-		} else {
-			for (size_t i=0; i<x.size(); ++i){
-				real_in last_x, next_x;
-				if (tail){
-					last_x = x[i];
-					next_x = (i == x.size()-1) ? Qmax : x[i+1];
-				} else {
-					last_x = (i == 0) ? 0.0 : x[i-1];
-					next_x = x[i];
-				}
-				real error, L1;
-				if (adaptive)
-					res[i] = GK::integrate(integrand, last_x, next_x, 9,
-					                       TOL_TANH_SINH, &error, &L1);
-				else
-					res[i] = GL::integrate(integrand, last_x, next_x, &L1);
-			}
-		}
-
-		if (tail){
-			size_t i = x.size() - 1;
-			rn::KahanAdder<real> cdfi(res[i]);
-			for (; i>0; --i){
-				cdfi += res[i];
-				res[i] = cdfi;
-			}
-			cdfi += res[0];
-			res[0] = cdfi;
-		} else {
-			rn::KahanAdder<real> cdfi(res[0]);
-			for (size_t i=1; i<x.size(); ++i){
-				cdfi += res[i];
-				res[i] = cdfi;
-			}
-		}
+		if (x < 0)
+			return 0.0;
+		else if (x > Qmax)
+			return 0.0;
+		return saq->density(x);
 	}
 
-	void tail_quantiles_old(std::vector<double>& quantiles,
-	                        size_t n_chebyshev, bool parallel,
-	                        bool adaptive) const
+	template<pdf_algorithm_t pa = pdf_algorithm>
+	real pdf_single(const std::enable_if_t<pa==EXPLICIT,
+	                                       rn::PointInInterval<real>>& x) const
 	{
-		if (n_chebyshev <= 1)
-			throw std::runtime_error("Need at least 2 Chebyshev points.");
-
-		/* The support for the interpolation: */
-		struct xf_t {
-			double x;
-			real f;
-		};
-		std::vector<xf_t> support(n_chebyshev, xf_t({0.0, 0.0}));
-		{
-			/* Prepare the interpolation points: */
-			for (size_t i=0; i<n_chebyshev; ++i){
-				constexpr long double pi = std::numbers::pi_v<long double>;
-				real z = std::cos(i * pi / (n_chebyshev-1));
-				support[i].x = std::min(std::max<double>(0.5 * (1.0+z) * Qmax,
-				                                         0.0),
-				                        (double)Qmax);
-			}
-
-			/*
-			 * Evaluate the posterior tail.
-			 * We fill f with x values - but in reverse order since `x`
-			 * is monotonously decreasing.
-			 */
-			std::vector<real> f(n_chebyshev);
-			for (size_t i=0; i<n_chebyshev; ++i){
-				f[i] = support[n_chebyshev-i-1].x;
-			}
-			tail<real>(f, parallel, adaptive);
-
-			/* Transfer to the support vector: */
-			for (size_t i=0; i<n_chebyshev; ++i){
-				support[i].f = f[n_chebyshev - i - 1];
-			}
-		}
-
-		/* Now we can interpolate: */
-		auto tail_bli = [&support,n_chebyshev](double PH) -> double {
-			auto xfit = support.cbegin();
-			if (PH == xfit->x)
-				return xfit->f;
-			rn::KahanAdder<real> nom(0.0);
-			rn::KahanAdder<real> denom(0.0);
-			real wi = 0.5 / (PH - xfit->x);
-			nom += wi * xfit->f;
-			denom += wi;
-			int sign = -1;
-			++xfit;
-			for (size_t i=1; i<n_chebyshev-1; ++i){
-				if (PH == xfit->x)
-					return xfit->f;
-				wi = sign * 1.0 / (PH - xfit->x);
-				nom += wi * xfit->f;
-				denom += wi;
-				sign = -sign;
-				++xfit;
-			}
-			if (PH == xfit->x)
-				return xfit->f;
-			wi = sign * 0.5 / (PH - xfit->x);
-			nom += wi * xfit->f;
-			denom += wi;
-			return std::max<double>(
-			          std::min<double>(static_cast<double>(nom)
-			                           / static_cast<double>(denom),
-			                           1.0),
-			          0.0
-			);
-		};
-
-		/* Now solve for the quantiles: */
-		for (size_t i=0; i<quantiles.size(); ++i){
-			if (quantiles[i] == 0.0)
-				quantiles[i] = Qmax;
-			else if (quantiles[i] == 1.0)
-				quantiles[i] = 0.0;
-			else if (quantiles[i] > 0.0 && quantiles[i] < 1.0){
-				/* The typical case. Use TOMS 748 on a quantile
-				 * function to find the quantile.
-				 */
-				const double qi = quantiles[i];
-				auto quantile_function =
-				[&tail_bli,qi](double PH) -> double
-				{
-					return tail_bli(PH) - qi;
-				};
-				std::uintmax_t max_iter(100);
-				bmt::eps_tolerance<double>
-				   eps_tol(std::numeric_limits<double>::digits - 2);
-				std::pair<double,double> bracket
-				   = bmt::toms748_solve(quantile_function, 0.0, (double)Qmax,
-				                        1.0-quantiles[i], -quantiles[i],
-				                        eps_tol, max_iter);
-				quantiles[i] = 0.5*(bracket.first + bracket.second);
-			} else {
-				throw std::runtime_error("Encountered quantile out of bounds "
-				                         "[0,1].");
-			}
-		}
+		if (x < 0)
+			return 0.0;
+		else if (x > Qmax)
+			return 0.0;
+		return pdf_single_explicit(x, locals, weights, Qmax, norm);
 	}
-
 
 };
 

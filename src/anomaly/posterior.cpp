@@ -25,12 +25,13 @@
 namespace reheatfunq {
 namespace anomaly {
 
-template<typename real>
+template<typename real, pdf_algorithm_t pdf_algorithm>
 bool
-Posterior<real>::validate(const std::vector<std::vector<posterior::qc_t>>&
-                                qc_set,
-                          double p0, double s0, double n0, double v0,
-                          double dest_tol) const
+Posterior<real,pdf_algorithm>::validate(
+    const std::vector<std::vector<posterior::qc_t>>& qc_set,
+    double p0, double s0, double n0, double v0,
+    double dest_tol
+) const
 {
 	if (qc_set.size() != locals.size())
 		throw std::runtime_error("Size of provided set to test against is not "
@@ -69,14 +70,40 @@ Posterior<real>::validate(const std::vector<std::vector<posterior::qc_t>>&
 /*
  * Explicitly specialize:
  */
+namespace ra = reheatfunq::anomaly;
+
 template bool
-reheatfunq::anomaly::Posterior<long double>::validate(
+reheatfunq::anomaly::Posterior<long double, ra::EXPLICIT>::validate(
     const std::vector<std::vector<posterior::qc_t>>&,
     double, double, double, double, double
 ) const;
 
 template bool
-reheatfunq::anomaly::Posterior<double>::validate(
+reheatfunq::anomaly::Posterior<long double, ra::BARYCENTRIC_LAGRANGE>::validate(
+    const std::vector<std::vector<posterior::qc_t>>&,
+    double, double, double, double, double
+) const;
+
+template bool
+reheatfunq::anomaly::Posterior<long double, ra::ADAPTIVE_SIMPSON>::validate(
+    const std::vector<std::vector<posterior::qc_t>>&,
+    double, double, double, double, double
+) const;
+
+template bool
+reheatfunq::anomaly::Posterior<double, ra::EXPLICIT>::validate(
+    const std::vector<std::vector<posterior::qc_t>>&,
+    double, double, double, double, double
+) const;
+
+template bool
+reheatfunq::anomaly::Posterior<double, ra::BARYCENTRIC_LAGRANGE>::validate(
+    const std::vector<std::vector<posterior::qc_t>>&,
+    double, double, double, double, double
+) const;
+
+template bool
+reheatfunq::anomaly::Posterior<double, ra::ADAPTIVE_SIMPSON>::validate(
     const std::vector<std::vector<posterior::qc_t>>&,
     double, double, double, double, double
 ) const;

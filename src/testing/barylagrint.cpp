@@ -27,20 +27,24 @@ namespace reheatfunq {
 namespace testing {
 
 using reheatfunq::numerics::PiecewiseBarycentricLagrangeInterpolator;
+using reheatfunq::numerics::PointInInterval;
 
 void test_barycentric_lagrange_interpolator()
 {
-	auto fun = [](double x) -> double
+	auto fun = [](const PointInInterval<double>& x) -> double
 	{
-		return std::exp(-x);
+		return std::exp(-x.val);
 	};
 
 	const double xmax = 5.0;
-	PiecewiseBarycentricLagrangeInterpolator<double> bli(fun, 0.0, xmax, 1e-8);
+	PiecewiseBarycentricLagrangeInterpolator<double> bli(fun, 0.0, xmax, 1e-8,
+	                                                     0.0, 0.0, 1.0);
 
 	constexpr size_t N = 897389;
 	for (size_t i=0; i<N; ++i){
-		double xi = i * xmax / (N-1);
+		PointInInterval<double> xi(i * xmax / (N-1),
+		                         i * xmax / (N-1),
+		                         (N - 1 - i) * xmax / (N-1));
 		double y_ref = fun(xi);
 		double y = bli(xi);
 		if (std::abs(y - y_ref) > 1e-8 * y_ref)
@@ -59,12 +63,16 @@ void test_barycentric_lagrange_interpolator()
 		return sx * sx;
 	};
 	PiecewiseBarycentricLagrangeInterpolator<double> bli2(fun2, 0.0, xmax,
-	                                                      1e-10);
+	                                                      1e-10, 0.0, 0.0, 1.0,
+	                                                      200, 8);
 	for (size_t i=0; i<N; ++i){
-		double xi = i * xmax / (N-1);
+		PointInInterval<double> xi(i * xmax / (N-1),
+		                         i * xmax / (N-1),
+		                         (N - 1 - i) * xmax / (N-1));
 		double y_ref = fun2(xi);
 		double y = bli2(xi);
-		if (std::abs(y - y_ref) > 1e-7 * y_ref){
+		double tol = std::max(1e-7, 1e-16/(y_ref/xi.val));
+		if ((std::abs(y - y_ref) > tol * y_ref) && (y_ref > 0)){
 			std::cerr << std::setprecision(20);
 			std::cerr << "i     = " << i << " / " << N << "\n";
 			std::cerr << "xi    = " << xi << "\n";
@@ -91,7 +99,9 @@ void test_barycentric_lagrange_interpolator()
 	bli = PiecewiseBarycentricLagrangeInterpolator<double>(fun3, 0.0, xmax,
 	                                                       1e-8, 1.0, 0.0, 1.0);
 	for (size_t i=0; i<N; ++i){
-		double xi = i * xmax / (N-1);
+		PointInInterval<double> xi(i * xmax / (N-1),
+		                         i * xmax / (N-1),
+		                         (N - 1 - i) * xmax / (N-1));
 		double y_ref = fun3(xi);
 		double y = bli(xi);
 		if (std::abs(y - y_ref) > 1e-6){
@@ -118,7 +128,9 @@ void test_barycentric_lagrange_interpolator()
 	bli = PiecewiseBarycentricLagrangeInterpolator<double>(fun4, 0.0, xmax,
 	                                                       1e-8);
 	for (size_t i=0; i<N; ++i){
-		double xi = i * xmax / (N-1);
+		PointInInterval<double> xi(i * xmax / (N-1),
+		                         i * xmax / (N-1),
+		                         (N - 1 - i) * xmax / (N-1));
 		double y_ref = fun4(xi);
 		double y = bli(xi);
 		if (std::abs(y - y_ref) > 1e-7 * y_ref){

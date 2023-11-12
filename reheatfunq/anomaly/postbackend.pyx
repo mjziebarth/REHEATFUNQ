@@ -27,6 +27,7 @@
 # General math routines
 cimport cython
 import numpy as np
+from libc.stdint cimport uint8_t
 from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp.memory cimport shared_ptr, make_shared
@@ -73,6 +74,13 @@ cdef extern from "ziebarth2022a.hpp" namespace "pdtoolbox::heatflow" nogil:
 
 cdef extern from "anomaly/variableprecisionposterior.hpp" \
          namespace "reheatfunq::anomaly" nogil:
+
+    # Actually in anomaly/posterior.hpp:
+    cdef enum pdf_algorithm_t:
+        EXPLICIT = 0
+        BARYCENTRIC_LAGRANGE = 1
+        ADAPTIVE_SIMPSON = 2
+
     cdef struct qc_t "reheatfunq::anomaly::posterior::qc_t":
         qc_t(double q, double c)
 
@@ -84,19 +92,17 @@ cdef extern from "anomaly/variableprecisionposterior.hpp" \
         VariablePrecisionPosterior(
                   const vector[weighted_sample_t] weighted_samples,
                   double p, double s, double n, double v, double amin,
-                  double dest_tol
+                  double dest_tol, precision_t precision,
+                  pdf_algorithm_t pa
         ) except+
 
         double get_Qmax() const
 
-        void pdf_inplace(vector[double]& PH) except+
-        void cdf_inplace(vector[double]& PH, bool parallel,
-                         bool adaptive) except+
-        void tail_inplace(vector[double]& PH, bool parallel,
-                          bool adaptive) except+
+        void pdf_inplace(vector[double]& PH, bool parallel) except+
+        void cdf_inplace(vector[double]& PH, bool parallel) except+
+        void tail_inplace(vector[double]& PH, bool parallel) except+
         void tail_quantiles_inplace(vector[double]& quantiles,
-                                    size_t n_chebyshev, bool parallel,
-                                    bool adaptive) except+
+                                    bool parallel) except+
 
         bool validate(const vector[vector[qc_t]]& qc_set, double p0, double s0,
                       double n0, double v0, double dest_tol) except+
@@ -149,8 +155,22 @@ cdef class CppAnomalyPosterior:
     cdef shared_ptr[VariablePrecisionPosterior] post
 
     def __init__(self, list qij, list cij, const double[::1] wi, double p,
-                 double s, double n, double v, double amin, double dest_tol,
-                 bool validate = False):
+                 double s, double n, double v, double amin, double rtol,
+                 bool validate = False, str pdf_algorithm="barycentric_lagrange",
+                 size_t bli_max_splits = 100, uint8_t bli_max_refinements=7):
+
+        pdf_algorithm = pdf_algorithm.lower()
+        if pdf_algorithm not in ("explicit", "barycentric_lagrange",
+                                 "adaptive_simpson"):
+            raise ValueError("`pdf_algorithm` must be one of 'explicit', "
+                             "'barycentric_lagrange', or 'adaptive_simpson'.")
+        cdef pdf_algorithm_t pa
+        if pdf_algorithm == "explicit":
+            pa = EXPLICIT
+        elif pdf_algorithm == "barycentric_lagrange":
+            pa = BARYCENTRIC_LAGRANGE
+        elif pdf_algorithm == "adaptive_simpson":
+            pa = ADAPTIVE_SIMPSON
 
         cdef size_t M = len(qij)
         if len(cij) != M:
@@ -184,7 +204,8 @@ cdef class CppAnomalyPosterior:
 
         with nogil:
             self.post = make_shared[VariablePrecisionPosterior](
-                            weighted_samples, p, s, n, v, amin, dest_tol, prec
+                            weighted_samples, p, s, n, v, amin, rtol, prec, pa,
+                            bli_max_splits, bli_max_refinements
             )
 
         # Validate:
@@ -200,7 +221,7 @@ cdef class CppAnomalyPosterior:
                     for j in range(N):
                         emplace_back(setofsets[i], qj[j], cj[j])
 
-            deref(self.post).validate(setofsets, p, s, n, v, dest_tol)
+            deref(self.post).validate(setofsets, p, s, n, v, rtol)
 
     #
     # Properties:
@@ -211,7 +232,7 @@ cdef class CppAnomalyPosterior:
         return deref(self.post).get_Qmax()
 
 
-    def pdf(self, const double[:] PH):
+    def pdf(self, const double[:] PH, bool parallel=True):
         """
 
         """
@@ -226,7 +247,7 @@ cdef class CppAnomalyPosterior:
             for i in range(N):
                 work[i] = PH[i]
 
-            deref(self.post).pdf_inplace(work)
+            deref(self.post).pdf_inplace(work, parallel)
         res = np.empty(N)
         with nogil:
             for i in range(N):
@@ -235,7 +256,7 @@ cdef class CppAnomalyPosterior:
         return res.base
 
 
-    def cdf(self, const double[:] PH, bool parallel=True, bool adaptive=False):
+    def cdf(self, const double[:] PH, bool parallel=True):
         """
 
         """
@@ -250,7 +271,7 @@ cdef class CppAnomalyPosterior:
             for i in range(N):
                 work[i] = PH[i]
 
-            deref(self.post).cdf_inplace(work, parallel, adaptive)
+            deref(self.post).cdf_inplace(work, parallel)
         res = np.empty(N)
         with nogil:
             for i in range(N):
@@ -259,7 +280,7 @@ cdef class CppAnomalyPosterior:
         return res.base
 
 
-    def tail(self, const double[:] PH, bool parallel=True, bool adaptive=False):
+    def tail(self, const double[:] PH, bool parallel=True):
         """
 
         """
@@ -274,7 +295,7 @@ cdef class CppAnomalyPosterior:
             for i in range(N):
                 work[i] = PH[i]
 
-            deref(self.post).tail_inplace(work, parallel, adaptive)
+            deref(self.post).tail_inplace(work, parallel)
         res = np.empty(N)
         with nogil:
             for i in range(N):
@@ -283,8 +304,7 @@ cdef class CppAnomalyPosterior:
         return res.base
 
 
-    def tail_quantiles(self, const double[:] t, size_t n_chebyshev=100,
-                       bool parallel=True, bool adaptive=False):
+    def tail_quantiles(self, const double[:] t, bool parallel=True):
         """
 
         """
@@ -299,8 +319,7 @@ cdef class CppAnomalyPosterior:
             for i in range(N):
                 work[i] = t[i]
 
-            deref(self.post).tail_quantiles_inplace(work, n_chebyshev, parallel,
-                                                    adaptive)
+            deref(self.post).tail_quantiles_inplace(work, parallel)
         res = np.empty(N)
         with nogil:
             for i in range(N):

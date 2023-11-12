@@ -166,8 +166,8 @@ libhfp2 = static_library(
 # Resilience:
 #
 include_resilience =  [include, 'external/zeal2022hfpc/include']
-sources_resilience = ['external/zeal2022hfpc/src/resilience.cpp',
-                      'external/zeal2022hfpc/src/synthetic_covering.cpp']
+sources_resilience = ['external/zeal2022hfpc/src/synthetic_covering.cpp',
+                      'src/resilience/resilience.cpp']
 dependencies_resilience = [openmp_dep, boost_dep]
 
 libresilience = static_library(
