@@ -171,6 +171,9 @@ cdef class CppAnomalyPosterior:
             pa = BARYCENTRIC_LAGRANGE
         elif pdf_algorithm == "adaptive_simpson":
             pa = ADAPTIVE_SIMPSON
+        else:
+            raise ValueError("'pdf_algorithm' must be one of 'explicit', 'barycentric_lagrange', "
+                             "'adaptive_simpson'.")
 
         cdef size_t M = len(qij)
         if len(cij) != M:
