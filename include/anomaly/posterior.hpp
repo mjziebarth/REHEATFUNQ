@@ -174,7 +174,7 @@ public:
 						*/
 					PH[i] = saq->integral(
 						rn::PointInInterval<real>(
-							PH[i], PH[i], Qmax - PH[i]
+						    PH[i], PH[i], Qmax - PH[i]
 						)
 					);
 				} catch (...) {
@@ -288,13 +288,13 @@ public:
 				{
 					const real PH = this->Qmax - PH_back;
 					return saq->integral(
-						rn::PointInInterval<real>(PH, PH, PH_back),
-						true
+					    rn::PointInInterval<real>(PH, PH, PH_back),
+					    true
 					) - qi;
 				};
 				std::uintmax_t max_iter(100);
 				bmt::eps_tolerance<real>
-					eps_tol(std::numeric_limits<real>::digits - 2);
+				    eps_tol(std::numeric_limits<real>::digits - 2);
 				try {
 					std::pair<real,real> bracket
 					    = bmt::toms748_solve(quantile_function,
@@ -307,8 +307,8 @@ public:
 				}
 			} else {
 				local_error = std::make_exception_ptr(
-					std::runtime_error("Encountered quantile out of bounds "
-										"[0,1]."));
+				    std::runtime_error("Encountered quantile out of bounds "
+				                       "[0,1]."));
 			}
 			if (local_error){
 				#pragma omp critical
@@ -321,7 +321,7 @@ public:
 		/* Handle potential errors that occurred: */
 		if (error){
 			std::string msg = "An error occurred while computing the "
-								"posterior tail quantiles: ";
+			                  "posterior tail quantiles: ";
 			try {
 				std::rethrow_exception(error);
 			} catch (const std::runtime_error& e) {
