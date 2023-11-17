@@ -372,7 +372,7 @@ fail_t _tcp_iteration_array(size_t N, double P_MW,
 }
 
 
-template<size_t Nq, typename dist_t>
+template<uint_fast8_t Nq, typename dist_t>
 std::optional<std::vector<quantiles_t>>
 test_performance_cpp(size_t N, size_t M, double P_MW, const dist_t& dist,
                      const std::array<double,Nq>& quantiles, double PRIOR_P,
