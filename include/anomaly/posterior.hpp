@@ -264,8 +264,8 @@ public:
 		}
 
 		/*
-			* OMP-compatible exception propagation code:
-			*/
+		 * OMP-compatible exception propagation code:
+		 */
 		std::exception_ptr error;
 
 		#pragma omp parallel for if(parallel)
@@ -280,8 +280,8 @@ public:
 				quantiles[i] = 0.0;
 			else if (quantiles[i] > 0.0 && quantiles[i] < 1.0){
 				/* The typical case. Use TOMS 748 on a quantile
-					* function to find the quantile.
-					*/
+				 * function to find the quantile.
+				 */
 				const real qi = quantiles[i];
 				auto quantile_function =
 				[this,qi](real PH_back) -> real
