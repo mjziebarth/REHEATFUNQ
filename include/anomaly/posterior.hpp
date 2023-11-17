@@ -297,12 +297,11 @@ public:
 					eps_tol(std::numeric_limits<real>::digits - 2);
 				try {
 					std::pair<real,real> bracket
-						= bmt::toms748_solve(quantile_function,
-										static_cast<real>(0.0), Qmax,
-										static_cast<real>(-quantiles[i]),
-										static_cast<real>(1.0-quantiles[i]),
-										eps_tol, max_iter);
-					quantiles[i] = 0.5*(bracket.first + bracket.second);
+					    = bmt::toms748_solve(quantile_function,
+					                    static_cast<real>(0.0), Qmax,
+					                    -qi, 1.0 - qi, eps_tol,
+					                    max_iter);
+					quantiles[i] = Qmax - 0.5*(bracket.first + bracket.second);
 				} catch (...) {
 					local_error = std::current_exception();
 				}
