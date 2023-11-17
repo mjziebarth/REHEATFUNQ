@@ -326,6 +326,10 @@ fail_t _tcp_iteration_array(size_t N, double P_MW,
 				work_quantiles[i] = quantiles[i];
 			}
 			post.tail_quantiles(work_quantiles);
+
+			/* Copy to the output vector: */
+			std::copy(work_quantiles.cbegin(), work_quantiles.cend(), res_proper);
+
 		} catch (std::exception& e) {
 			std::cout << "ERROR in Posterior informed\n" << std::flush;
 			std::cout << e.what() << "\n" << std::flush;
@@ -352,6 +356,9 @@ fail_t _tcp_iteration_array(size_t N, double P_MW,
 				work_quantiles[i] = quantiles[i];
 			}
 			post.tail_quantiles(work_quantiles);
+
+			/* Copy to the output vector: */
+			std::copy(work_quantiles.cbegin(), work_quantiles.cend(), res_improper);
 		} catch (...) {
 			std::cout << "ERROR in Posterior uninformed\n" << std::flush;
 			std::fill(res_improper, res_improper+Nq, std::nan(""));
