@@ -182,12 +182,13 @@ real large_z_amax(const typename arg<real>::type ym, const Locals<real>& L)
 	constexpr double TOL = 1e-14;
 	const real lh0 = rm::log(L.h[0]);
 	const real lym =  rm::log(ym);
-	real amax = (L.n > L.v) ? std::max<real>((L.lp - L.v * L.ls
+	const real amax0 = (L.n > L.v) ? std::max<real>((L.lp - L.v * L.ls
 	                                          + L.v * rm::log(L.v)
 	                                          + lh0 - L.v * L.l1p_w + lym)
 	                                         / (L.n - L.v),
 	                                         1.0)
 	                    : 1.0;
+	real amax = amax0;
 
 	/* Recurring terms of the first and second derivatives of the a-integrands:
 	 */
@@ -199,14 +200,24 @@ real large_z_amax(const typename arg<real>::type ym, const Locals<real>& L)
 		return L.v * L.v * rm::trigamma(L.v * a) - L.n * rm::trigamma(a);
 	};
 
+	constexpr double MAX_INCREASE = 1e50;
+	bool converged = false;
+	try {
 	if (order == 0){
 		for (uint_fast8_t i=0; i<200; ++i){
 			const real f0 = f0_base(amax) - 1/amax + lym;
 			const real f1 = f1_base(amax) + 1/(amax*amax);
-			const real da = std::max<real>(-f0/f1, -0.9*amax);
+			const real da = std::min<real>(
+			    std::max<real>(-f0/f1, -0.9*amax),
+			    MAX_INCREASE * amax
+			);
 			amax += da;
-			if (abs(da) < TOL*abs(amax))
+			if (abs(da) < TOL*abs(amax)){
+				converged = true;
 				break;
+			} else if (std::isinf(amax)) {
+				break;
+			}
 		}
 	} else if (order == 1){
 		for (uint_fast8_t i=0; i<200; ++i){
@@ -215,10 +226,17 @@ real large_z_amax(const typename arg<real>::type ym, const Locals<real>& L)
 			const real f0 = f0_base(amax) - 1/(amax+1) + lym + C1_1;
 			const real f1 = f1_base(amax) + 1/((amax+1)*(amax+1))
 			                + C1.deriv2/C1.deriv0 - C1_1 * C1_1;
-			const real da = std::max<real>(-f0/f1, -0.9*amax);
+			const real da = std::min<real>(
+			    std::max<real>(-f0/f1, -0.9*amax),
+			    MAX_INCREASE * amax
+			);
 			amax += da;
-			if (abs(da) < TOL*abs(amax))
+			if (abs(da) < TOL*abs(amax)){
+				converged = true;
 				break;
+			} else if (std::isinf(amax)) {
+				break;
+			}
 		}
 	} else if (order == 2){
 		for (uint_fast8_t i=0; i<200; ++i){
@@ -227,10 +245,17 @@ real large_z_amax(const typename arg<real>::type ym, const Locals<real>& L)
 			const real f0 = f0_base(amax) - 1/(amax+2) + lym + C2_1;
 			const real f1 = f1_base(amax) + 1/((amax+2)*(amax+2))
 			                + C2.deriv2/C2.deriv0 - C2_1 * C2_1;
-			const real da = std::max<real>(-f0/f1, -0.9*amax);
+			const real da = std::min(
+			    std::max<real>(-f0/f1, -0.9*amax),
+			    MAX_INCREASE * amax
+			);
 			amax += da;
-			if (abs(da) < TOL*abs(amax))
+			if (abs(da) < TOL*abs(amax)){
+				converged = true;
 				break;
+			} else if (std::isinf(amax)) {
+				break;
+			}
 		}
 	} else if (order == 3){
 		for (uint_fast8_t i=0; i<200; ++i){
@@ -239,10 +264,80 @@ real large_z_amax(const typename arg<real>::type ym, const Locals<real>& L)
 			auto C3_2 = C3.deriv2/C3.deriv0 - C3_1 * C3_1;
 			const real f0 = f0_base(amax) - 1/(amax+3) + lym + C3_1;
 			const real f1 = f1_base(amax) + 1/((amax+3)*(amax+3)) + C3_2;
-			const real da = std::max<real>(-f0/f1, -0.9*amax);
+			const real da = std::min(
+			    std::max<real>(-f0/f1, -0.9*amax),
+			    MAX_INCREASE * amax
+			);
 			amax += da;
-			if (abs(da) < TOL*abs(amax))
+			if (abs(da) < TOL*abs(amax)){
+				converged = true;
 				break;
+			} else if (std::isinf(amax)) {
+				break;
+			}
+		}
+	}
+	} catch (...){
+		std::string msg("Runtime error in large_z_amax (large_z.hpp).\na = ");
+		msg += std::to_string(amax);
+		msg += "\nva = ";
+		msg += std::to_string(L.v * amax);
+		msg += "\ninitial guess = ";
+		real r = (L.n > L.v) ? std::max<real>((L.lp - L.v * L.ls
+	                                          + L.v * rm::log(L.v)
+	                                          + lh0 - L.v * L.l1p_w + lym)
+	                                         / (L.n - L.v),
+	                                         1.0)
+	                    : 1.0;
+		msg += std::to_string(r);
+		throw std::runtime_error(msg);
+	}
+	if (!converged){
+		/*
+		 * The Newton-Raphson root finding did not converge. Either because the
+		 * maximum number of iterations has been reached or because `a` is infinite.
+		 * Also in case of the maximum number of iterations reached it is likely
+		 * that `a` is converging to infinity - the Newton-Raphson usually converges
+		 * too rapidly to allow that many iterations.
+		 * An infinite `a` can be the case if the derivative f0_base simply has no
+		 * roots.
+		 * Assuming this to be the case, the maximum---which we aim to determine through
+		 * the root finding on the derivative---is likely on the edges of the interval.
+		 * Since the log-integrand approaches -infty at large a (due to existing
+		 * convergence), the maximum is hence very likely at the lower boundary of the
+		 * `a` interval.
+		 * Here, we use the starting value of `a`, as well as a=1.0, and check explicitly
+		 * the a-varying part of the base function (fm1_base). Of the three `a`
+		 * (1.0, amax, amax0), we choose the one that evaluates to the maximum fm1_base.
+		 */
+		auto fm1_base = [&](const typename arg<real>::type a) -> real {
+			if (rm::isinf(a))
+				return -rm::abs(a);
+			real lgva = rm::lgamma(L.v * a);
+			real lga = rm::lgamma(a);
+			real fbase = (L.lp - L.v * L.ls + lh0 - L.v + L.l1p_w) * a;
+			if (rm::isinf(lgva) || rm::isinf(lga)){
+				/* Here we take into consideration only the leading terms of the difference
+				 * of the loggamma functions (computed using SymPy). */
+				return fbase + a * (L.n - L.v + L.v * rm::log(L.v) + (L.v - L.n) * rm::log(a));
+			}
+			return fbase + lgva - L.n * lga;
+		};
+		real fm1_amax0 = fm1_base(amax0),
+		     fm1_amax = fm1_base(amax),
+			 fm1_1 = fm1_base(1.0);
+		if (fm1_amax0 >= fm1_amax){
+			if (fm1_1 >= fm1_amax0){
+				return 1.0;
+			} else {
+				return amax0;
+			}
+		} else {
+			if (fm1_1 >= fm1_amax){
+				return 1.0;
+			} else {
+				return amax;
+			}
 		}
 	}
 	return std::max(amax, L.amin);
