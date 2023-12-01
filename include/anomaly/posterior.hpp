@@ -667,6 +667,57 @@ private:
 	}
 
 
+	static real pdf_single_explicit_j(const rn::PointInInterval<real>& x,
+	                const std::vector<posterior::LocalsAndNorm<real>>& locals,
+	                const std::vector<real>& weights,
+	                const posterior::arg<real>::type Qmax,
+	                const posterior::arg<real>::type norm,
+	                size_t j)
+	{
+		const real Qmax_j = locals[j].Qmax;
+		const real zi = static_cast<real>(x) / Qmax_j;
+		if (rm::isnan(zi))
+			return std::nan("");
+		if (zi > 1.0 || zi < 0.0)
+			return 0.0;
+		real sj;
+		if (zi <= locals[j].ztrans){
+			sj = posterior::outer_integrand<real>(zi, locals[j],
+							locals[j].log_scale.log_integrand)
+					* weights[j] / (Qmax_j * norm);
+			if (rm::isnan(sj)){
+				std::string msg("Found NaN at sub-PDF evaluation (zi=");
+				msg += std::to_string(zi);
+				msg += ")";
+				throw std::runtime_error(msg);
+			}
+		} else {
+			const real yi = (Qmax_j == Qmax)
+				? x.from_back / Qmax
+				: 1.0 - zi;
+			sj = posterior::a_integral_large_z<false,real>(
+						yi,
+						locals[j].norm,
+						locals[j].log_scale.log_integrand,
+						locals[j])
+					* weights[j] / (Qmax_j * norm);
+			if (rm::isnan(sj)){
+				std::string msg("Found NaN at sub-PDF evaluation (zi=");
+				msg += std::to_string(zi);
+				msg += " - large z)";
+				msg += "\nQmax_j: ";
+				msg += std::to_string(Qmax_j);
+				msg += "\nnorm:   ";
+				msg += std::to_string(norm);
+				msg += "\nw[j]:   ";
+				msg += std::to_string(weights[j]);
+				throw std::runtime_error(msg);
+			}
+		}
+		return sj;
+	}
+
+	template<bool serial = false, size_t parallel_min_locals = 2>
 	static real pdf_single_explicit(const rn::PointInInterval<real>& x,
 	                const std::vector<posterior::LocalsAndNorm<real>>& locals,
 	                const std::vector<real>& weights,
@@ -678,50 +729,65 @@ private:
 		 */
 		rn::KahanAdder<real> res;
 
-		for (size_t j=0; j<locals.size(); ++j){
-			const real Qmax_j = locals[j].Qmax;
-			const real zi = static_cast<real>(x) / Qmax_j;
-			if (rm::isnan(zi)){
+		const bool parallel = (!serial) && (locals.size() >= parallel_min_locals);
+
+		if (parallel){
+			/*
+			 * 1. Parallel Implementation.
+			 */
+			std::vector<real> resv(locals.size());
+			bool isnan = false;
+			std::exception_ptr error;
+
+			#pragma omp parallel for
+			for (size_t j=0; j<locals.size(); ++j){
+				/* Continue if the result is known Nan: */
+				if (isnan)
+					continue;
+
+				/* Handle exception capture and propagation across the
+				 * OMP border: */
+				try {
+					resv[j] = pdf_single_explicit_j(
+					                x, locals, weights, Qmax,
+					                norm, j
+					);
+				} catch (...) {
+					#pragma omp critical
+					{
+						error = std::current_exception();
+					}
+				}
+
+				/* Result computed but might be NaN: */
+				if (std::isnan(resv[j]))
+					isnan = true;
+			}
+			if (isnan)
 				return std::nan("");
+
+			/* Sum in single thread: */
+			for (size_t j=0; j<locals.size(); ++j){
+				res += resv[j];
 			}
-			if (zi > 1.0 || zi < 0.0)
-				continue;
-			real sj;
-			if (zi <= locals[j].ztrans){
-				sj = posterior::outer_integrand<real>(zi, locals[j],
-				             locals[j].log_scale.log_integrand)
-				       * weights[j] / (Qmax_j * norm);
-				if (rm::isnan(sj)){
-					std::string msg("Found NaN at sub-PDF evaluation (zi=");
-					msg += std::to_string(zi);
-					msg += ")";
-					throw std::runtime_error(msg);
-				}
-			} else {
-				const real yi = (Qmax_j == Qmax)
-				    ? x.from_back / Qmax
-				    : 1.0 - zi;
-				sj = posterior::a_integral_large_z<false,real>(
-					       yi,
-				           locals[j].norm,
-				           locals[j].log_scale.log_integrand,
-				           locals[j])
-				       * weights[j] / (Qmax_j * norm);
-				if (rm::isnan(sj)){
-					std::string msg("Found NaN at sub-PDF evaluation (zi=");
-					msg += std::to_string(zi);
-					msg += " - large z)";
-					msg += "\nQmax_j: ";
-					msg += std::to_string(Qmax_j);
-					msg += "\nnorm:   ";
-					msg += std::to_string(norm);
-					msg += "\nw[j]:   ";
-					msg += std::to_string(weights[j]);
-					throw std::runtime_error(msg);
-				}
+		} else {
+			/*
+			 * 2. Serial Implementation.
+			 */
+			for (size_t j=0; j<locals.size(); ++j){
+				real resj = pdf_single_explicit_j(
+				                x, locals, weights, Qmax,
+				                norm, j
+				);
+
+				/* Result computed but might be NaN: */
+				if (std::isnan(resj))
+					return std::nan("");
+
+				res += resj;
 			}
-			res += sj;
 		}
+
 		real resr(res);
 		if (rm::isnan(resr))
 			throw std::runtime_error("Found NaN PDF evaluation.");
