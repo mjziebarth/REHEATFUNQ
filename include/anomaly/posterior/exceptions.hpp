@@ -23,6 +23,8 @@
 #ifndef REHEATFUNQ_ANOMALY_POSTERIOR_EXCEPTIONS_HPP
 #define REHEATFUNQ_ANOMALY_POSTERIOR_EXCEPTIONS_HPP
 
+#include <string>
+
 namespace reheatfunq {
 namespace anomaly {
 namespace posterior {
@@ -30,16 +32,14 @@ namespace posterior {
 /* A custom exception type indicating that the integral is out of
  * scale for double precision: */
 template<typename real>
-class ScaleError : public std::exception
+class ScaleError : public std::runtime_error
 {
 public:
-	explicit ScaleError(const char* msg, real log_scale)
-	    : _lscale(log_scale), msg(msg) {};
+	explicit ScaleError(const std::string& msg, real log_scale)
+	    : std::runtime_error(msg), _lscale(log_scale) {};
 
-	virtual const char* what() const noexcept
-	{
-		return msg;
-	}
+	explicit ScaleError(const char* msg, real log_scale)
+	    : std::runtime_error(msg), _lscale(log_scale) {};
 
 	real log_scale() const
 	{
@@ -48,7 +48,6 @@ public:
 
 private:
 	real _lscale;
-	const char* msg;
 };
 
 

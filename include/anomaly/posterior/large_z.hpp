@@ -347,7 +347,7 @@ real a_integral_large_z_integrand(const typename arg<real>::type a,
 	           (a, ly, log_integrand_max, L);
 	if (rm::isnan(res.log_abs)){
 		std::string msg("NaN result in a_integral_large_z_integrand_");
-		msg += std::to_string((uint_fast8_t)C);
+		msg += std::to_string((int)C);
 		throw std::runtime_error(msg);
 	}
 
@@ -355,8 +355,11 @@ real a_integral_large_z_integrand(const typename arg<real>::type a,
 	real result = rm::exp(res.log_abs);
 	if (rm::isinf(result)){
 		std::string msg("a_integral_large_z_integrand_");
-		msg += std::to_string((uint_fast8_t)C);
-		throw ScaleError<real>(msg.c_str(), res.log_abs);
+		msg += std::to_string((int)C);
+		msg += "\n   at ly = ";
+		msg += std::to_string(ly);
+		msg += ".";
+		throw ScaleError<real>(msg, res.log_abs);
 	}
 
 	return result;
