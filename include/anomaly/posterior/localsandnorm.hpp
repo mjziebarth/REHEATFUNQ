@@ -177,7 +177,7 @@ public:
 	void write(ostream& out) const {
 		/* Write the parent class: */
 		 LocalsAndLogScale<real>::write(out);
-		
+
 		/* The additions: */
 		out.write(&integrals.S, sizeof(real));
 		out.write(&integrals.full_taylor_integral, sizeof(real));
@@ -211,7 +211,6 @@ private:
 			                   L.ztrans, 9, TOL_TANH_SINH,
 			                   &error, &L1);
 		}
-		// TODO: Check result!
 
 		/*
 		 * Taylor integral from z=1-ymax to z=1
