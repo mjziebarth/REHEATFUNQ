@@ -493,49 +493,62 @@ private:
 	{
 		const size_t N = weighted_samples.size();
 
-		std::exception_ptr error;
 		std::vector<posterior::LocalsAndNorm<real>> locals(N);
 
-		#pragma omp parallel for
-		for (size_t i=0; i<N; ++i)
-		{
-			if (error)
-				continue;
+		/* Perform parallel computation only if more than one set of samples: */
+		const bool parallel = N > 1;
 
-			const weighted_sample_t& ws = weighted_samples[i];
-			std::exception_ptr local_error;
-			if (std::isnan(ws.w) || ws.w <= 0){
-				local_error = std::make_exception_ptr(
-				    std::runtime_error("NaN, zero, or negative weight found"));
-			} else {
+		if (parallel){
+			std::exception_ptr error;
+
+			#pragma omp parallel for
+			for (size_t i=0; i<N; ++i)
+			{
+				if (error)
+					continue;
+
+				const weighted_sample_t& ws = weighted_samples[i];
+				std::exception_ptr local_error;
+				if (std::isnan(ws.w) || ws.w <= 0){
+					local_error = std::make_exception_ptr(
+						std::runtime_error("NaN, zero, or negative weight found"));
+				} else {
+					try {
+						locals[i] = posterior::LocalsAndNorm<real>(ws.sample, p, s,
+																n, v, amin,
+																rtol);
+					} catch (...) {
+						local_error = std::current_exception();
+					}
+				}
+				if (local_error){
+					#pragma omp critical
+					{
+						error = local_error;
+					}
+				}
+			}
+
+			/* Check for any occurred errors: */
+			if (error){
+				std::string msg = "An error occurred while computing the "
+								"posterior attributes: ";
 				try {
-					locals[i] = posterior::LocalsAndNorm<real>(ws.sample, p, s,
-					                                           n, v, amin,
-					                                           rtol);
-				} catch (...) {
-					local_error = std::current_exception();
+					std::rethrow_exception(error);
+				} catch (const std::runtime_error& e) {
+					msg += e.what();
 				}
+				throw std::runtime_error(msg);
 			}
-			if (local_error){
-				#pragma omp critical
-				{
-					error = local_error;
-				}
-			}
+		} else if (N == 1){
+			const weighted_sample_t& ws = weighted_samples[0];
+			if (std::isnan(ws.w) || ws.w <= 0)
+				throw std::runtime_error("NaN, zero, or negative weight found");
+
+			locals[0] = posterior::LocalsAndNorm<real>(ws.sample, p, s, n, v, amin, rtol);
+		} else {
+			throw std::runtime_error("No samples given.");
 		}
-		if (error){
-			std::string msg = "An error occurred while computing the "
-			                  "posterior attributes: ";
-			try {
-				std::rethrow_exception(error);
-			} catch (const std::runtime_error& e) {
-				msg += e.what();
-			}
-			throw std::runtime_error(msg);
-		}
-		if (locals.empty())
-			throw std::runtime_error("No sample with positive weights "
-			                         "provided.");
 		return locals;
 	}
 
