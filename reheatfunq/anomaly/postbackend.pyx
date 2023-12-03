@@ -157,7 +157,8 @@ cdef class CppAnomalyPosterior:
     def __init__(self, list qij, list cij, const double[::1] wi, double p,
                  double s, double n, double v, double amin, double rtol,
                  bool validate = False, str pdf_algorithm="barycentric_lagrange",
-                 size_t bli_max_splits = 100, uint8_t bli_max_refinements=7):
+                 size_t bli_max_splits = 100, uint8_t bli_max_refinements=7,
+                 str precision = "long double"):
 
         pdf_algorithm = pdf_algorithm.lower()
         if pdf_algorithm not in ("explicit", "barycentric_lagrange",
@@ -200,11 +201,32 @@ cdef class CppAnomalyPosterior:
                 for j in range(N):
                     emplace_back(weighted_samples.back(), qj[j], cj[j])
 
-        #raise RuntimeError("check 2")
+
+        # Parse the numerical precision parameter:
+        if prec == "double":
+            prec = WP_LONG_DOUBLE
+        elif prec == "long double":
+            prec = WP_DOUBLE
+        elif prec == "float128":
+            if not HAS_FLOAT128:
+                raise RuntimeError("To use float128 backend, REHEATFUNQ needs to be "
+                                   "compiled with the anomaly_posterior_float128 option.")
+            prec = WP_FLOAT_128
+        elif prec == "dec50":
+            if not HAS_DEC50:
+                raise RuntimeError("To use float128 backend, REHEATFUNQ needs to be "
+                                   "compiled with the anomaly_posterior_float128 option.")
+            prec = WP_BOOST_DEC_50
+        elif prec == "dec100":
+            if not HAS_DEC100:
+                raise RuntimeError("To use float128 backend, REHEATFUNQ needs to be "
+                                   "compiled with the anomaly_posterior_float128 option.")
+            prec = WP_BOOST_DEC_100
+        else:
+            raise RuntimeError("Unknown precision '" + prec + "'.")
 
 
-        prec = WP_LONG_DOUBLE
-
+        # Compute the posterior:
         self.post = make_shared[VariablePrecisionPosterior](
                         weighted_samples, p, s, n, v, amin, rtol, prec, pa,
                         bli_max_splits, bli_max_refinements
