@@ -63,15 +63,21 @@ real log_integrand_amax(const typename arg<real>::type l1pwz,
 	real a = 1.0;
 	real f0, f1, da;
 
+	/* Ensure that the limit (a -> inf) of the derivative f0 is negative: */
+	if (L.n < L.v || (L.n == L.v && C >= 0)){
+		throw std::domain_error("Posterior is not normalizeable.");
+	}
+
 	bool success = false;
 	for (size_t i=0; i<100; ++i){
 		f0 = L.v * rm::digamma(L.v * a) - L.n * rm::digamma(a) + C;
 		f1 = L.v * L.v * rm::trigamma(L.v * a) - L.n * rm::trigamma(a);
 		da = f0 / f1;
-		a -= da;
-		a = std::max<real>(a, 1e-8);
+		real anext = std::max<real>(a - da, 1e-8);
+		real da_real = rm::abs(a - anext);
 		success = rm::abs(da) <= 1e-8 * a;
-		if (success)
+		a = anext;
+		if (success || da_real <= 1e-8 * a)
 			break;
 	}
 	if (!success)
