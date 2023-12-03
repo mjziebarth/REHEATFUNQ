@@ -666,7 +666,7 @@ real a_integral_large_z(const typename arg<real>::type ym,
 	size_t levels;
 	bmq::exp_sinh<real> integrator;
 
-	auto integrand = [&](real a) -> real
+	auto integrand = [=,&L](real a) -> real
 	{
 		real S0
 		   = a_integral_large_z_integrand<C_t::C0,y_integrated,real>
