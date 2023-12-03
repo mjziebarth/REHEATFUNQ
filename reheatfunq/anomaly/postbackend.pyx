@@ -203,27 +203,27 @@ cdef class CppAnomalyPosterior:
 
 
         # Parse the numerical precision parameter:
-        if prec == "double":
+        if precision == "double":
             prec = WP_LONG_DOUBLE
-        elif prec == "long double":
+        elif precision == "long double":
             prec = WP_DOUBLE
-        elif prec == "float128":
+        elif precision == "float128":
             if not HAS_FLOAT128:
                 raise RuntimeError("To use float128 backend, REHEATFUNQ needs to be "
                                    "compiled with the anomaly_posterior_float128 option.")
             prec = WP_FLOAT_128
-        elif prec == "dec50":
+        elif precision == "dec50":
             if not HAS_DEC50:
                 raise RuntimeError("To use float128 backend, REHEATFUNQ needs to be "
                                    "compiled with the anomaly_posterior_float128 option.")
             prec = WP_BOOST_DEC_50
-        elif prec == "dec100":
+        elif precision == "dec100":
             if not HAS_DEC100:
                 raise RuntimeError("To use float128 backend, REHEATFUNQ needs to be "
                                    "compiled with the anomaly_posterior_float128 option.")
             prec = WP_BOOST_DEC_100
         else:
-            raise RuntimeError("Unknown precision '" + prec + "'.")
+            raise RuntimeError("Unknown precision '" + precision + "'.")
 
 
         # Compute the posterior:
@@ -231,6 +231,7 @@ cdef class CppAnomalyPosterior:
                         weighted_samples, p, s, n, v, amin, rtol, prec, pa,
                         bli_max_splits, bli_max_refinements
         )
+
 
         # Validate:
         cdef vector[vector[qc_t]] setofsets
