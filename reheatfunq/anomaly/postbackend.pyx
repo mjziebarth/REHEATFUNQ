@@ -205,11 +205,10 @@ cdef class CppAnomalyPosterior:
 
         prec = WP_LONG_DOUBLE
 
-        with nogil:
-            self.post = make_shared[VariablePrecisionPosterior](
-                            weighted_samples, p, s, n, v, amin, rtol, prec, pa,
-                            bli_max_splits, bli_max_refinements
-            )
+        self.post = make_shared[VariablePrecisionPosterior](
+                        weighted_samples, p, s, n, v, amin, rtol, prec, pa,
+                        bli_max_splits, bli_max_refinements
+        )
 
         # Validate:
         cdef vector[vector[qc_t]] setofsets
