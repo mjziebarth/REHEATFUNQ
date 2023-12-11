@@ -28,6 +28,7 @@
  */
 #include <boost/math/quadrature/exp_sinh.hpp>
 #include <boost/math/quadrature/tanh_sinh.hpp>
+#include <boost/math/constants/constants.hpp>
 
 
 /*
@@ -51,6 +52,145 @@ namespace bmq = boost::math::quadrature;
  */
 
 template<typename real>
+real log_rising_factorial(const typename arg<real>::type a,
+                          const typename arg<real>::type log_a,
+                          int n)
+{
+	/*
+	 * This implements algorithm 1 of Johansson (2023).
+	 *
+	 * An upper bound on when to stop the multiplications due to possible overflow: */
+	const real max_y = std::numeric_limits<real>::max() / (a+n);
+	if (n <= 30){
+		real res = log_a;
+		/* Keep a running product in y, but do not multiply too often
+		 * so as not to overflow: */
+		real y = 1.0;
+		int mul = 0;
+		for (int i=1; i<n; ++i){
+			y *= (a+i);
+			++mul;
+			if (y >= max_y){
+				res += rm::log(y);
+				y = 1.0;
+				mul = 0;
+			}
+		}
+		if (mul > 0)
+			res += rm::log(y);
+		return res;
+	}
+	int m = n / 2;
+	return log_rising_factorial<real>(a, log_a, m)
+	     + log_rising_factorial<real>(a+m, rm::log(a+m), n-m);
+}
+
+
+template<typename real>
+real loggamma_v_a__minus__n_loggamma_a__plus__C_a_explicit(
+        const typename arg<real>::type a,
+        const typename arg<real>::type n,
+        const typename arg<real>::type v,
+        const typename arg<real>::type C
+)
+{
+	/* Otherwise compute the difference of the log-gamma functions: */
+	return rm::lgamma(v * a) - n * rm::lgamma(a) + C * a;
+}
+
+
+template<typename real>
+real loggamma_v_a__minus__n_loggamma_a__plus__C_a(
+        const typename arg<real>::type a,
+        const typename arg<real>::type n,
+        const typename arg<real>::type v,
+        const typename arg<real>::type C,
+        const typename arg<real>::type lv
+)
+{
+	constexpr static int m = 30;
+	real la = rm::log(a);
+	if (a < m){
+		real vshift = (v * a + m) / (a + m);
+		return n*log_rising_factorial<real>(a, la, m)
+		       - log_rising_factorial<real>(v*a, lv+la, m)
+		       + loggamma_v_a__minus__n_loggamma_a__plus__C_a<real>(
+		              a+m,
+		              n,
+		              vshift,
+		              C * a / (a + m),
+		              rm::log(vshift));
+	}
+	/* This function computes the term
+	 *    loggamma(v*a) - n*loggamma(a)
+	 * using either the lgamma function or a series expansion.
+	 */
+	constexpr real l2pi = rm::log(2 * boost::math::constants::pi<real>());
+	real v2 = v*v;
+	real v4 = v2*v2;
+	real a2 = a*a;
+	real g = a * (((n - v) * (1.0 - la) + v * lv) + C)
+	         + 0.5 * ((n - 1.0) * (la - l2pi) - lv)
+	         + 1/(12*a) * (1/v - n
+	                       + 1/(30*a2)*(n - 1/(v*v2)
+	                                     + 2/(7*a2)*(1/(v*v4) - n
+	                                                 + 3/(4*a2) * (n - 1/(v*v2*v4)))
+	                                   )
+	                      );
+
+	/* Leading-order error estimate from the series expansion: */
+	real err = rm::abs((n - 1.0/(v*v4*v4)) / (1188*a*a2*a2*a2*a2));
+	if (err < std::numeric_limits<real>::epsilon() * rm::abs(g)){
+		return g;
+	}
+
+	/* Otherwise compute the difference of the log-gamma functions: */
+	return loggamma_v_a__minus__n_loggamma_a__plus__C_a_explicit<real>(a, n, v, C);
+}
+
+template<typename real>
+real v_digamma_v_a__minus__n_digamma_a(
+        const typename arg<real>::type a,
+        const typename arg<real>::type n,
+        const typename arg<real>::type v
+)
+{
+	real v3 = v*v*v;
+	real a2 = a*a;
+	real g = (v - n) * rm::log(a) + v * rm::log(v)
+	         + 1/(2*a) * (n - 1 + 1/(6*a) * (n - 1/v - (n - 1/v3)/(10*a2) ));
+
+	/* Leading-order error estimate from the series expansion: */
+	real err = rm::abs((n - 1/(v3*v*v)) / (252*a2*a2*a2));
+	if (err < std::numeric_limits<real>::epsilon() * rm::abs(g)){
+		return g;
+	}
+
+	/* Otherwise compute the difference of the digamma functions: */
+	return v * rm::digamma(v * a) - n * rm::digamma(a);
+}
+
+template<typename real>
+real v2_trigamma_v_a__minus__n_trigamma_a(
+        const typename arg<real>::type a,
+        const typename arg<real>::type n,
+        const typename arg<real>::type v
+)
+{
+	real g = 1/a*((v-n) + 1/(2*a)*((1-n) + 1/(3*a)*(1/v - n )));
+
+	/* Leading-order error estimate from the series expansion: */
+	real err = rm::abs((n - 1/(v*v*v)) / (30*a*a*a*a*a));
+	if (err < std::numeric_limits<real>::epsilon() * rm::abs(g)){
+		return g;
+	}
+
+	/* Otherwise compute the difference of the digamma functions: */
+	return v * v * rm::trigamma(v * a) - n * rm::trigamma(a);
+}
+
+
+template<typename real>
 real log_integrand_amax(const typename arg<real>::type l1pwz,
                         const typename arg<real>::type lkiz_sum,
                         const Locals<real>& L)
@@ -63,25 +203,49 @@ real log_integrand_amax(const typename arg<real>::type l1pwz,
 	real a = 1.0;
 	real f0, f1, da;
 
-	/* Ensure that the limit (a -> inf) of the derivative f0 is negative: */
-	if (L.n < L.v || (L.n == L.v && C >= 0)){
-		throw std::domain_error("Posterior is not normalizeable.");
+	/* Ensure that the limit (a -> inf) of the derivative f0 is negative:
+	 * This condition looks at the term
+	 *      a * (((n - v) * (1.0 - la) + v * lv) + C)
+	 * of the function loggamma_v_a__minus__n_loggamma_a__plus__C_a and
+	 * ensures that this converges to -infty.
+	 *
+	 * Note: We do not properly handle the case  C == v * lv.
+	 *       This case is probably particularly rare enough not to warrant
+	 *       the increased complexity of handling it. In case it occurs,
+	 *       we reject it here. An improved version would then look at
+	 *           0.5 * ((n - 1.0) * (la - l2pi) - lv)
+	 *           + (1/v - n)/(12*a)
+	 *       to decide whether the posterior is normalizeable.
+	 */
+	if (L.n < L.v)
+		throw std::domain_error("Posterior not normalizeable because n < v, while "
+			"n >= v is required."
+		);
+	if (L.n == L.v && (C >= 0 || -C <= L.v * rm::log(L.v))){
+		throw std::domain_error("Posterior is not normalizeable. Your data set "
+			"might be insufficient or lead to a degenerate case. Providing prior "
+			"parameters informed by n > v may also resolve the numerical difficulty."
+		);
 	}
 
 	bool success = false;
 	for (size_t i=0; i<100; ++i){
-		f0 = L.v * rm::digamma(L.v * a) - L.n * rm::digamma(a) + C;
-		f1 = L.v * L.v * rm::trigamma(L.v * a) - L.n * rm::trigamma(a);
-		da = f0 / f1;
-		real anext = std::max<real>(a - da, 1e-8);
+		// f0 = L.v * rm::digamma(L.v * a) - L.n * rm::digamma(a) + C;
+		// f1 = L.v * L.v * rm::trigamma(L.v * a) - L.n * rm::trigamma(a);
+		f0 = v_digamma_v_a__minus__n_digamma_a<real>(a, L.n, L.v) + C;
+		f1 = v2_trigamma_v_a__minus__n_trigamma_a<real>(a, L.n, L.v);
+		da = -f0 / f1;
+		da = std::max(std::min(da, 1e3 * a), -0.999*a);
+		real anext = std::max<real>(a + da, 1e-8);
 		real da_real = rm::abs(a - anext);
 		success = rm::abs(da) <= 1e-8 * a;
 		a = anext;
 		if (success || da_real <= 1e-8 * a)
 			break;
 	}
-	if (!success)
+	if (!success){
 		throw std::runtime_error("Could not determine log_integrand_max.");
+	}
 	return a;
 }
 
@@ -101,9 +265,15 @@ itgmax_t<real> log_integrand_maximum(const typename arg<real>::type l1pwz,
 	itgmax_t<real> res;
 	res.a = log_integrand_amax(l1pwz, lkiz_sum, L);
 
-	res.logI = rm::lgamma(L.v * res.a) + (res.a - 1.0) * L.lp
-	           - L.n * rm::lgamma(res.a) - L.v * res.a * (L.ls + l1pwz)
-	           + (res.a - 1) * lkiz_sum;
+	res.logI = loggamma_v_a__minus__n_loggamma_a__plus__C_a<real>(
+	                res.a, L.n, L.v,
+	                (L.lp - L.v * (L.ls + l1pwz) + lkiz_sum),
+	                L.lv
+	           ) - (L.lp + lkiz_sum);
+
+	//res.logI = rm::lgamma(L.v * res.a) + (res.a - 1.0) * L.lp
+	//           - L.n * rm::lgamma(res.a) - L.v * res.a * (L.ls + l1pwz)
+	//           + (res.a - 1) * lkiz_sum;
 
 	return res;
 }
@@ -120,8 +290,6 @@ real inner_integrand_template(const typename arg<real>::type a,
                               const Locals<real>& L)
 {
 
-	auto va = L.v * a;
-
 	/*
 	 * Shortcut for small a
 	 * With SymPy, we find the following limit for a -> 0:
@@ -131,22 +299,12 @@ real inner_integrand_template(const typename arg<real>::type a,
 	 */
 	if (a == 0)
 		return 0;
-	const real lga = rm::lgamma(a);
-	if (rm::isinf(lga))
-		return 0;
-	const real lgva = rm::lgamma(va);
-	if (rm::isinf(lgva))
-		return 0;
 
-
-	// Term PROD_i{  (1-k[i] * z) ^ (a-1)  }
-	real lS = (a - 1) * l1p_kiz_sum;
-
-	// Term ( 1 / (s_new * (1-w*z))) ^ va
-	lS -= va * (L.ls + l1p_wz);
-
-	// Remaining summands:
-	lS += lgva + (a - 1.0) * L.lp - L.n * lga - log_integrand_max;
+	real lS = loggamma_v_a__minus__n_loggamma_a__plus__C_a<real>(
+	            a, L.n, L.v,
+	            (L.lp - L.v * (L.ls + l1p_wz) + l1p_kiz_sum),
+	            L.lv
+	) - (L.lp + l1p_kiz_sum) - log_integrand_max;
 
 	// Shortcut for debugging purposes:
 	if (log_integrand)

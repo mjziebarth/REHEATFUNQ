@@ -313,15 +313,8 @@ real large_z_amax(const typename arg<real>::type ym, const Locals<real>& L)
 		auto fm1_base = [&](const typename arg<real>::type a) -> real {
 			if (rm::isinf(a))
 				return -rm::abs(a);
-			real lgva = rm::lgamma(L.v * a);
-			real lga = rm::lgamma(a);
-			real fbase = (L.lp - L.v * L.ls + lh0 - L.v + L.l1p_w) * a;
-			if (rm::isinf(lgva) || rm::isinf(lga)){
-				/* Here we take into consideration only the leading terms of the difference
-				 * of the loggamma functions (computed using SymPy). */
-				return fbase + a * (L.n - L.v + L.v * rm::log(L.v) + (L.v - L.n) * rm::log(a));
-			}
-			return fbase + lgva - L.n * lga;
+			real C = L.lp - L.v * L.ls + lh0 - L.v + L.l1p_w;
+			return loggamma_v_a__minus__n_loggamma_a__plus__C_a<real>(a, L.n, L.v, C, L.lv);
 		};
 		real fm1_amax0 = fm1_base(amax0),
 		     fm1_amax = fm1_base(amax),
@@ -369,9 +362,9 @@ a_integral_large_z_log_integrand(const typename arg<real>::type a,
 	auto signed_log = [](const typename arg<real>::type Cx, int8_t& sign, real& lC){
 		if (Cx < 0){
 			sign = -1;
-			lC = log(-Cx);
+			lC = rm::log(-Cx);
 		} else {
-			lC = log(Cx);
+			lC = rm::log(Cx);
 		}
 	};
 
@@ -397,11 +390,6 @@ a_integral_large_z_log_integrand(const typename arg<real>::type a,
 	if (a == 0)
 		return {.log_abs=-std::numeric_limits<real>::infinity(),
 		        .sign=sign};
-	const real lgva = rm::lgamma(va);
-	const real lga = rm::lgamma(a);
-	if (rm::isinf(lgva) || rm::isinf(lga))
-		return {.log_abs=-std::numeric_limits<real>::infinity(),
-		        .sign=sign};
 
 	// Term
 	//     C * y^(a+m) / (a+m)
@@ -411,17 +399,21 @@ a_integral_large_z_log_integrand(const typename arg<real>::type a,
 	constexpr short m = C;
 	if (y_integrated){
 		// Integrated:
-		lC += (a + m) * ly - rm::log(a+m);
+		lC += m * ly - rm::log(a+m);
 	} else {
 		// Not integrated:
-		lC += (a + m - 1) * ly;
+		lC += (m - 1) * ly;
 	}
 
 	// Term ( s_tilde * (1-w) ) ^ (-va)
 	lC -= va * (L.ls + L.l1p_w);
 
 	// Remaining summands:
-	lC += lgva + (a - 1.0) * (L.lp + L.lh0) - L.n * lga - log_integrand_max;
+	lC += loggamma_v_a__minus__n_loggamma_a__plus__C_a<real>(
+	          a, L.n, L.v,
+	          L.lp + L.lh0 - L.v* (L.ls + L.l1p_w) + ly,
+	          L.lv);
+	lC -= L.lp + L.lh0 + log_integrand_max;
 
 	if (rm::isinf(lC)){
 		return {.log_abs=-std::numeric_limits<double>::infinity(),

@@ -84,6 +84,7 @@ public:
 	real w;
 	real lh0;
 	real l1p_w;
+	real lv;
 
 	/*
 	 * The main interface to this class.
@@ -116,9 +117,10 @@ public:
 	       const arg<real>::type amin, const arg<real>::type Qmax,
 	       std::vector<real>&& ki, const std::array<real,4>& h,
 	       const arg<real>::type w, const arg<real>::type lh0,
-	       const arg<real>::type l1p_w)
+	       const arg<real>::type l1p_w, const arg<real>::type lv)
 	   : lp(lp), ls(ls), n(n), v(v), amin(amin), Qmax(Qmax),
-	     ki(std::move(ki)), h(h), w(w), lh0(lh0), l1p_w(l1p_w)
+	     ki(std::move(ki)), h(h), w(w), lh0(lh0), l1p_w(l1p_w),
+	     lv(lv)
 	{}
 
 	template<typename istream>
@@ -141,6 +143,7 @@ public:
 		in.get(&w, sizeof(real));
 		in.get(&lh0, sizeof(real));
 		in.get(&l1p_w, sizeof(real));
+		in.get(&lv, sizeof(real));
 	}
 
 	Locals() {};
@@ -166,6 +169,7 @@ public:
 		out.write(&w, sizeof(real));
 		out.write(&lh0, sizeof(real));
 		out.write(&l1p_w, sizeof(real));
+		out.write(&lv, sizeof(real));
 	}
 
 
@@ -180,19 +184,20 @@ private:
 
 	Locals(const std::vector<qc_t>& qc, const arg<real>::type p,
 	       const arg<real>::type s, const arg<real>::type n,
-	       const arg<real>::type v, const arg<real>::type amin,
+	       const arg<real>::type v_, const arg<real>::type amin,
 	       double dest_tol, real A, real B, std::pair<real,size_t> Qimax)
 	 : lp(rm::log(p) + compute_lqsum(qc)),
 	   ls(rm::log(A)),
 	   n(n+qc.size()),
-	   v(v+qc.size()),
+	   v(v_+qc.size()),
 	   amin(amin),
 	   Qmax(Qimax.first),
 	   ki(compute_ki(qc, Qmax)),
 	   h(compute_h(ki, Qimax.second)),
 	   w(B * Qmax / A),
 	   lh0(rm::log(h[0])),
-	   l1p_w(rm::log1p(-w))
+	   l1p_w(rm::log1p(-w)),
+	   lv(rm::log(v))
 	{}
 
 	static real get_q(const qc_t& qc) {

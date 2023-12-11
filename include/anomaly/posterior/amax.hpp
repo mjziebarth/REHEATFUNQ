@@ -72,9 +72,9 @@ az_t<real> log_integrand_max(const Locals<real>& L)
 		real f0;
 
 		void compute_f0(const Locals<real>& L) {
-			f0 = rm::lgamma(L.v * amax) + (amax - 1.0) * L.lp
-			     - L.n * rm::lgamma(amax) - L.v * amax * (L.ls + l1p_wz)
-			     + (amax - 1.0) * l1p_kiz_sum;
+			real C = L.lp - L.v * (L.ls + l1p_wz) + l1p_kiz_sum;
+			f0 = loggamma_v_a__minus__n_loggamma_a__plus__C_a<real>(amax, L.n, L.v, C, L.lv)
+			      - (L.lp + l1p_kiz_sum);
 		};
 
 		void compute(real z, const Locals<real>& L){
