@@ -49,10 +49,20 @@ Posterior<real,pdf_algorithm>::validate(
 
 		if (pdtoolbox::heatflow::check_locals(qi.data(), ci.data(), qi.size(),
 		                                      p0, s0, n0, v0,
-		                                      L.amin, dest_tol, L.lp, L.ls,
-		                                      L.n, L.v, L.Qmax, L.h[0], L.h[1],
-		                                      L.h[2], L.h[3], L.w, L.lh0,
-		                                      L.l1p_w)
+		                                      static_cast<double>(L.amin),
+		                                      dest_tol,
+		                                      static_cast<double>(L.lp),
+		                                      static_cast<double>(L.ls),
+		                                      static_cast<double>(L.n),
+		                                      static_cast<double>(L.v),
+		                                      static_cast<double>(L.Qmax),
+		                                      static_cast<double>(L.h[0]),
+		                                      static_cast<double>(L.h[1]),
+		                                      static_cast<double>(L.h[2]),
+		                                      static_cast<double>(L.h[3]),
+		                                      static_cast<double>(L.w),
+		                                      static_cast<double>(L.lh0),
+		                                      static_cast<double>(L.l1p_w))
 		    != 0)
 		{
 			return false;
@@ -107,3 +117,66 @@ reheatfunq::anomaly::Posterior<double, ra::ADAPTIVE_SIMPSON>::validate(
     const std::vector<std::vector<posterior::qc_t>>&,
     double, double, double, double, double
 ) const;
+
+
+#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
+template bool
+reheatfunq::anomaly::Posterior<boost::multiprecision::float128, ra::EXPLICIT>::validate(
+    const std::vector<std::vector<posterior::qc_t>>&,
+    double, double, double, double, double
+) const;
+
+template bool
+reheatfunq::anomaly::Posterior<boost::multiprecision::float128, ra::BARYCENTRIC_LAGRANGE>::validate(
+    const std::vector<std::vector<posterior::qc_t>>&,
+    double, double, double, double, double
+) const;
+
+template bool
+reheatfunq::anomaly::Posterior<boost::multiprecision::float128, ra::ADAPTIVE_SIMPSON>::validate(
+    const std::vector<std::vector<posterior::qc_t>>&,
+    double, double, double, double, double
+) const;
+#endif
+
+
+#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50
+template bool
+reheatfunq::anomaly::Posterior<boost::multiprecision::cpp_dec_float_50, ra::EXPLICIT>::validate(
+    const std::vector<std::vector<posterior::qc_t>>&,
+    double, double, double, double, double
+) const;
+
+template bool
+reheatfunq::anomaly::Posterior<boost::multiprecision::cpp_dec_float_50, ra::BARYCENTRIC_LAGRANGE>::validate(
+    const std::vector<std::vector<posterior::qc_t>>&,
+    double, double, double, double, double
+) const;
+
+template bool
+reheatfunq::anomaly::Posterior<boost::multiprecision::cpp_dec_float_50, ra::ADAPTIVE_SIMPSON>::validate(
+    const std::vector<std::vector<posterior::qc_t>>&,
+    double, double, double, double, double
+) const;
+#endif
+
+
+#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100
+template bool
+reheatfunq::anomaly::Posterior<boost::multiprecision::cpp_dec_float_100, ra::EXPLICIT>::validate(
+    const std::vector<std::vector<posterior::qc_t>>&,
+    double, double, double, double, double
+) const;
+
+template bool
+reheatfunq::anomaly::Posterior<boost::multiprecision::cpp_dec_float_100, ra::BARYCENTRIC_LAGRANGE>::validate(
+    const std::vector<std::vector<posterior::qc_t>>&,
+    double, double, double, double, double
+) const;
+
+template bool
+reheatfunq::anomaly::Posterior<boost::multiprecision::cpp_dec_float_100, ra::ADAPTIVE_SIMPSON>::validate(
+    const std::vector<std::vector<posterior::qc_t>>&,
+    double, double, double, double, double
+) const;
+#endif

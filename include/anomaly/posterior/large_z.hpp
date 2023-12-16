@@ -82,7 +82,7 @@ struct C1_t {
 	real deriv1;
 	real deriv2;
 
-	C1_t(const typename arg<real>::type a, const Locals<real>& L)
+	C1_t(typename arg<const real>::type a, const Locals<real>& L)
 	{
 		auto h1h0 = L.h[1] / L.h[0];
 		deriv0 = (h1h0 + L.v * L.w / (L.w - 1)) * a - h1h0;
@@ -102,7 +102,7 @@ struct C2_t {
 	real deriv1;
 	real deriv2;
 
-	C2_t(const typename arg<real>::type a, const Locals<real>& L)
+	C2_t(typename arg<const real>::type a, const Locals<real>& L)
 	{
 		auto h1h0 = L.h[1] / L.h[0];
 		auto h2h0 = L.h[2] / L.h[0];
@@ -133,7 +133,7 @@ struct C3_t {
 	real deriv1;
 	real deriv2;
 
-	C3_t(const typename arg<real>::type a, const Locals<real>& L)
+	C3_t(typename arg<const real>::type a, const Locals<real>& L)
 	{
 		auto h1h0 = L.h[1] / L.h[0];
 		auto h2h0 = L.h[2] / L.h[0];
@@ -173,169 +173,6 @@ struct C3_t {
 };
 
 
-template<typename real, unsigned char order>
-real large_z_amax(const typename arg<real>::type ym, const Locals<real>& L)
-{
-
-	/* This method computes max location of the maximum of the four integrals
-	 * used in the Taylor expansion of the double integral for large z. */
-	constexpr double TOL = 1e-14;
-	const real lh0 = rm::log(L.h[0]);
-	const real lym =  rm::log(ym);
-	const real amax0 = (L.n > L.v) ? std::max<real>((L.lp - L.v * L.ls
-	                                          + L.v * rm::log(L.v)
-	                                          + lh0 - L.v * L.l1p_w + lym)
-	                                         / (L.n - L.v),
-	                                         1.0)
-	                    : 1.0;
-	real amax = amax0;
-
-	/* Recurring terms of the first and second derivatives of the a-integrands:
-	 */
-	auto f0_base = [&](const typename arg<real>::type a) -> real {
-		return L.v * rm::digamma(L.v * a) + L.lp - L.n * rm::digamma(a)
-		       - L.v * L.ls + lh0 - L.v * L.l1p_w;
-	};
-	auto f1_base = [&](const typename arg<real>::type a) -> real {
-		return L.v * L.v * rm::trigamma(L.v * a) - L.n * rm::trigamma(a);
-	};
-
-	constexpr double MAX_INCREASE = 1e50;
-	bool converged = false;
-	try {
-	if (order == 0){
-		for (uint_fast8_t i=0; i<200; ++i){
-			const real f0 = f0_base(amax) - 1/amax + lym;
-			const real f1 = f1_base(amax) + 1/(amax*amax);
-			const real da = std::min<real>(
-			    std::max<real>(-f0/f1, -0.9*amax),
-			    MAX_INCREASE * amax
-			);
-			amax += da;
-			if (abs(da) < TOL*abs(amax)){
-				converged = true;
-				break;
-			} else if (std::isinf(amax)) {
-				break;
-			}
-		}
-	} else if (order == 1){
-		for (uint_fast8_t i=0; i<200; ++i){
-			C1_t<real> C1(amax, L);
-			real C1_1 = C1.deriv1 / C1.deriv0;
-			const real f0 = f0_base(amax) - 1/(amax+1) + lym + C1_1;
-			const real f1 = f1_base(amax) + 1/((amax+1)*(amax+1))
-			                + C1.deriv2/C1.deriv0 - C1_1 * C1_1;
-			const real da = std::min<real>(
-			    std::max<real>(-f0/f1, -0.9*amax),
-			    MAX_INCREASE * amax
-			);
-			amax += da;
-			if (abs(da) < TOL*abs(amax)){
-				converged = true;
-				break;
-			} else if (std::isinf(amax)) {
-				break;
-			}
-		}
-	} else if (order == 2){
-		for (uint_fast8_t i=0; i<200; ++i){
-			C2_t<real> C2(amax, L);
-			real C2_1 = C2.deriv1/C2.deriv0;
-			const real f0 = f0_base(amax) - 1/(amax+2) + lym + C2_1;
-			const real f1 = f1_base(amax) + 1/((amax+2)*(amax+2))
-			                + C2.deriv2/C2.deriv0 - C2_1 * C2_1;
-			const real da = std::min(
-			    std::max<real>(-f0/f1, -0.9*amax),
-			    MAX_INCREASE * amax
-			);
-			amax += da;
-			if (abs(da) < TOL*abs(amax)){
-				converged = true;
-				break;
-			} else if (std::isinf(amax)) {
-				break;
-			}
-		}
-	} else if (order == 3){
-		for (uint_fast8_t i=0; i<200; ++i){
-			C3_t<real> C3(amax, L);
-			const real C3_1 = C3.deriv1/C3.deriv0;
-			auto C3_2 = C3.deriv2/C3.deriv0 - C3_1 * C3_1;
-			const real f0 = f0_base(amax) - 1/(amax+3) + lym + C3_1;
-			const real f1 = f1_base(amax) + 1/((amax+3)*(amax+3)) + C3_2;
-			const real da = std::min(
-			    std::max<real>(-f0/f1, -0.9*amax),
-			    MAX_INCREASE * amax
-			);
-			amax += da;
-			if (abs(da) < TOL*abs(amax)){
-				converged = true;
-				break;
-			} else if (std::isinf(amax)) {
-				break;
-			}
-		}
-	}
-	} catch (...){
-		std::string msg("Runtime error in large_z_amax (large_z.hpp).\na = ");
-		msg += std::to_string(amax);
-		msg += "\nva = ";
-		msg += std::to_string(L.v * amax);
-		msg += "\ninitial guess = ";
-		real r = (L.n > L.v) ? std::max<real>((L.lp - L.v * L.ls
-	                                          + L.v * rm::log(L.v)
-	                                          + lh0 - L.v * L.l1p_w + lym)
-	                                         / (L.n - L.v),
-	                                         1.0)
-	                    : 1.0;
-		msg += std::to_string(r);
-		throw std::runtime_error(msg);
-	}
-	if (!converged){
-		/*
-		 * The Newton-Raphson root finding did not converge. Either because the
-		 * maximum number of iterations has been reached or because `a` is infinite.
-		 * Also in case of the maximum number of iterations reached it is likely
-		 * that `a` is converging to infinity - the Newton-Raphson usually converges
-		 * too rapidly to allow that many iterations.
-		 * An infinite `a` can be the case if the derivative f0_base simply has no
-		 * roots.
-		 * Assuming this to be the case, the maximum---which we aim to determine through
-		 * the root finding on the derivative---is likely on the edges of the interval.
-		 * Since the log-integrand approaches -infty at large a (due to existing
-		 * convergence), the maximum is hence very likely at the lower boundary of the
-		 * `a` interval.
-		 * Here, we use the starting value of `a`, as well as a=1.0, and check explicitly
-		 * the a-varying part of the base function (fm1_base). Of the three `a`
-		 * (1.0, amax, amax0), we choose the one that evaluates to the maximum fm1_base.
-		 */
-		auto fm1_base = [&](const typename arg<real>::type a) -> real {
-			if (rm::isinf(a))
-				return -rm::abs(a);
-			real C = L.lp - L.v * L.ls + lh0 - L.v + L.l1p_w;
-			return loggamma_v_a__minus__n_loggamma_a__plus__C_a<real>(a, L.n, L.v, C, L.lv);
-		};
-		real fm1_amax0 = fm1_base(amax0),
-		     fm1_amax = fm1_base(amax),
-			 fm1_1 = fm1_base(1.0);
-		if (fm1_amax0 >= fm1_amax){
-			if (fm1_1 >= fm1_amax0){
-				return 1.0;
-			} else {
-				return amax0;
-			}
-		} else {
-			if (fm1_1 >= fm1_amax){
-				return 1.0;
-			} else {
-				return amax;
-			}
-		}
-	}
-	return std::max(amax, L.amin);
-}
-
 /*
  * Integrand of the 'a'-integral given y^(a+m)
  */
@@ -349,17 +186,17 @@ struct log_double_t {
 
 template<C_t C, bool y_integrated, typename real>
 log_double_t<real>
-a_integral_large_z_log_integrand(const typename arg<real>::type a,
-                              const typename arg<real>::type ly,
-                              const typename arg<real>::type log_integrand_max,
-                              const Locals<real>& L)
+a_integral_large_z_log_integrand(typename arg<const real>::type a,
+                                 typename arg<const real>::type ly,
+                                 typename arg<const real>::type log_integrand_max,
+                                 const Locals<real>& L)
 {
 	const real va = L.v * a;
 
 	/* A function to compute sign and logarithm of absolute of a
 	 * real number:
 	 */
-	auto signed_log = [](const typename arg<real>::type Cx, int8_t& sign, real& lC){
+	auto signed_log = [](typename arg<const real>::type Cx, int8_t& sign, real& lC){
 		if (Cx < 0){
 			sign = -1;
 			lC = rm::log(-Cx);
@@ -424,10 +261,10 @@ a_integral_large_z_log_integrand(const typename arg<real>::type a,
 }
 
 template<C_t C, bool y_integrated, typename real>
-real a_integral_large_z_integrand(const typename arg<real>::type a,
-                               const typename arg<real>::type ly,
-                               const typename arg<real>::type log_integrand_max,
-                               const Locals<real>& L)
+real a_integral_large_z_integrand(typename arg<const real>::type a,
+                                  typename arg<const real>::type ly,
+                                  typename arg<const real>::type log_integrand_max,
+                                  const Locals<real>& L)
 {
 	log_double_t<real> res
 	    = a_integral_large_z_log_integrand<C,y_integrated, real>
@@ -435,6 +272,15 @@ real a_integral_large_z_integrand(const typename arg<real>::type a,
 	if (rm::isnan(res.log_abs)){
 		std::string msg("NaN result in a_integral_large_z_integrand_");
 		msg += std::to_string((int)C);
+		msg += ".\n   at a=";
+		msg += std::to_string(static_cast<long double>(a));
+		msg += ".\n   at ly = ";
+		msg += std::to_string(static_cast<long double>(ly));
+		msg += ".\n   with log_integrand_max =  ";
+		msg += std::to_string(static_cast<long double>(log_integrand_max));
+		msg += ".\n   and res.log_abs =         ";
+		msg += std::to_string(static_cast<long double>(res.log_abs));
+		msg += ".";
 		throw std::runtime_error(msg);
 	}
 
@@ -443,8 +289,14 @@ real a_integral_large_z_integrand(const typename arg<real>::type a,
 	if (rm::isinf(result)){
 		std::string msg("a_integral_large_z_integrand_");
 		msg += std::to_string((int)C);
-		msg += "\n   at ly = ";
-		msg += std::to_string(ly);
+		msg += " inf result.\n   at ly = ";
+		msg += std::to_string(static_cast<long double>(ly));
+		msg += ".\n   at a =  ";
+		msg += std::to_string(static_cast<long double>(a));
+		msg += ".\n   with log_integrand_max =  ";
+		msg += std::to_string(static_cast<long double>(log_integrand_max));
+		msg += ".\n   and res.log_abs =         ";
+		msg += std::to_string(static_cast<long double>(res.log_abs));
 		msg += ".";
 		throw ScaleError<real>(msg, res.log_abs);
 	}
@@ -453,10 +305,37 @@ real a_integral_large_z_integrand(const typename arg<real>::type a,
 }
 
 
+template<typename real, unsigned char order>
+real large_z_amax(typename arg<const real>::type ym, const Locals<real>& L)
+{
+	static_assert(order == 0);
+
+	const real ly = rm::log(ym);
+
+	auto cost = [ly,&L](typename arg<const real>::type x) -> real
+	{
+		real a = L.amin / (1.0 - x);
+		if (rm::isinf(a))
+			return std::numeric_limits<real>::infinity();
+		return -a_integral_large_z_log_integrand<C_t::C0, false, real>(a, ly, 0.0, L).log_abs;
+	};
+
+	std::uintmax_t max_iter = 200;
+	real xmax = boost::math::tools::brent_find_minima(
+	                cost,
+	                static_cast<real>(0.0),
+	                static_cast<real>(1.0),
+	                1000000,
+	                max_iter).first;
+
+	return L.amin / (1.0 - xmax);
+}
+
+
 template<typename real>
-real y_taylor_transition_root_backend(const typename arg<real>::type y,
-                                const Locals<real>& L,
-                                const typename arg<real>::type outer_log_scale)
+real y_taylor_transition_root_backend(typename arg<const real>::type y,
+                                      const Locals<real>& L,
+                                      typename arg<const real>::type outer_log_scale)
 {
 	/* Backup Gauss-Kronrod quadrature: */
 	typedef bmq::gauss_kronrod<real,31> GK;
@@ -465,13 +344,31 @@ real y_taylor_transition_root_backend(const typename arg<real>::type y,
 
 	const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
 
+
+
+
 	/* Get the scale: */
 	const real amax = large_z_amax<real,0>(y, L);
 	const real ly = rm::log(y);
-	const real log_scale = outer_log_scale
-	    + a_integral_large_z_log_integrand<C_t::C0,true>(amax, ly,
-	                                                     outer_log_scale,
+
+	const real log_scale
+	    = a_integral_large_z_log_integrand<C_t::C0,true>(amax, ly,
+	                                                     0.0,
 	                                                     L).log_abs;
+
+
+	const real amax_3 = large_z_amax<real,0>(y, L);
+	const real log_scale_3
+	    = a_integral_large_z_log_integrand<C_t::C3,true>(amax_3, ly,
+	                                                     0.0,
+	                                                     L).log_abs;
+
+	/* Crude approximation of the integral, assuming similar shapes
+	 * of the integrands for C0 and C3: */
+	return log_scale_3 + rm::log(amax_3) - log_scale - rm::log(amax)
+	       - rm::log(std::numeric_limits<real>::epsilon());
+
+
 
 	/* Compute the 'a' integrals for the constant and the cubic term: */
 	real error, L1;
@@ -479,8 +376,8 @@ real y_taylor_transition_root_backend(const typename arg<real>::type y,
 	bmq::exp_sinh<real> es_integrator;
 	bmq::tanh_sinh<real> ts_integrator;
 
-	auto integrand00 = [&](const typename arg<real>::type a,
-	                       const typename arg<real>::type distance_to_border)
+	auto integrand00 = [&](typename arg<const real>::type a,
+	                       typename arg<const real>::type distance_to_border)
 	                       -> real
 	{
 		return a_integral_large_z_integrand<C_t::C0,true,real>(
@@ -488,7 +385,7 @@ real y_taylor_transition_root_backend(const typename arg<real>::type y,
 		);
 	};
 
-	auto integrand0 = [&](const typename arg<real>::type a) -> real
+	auto integrand0 = [&](typename arg<const real>::type a) -> real
 	{
 		return a_integral_large_z_integrand<C_t::C0,true,real>(
 		                a, ly, log_scale, L
@@ -529,8 +426,8 @@ real y_taylor_transition_root_backend(const typename arg<real>::type y,
 		                           error, L1);
 	}
 
-	auto integrand10 = [&](const typename arg<real>::type a,
-	                       const typename arg<real>::type distance_to_border)
+	auto integrand10 = [&](typename arg<const real>::type a,
+	                       typename arg<const real>::type distance_to_border)
 	                       -> real
 	{
 		return a_integral_large_z_integrand<C_t::C3,true,real>(
@@ -538,7 +435,7 @@ real y_taylor_transition_root_backend(const typename arg<real>::type y,
 		);
 	};
 
-	auto integrand1 = [&](const typename arg<real>::type a) -> real
+	auto integrand1 = [&](typename arg<const real>::type a) -> real
 	{
 		return a_integral_large_z_integrand<C_t::C3,true,real>(
 		                a, ly, log_scale, L);
@@ -596,11 +493,11 @@ real y_taylor_transition_root_backend(const typename arg<real>::type y,
 
 template<typename real>
 real y_taylor_transition(const Locals<real>& L,
-                         const typename arg<real>::type outer_log_scale,
+                         typename arg<const real>::type outer_log_scale,
                          const real ymin = 1e-32)
 {
 	/* Find a value above the threshold: */
-	real yr = 1e-9;
+	real yr = 1e-20;
 	real val = y_taylor_transition_root_backend<real>(yr, L, outer_log_scale);
 	while (val < 0 || rm::isnan(val)){
 		yr = std::min<real>(2*yr, 1.0);
@@ -610,7 +507,7 @@ real y_taylor_transition(const Locals<real>& L,
 	}
 
 	/* Root finding: */
-	auto rootfun = [&](const typename arg<real>::type y) -> real {
+	auto rootfun = [&](typename arg<const real>::type y) -> real {
 		return y_taylor_transition_root_backend<real>(y, L, outer_log_scale);
 	};
 	constexpr std::uintmax_t MAX_ITER = 100;
@@ -632,9 +529,9 @@ real y_taylor_transition(const Locals<real>& L,
  * Compute the actual integral:
  */
 template<bool y_integrated, typename real>
-real a_integral_large_z(const typename arg<real>::type ym,
-                        const typename arg<real>::type S_cmp,
-                        const typename arg<real>::type log_scale,
+real a_integral_large_z(typename arg<const real>::type ym,
+                        typename arg<const real>::type S_cmp,
+                        typename arg<const real>::type log_scale,
                         const Locals<real>& L)
 {
 	/*
@@ -687,7 +584,7 @@ real a_integral_large_z(const typename arg<real>::type ym,
 	}
 	if (rm::isinf(S) || rm::isnan(S))
 		throw ScaleError<real>("a_integral_large_z", 0.0);
-	if (error > std::max(TOL_TANH_SINH * L1, 1e-14 * S_cmp))
+	if (error > std::max<real>(TOL_TANH_SINH * L1, 1e-14 * S_cmp))
 		throw PrecisionError<real>("a_integral_large_z_S3", error, L1);
 
 	return S;

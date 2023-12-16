@@ -41,9 +41,12 @@
 
 #include <numerics/intervall.hpp>
 #include <numerics/kahan.hpp>
+#include <numerics/functions.hpp>
 
 namespace reheatfunq {
 namespace numerics {
+
+namespace rm = reheatfunq::math;
 
 /*
  * Types for summation within the BarycentricLagrangeInterpolator
@@ -99,7 +102,7 @@ class PiecewiseBarycentricLagrangeInterpolator
 public:
 	template<typename fun_t>
 	PiecewiseBarycentricLagrangeInterpolator(fun_t func, real xmin, real xmax,
-	            real tol_rel = std::sqrt(std::sqrt(std::numeric_limits<real>::epsilon())),
+	            real tol_rel = rm::sqrt(rm::sqrt(std::numeric_limits<real>::epsilon())),
 	            real tol_abs = 0.0,
 	            real fmin = -std::numeric_limits<real>::infinity(),
 	            real fmax = std::numeric_limits<real>::infinity(),
@@ -138,11 +141,13 @@ public:
 		 */
 		auto it = ranges.cbegin();
 		PointInInterval<real> xmin_local(xmin, 0, xmax-xmin);
-		while (it->xmax < x){
+		while (it->xmax < static_cast<real>(x)){
 			xmin_local = it->xmax;
 			++it;
 		}
-		const PointInInterval<real> xint(x, x-xmin, xmax-x);
+		const PointInInterval<real> xint(static_cast<real>(x),
+		                                 static_cast<real>(x)-xmin,
+		                                 xmax-static_cast<real>(x));
 		return interpolate(support_to_chebyshev(xint, xmin_local, it->xmax),
 		                   it->samples, fmin, fmax);
 	}
@@ -192,14 +197,35 @@ private:
 	std::vector<subrange_t> ranges;
 
 
-	constexpr static PointInInterval<real> chebyshev_point(size_t i, size_t n){
-		constexpr real pi = std::numbers::pi_v<real>;
-		const real z = std::cos(i * pi / (n-1));
-		const real cha = std::cos(i * pi / (2*(n-1)));
-		const real sha = std::sin(i * pi / (2*(n-1)));
-		const real zf = cha * cha;
-		const real zb = sha * sha;
-		return PointInInterval<real>(z, zf, zb);
+	template<typename R=real>
+	constexpr static
+	std::enable_if_t<(std::is_same_v<R, double>
+	                 || std::is_same_v<R, long double>),
+	PointInInterval<R>>
+	chebyshev_point(size_t i, size_t n){
+		constexpr R pi = std::numbers::pi_v<R>;
+		const R z = rm::cos(i * pi / (n-1));
+		const R cha = rm::cos(i * pi / (2*(n-1)));
+		const R sha = rm::sin(i * pi / (2*(n-1)));
+		const R zf = cha * cha;
+		const R zb = sha * sha;
+		return PointInInterval<R>(z, zf, zb);
+	}
+
+
+	template<typename R=real>
+	static
+	std::enable_if_t<!(std::is_same_v<R,double>
+	                 || std::is_same_v<R, long double>),
+	PointInInterval<R>>
+	chebyshev_point(size_t i, size_t n){
+		const R pi = boost::math::constants::pi<R>();
+		const R z = rm::cos(i * pi / (n-1));
+		const R cha = rm::cos(i * pi / (2*(n-1)));
+		const R sha = rm::sin(i * pi / (2*(n-1)));
+		const R zf = cha * cha;
+		const R zb = sha * sha;
+		return PointInInterval<R>(z, zf, zb);
 	}
 
 	static PointInInterval<real>
@@ -210,7 +236,7 @@ private:
 		const real Dx = xmax - xmin;
 		return PointInInterval<real>(
 		    std::min<real>(std::max<real>(
-		        xmin + 0.5 * (1.0 + z.val) * Dx,
+		        static_cast<real>(xmin) + 0.5 * (1.0 + z.val) * Dx,
 		        xmin),
 		    xmax),
 		    Dx * z.from_front + xmin.from_front,
@@ -224,7 +250,7 @@ private:
 	                     const PointInInterval<real>& xmax){
 		const real Dx = xmax - xmin;
 		z.val = std::min<real>(std::max<real>(
-		        xmin + 0.5 * (1.0 + z.val) * Dx,
+		        static_cast<real>(xmin) + 0.5 * (1.0 + z.val) * Dx,
 		        xmin),
 		    xmax);
 		z.from_front *= Dx;
@@ -304,8 +330,8 @@ private:
 			for (size_t i=1; i<refined.size(); ++i){
 				PointInInterval<real> xi = chebyshev_to_support(refined[i].z, xmin, xmax);
 				const real xcmp = std::max<real>(
-					std::fabs(xlast),
-					std::fabs(xi)
+					rm::abs(static_cast<real>(xlast)),
+					rm::abs(static_cast<real>(xi))
 				);
 				if (xlast.distance(xi) <= 4 * eps * xcmp){
 					return std::optional<std::vector<zf_t>>();
@@ -330,151 +356,29 @@ private:
 		 *  value is zero).
 		 */
 		error_t err;
-		err.abs = std::fabs(f - f_ref);
+		err.abs = rm::abs(f - f_ref);
 		if (f_ref == 0){
 			if (f != 0)
 				err.rel = 1.0;
 			else
 				err.rel = 0.0;
 		} else {
-			err.rel = err.abs / std::fabs(f_ref);
+			err.rel = err.abs / rm::abs(f_ref);
 		}
 		return err;
 	}
 
-	struct discontinuity_t {
-		real x;
 
-		bool operator>(const discontinuity_t& other) const {
-			return x > other.x;
-		}
-	};
-
-	/*
-	 * This function tries to identify a possible discontinuity in an interval
-	 * range. The discontinuity needs to accumulate more than 50% of the
-	 * function value change in the interval.
-	 * Note that it tries to identify exactly one discontinuity. If there is
-	 * more than one, it may not work or it may return the one that accumulates
-	 * more than 50% of the function change in the interval.
-	 */
-	template<typename fun_t>
-	static std::optional<discontinuity_t>
-	find_discontinuity(fun_t func, const size_t il,
-	                   const size_t n_chebyshev, const PointInInterval<real>& xmin,
-	                   const PointInInterval<real>& xmax, const real fmin, const real fmax)
-	{
-		/* Add the initial interval as to do: */
-		struct interval_t {
-			size_t il = 0;
-			PointInInterval<real> xl;
-			PointInInterval<real> xr;
-			real fl = 0;
-			real fr = 0;
-
-			interval_t() = default;
-
-			interval_t(size_t il, PointInInterval<real> xl, PointInInterval<real> xr,
-			           real fl, real fr)
-			   : il(il), xl(xl), xr(xr), fl(fl), fr(fr) {};
-		};
-		std::stack<interval_t> todo;
-		std::stack<interval_t> next_todo;
-		std::stack<discontinuity_t> identified;
-		{
-			PointInInterval<real> xl(
-			    chebyshev_to_support(
-			        chebyshev_point(il, n_chebyshev),
-			        xmin, xmax)
-			);
-			PointInInterval<real> xr(
-			    chebyshev_to_support(
-			        chebyshev_point(il+1, n_chebyshev),
-			        xmin, xmax)
-			);
-			PointInInterval<real> xm(
-			    chebyshev_to_support(
-			        chebyshev_point(2*il+1, 2*(n_chebyshev-1)+1),
-			        xmin, xmax)
-			);
-			if (xl == xm || xr == xm)
-				throw RefinementError<real>("Precision of `x` data point exceeded."
-				                            " Cannot perform required refinement "
-				                            "in find_discontinuity.");
-			todo.emplace(il, xl, xr, func(xl), func(xr));
-		}
-
-		/* Start the refinement loop: */
-		const real df_0 = std::fabs(todo.top().fl - todo.top().fr);
-		const size_t max_refinements = std::numeric_limits<real>::digits;
-		size_t n_cheb_i = n_chebyshev;
-		bool exit = false;
-		for (uint_fast8_t r=0; r<max_refinements; ++r){
-			n_cheb_i = 2 * (n_cheb_i - 1) + 1;
-			while (!todo.empty()){
-				/* Split the interval: */
-				const size_t ix = 2 * todo.top().il + 1;
-				auto x = chebyshev_to_support(chebyshev_point(ix, n_cheb_i), xmin, xmax);
-				if (x == todo.top().xl || x == todo.top().xr){
-//					/* Identify the discontinuity closer than what might be
-//					 * possible by the Chebyshev grid evaluation:
-//					 */
-//					const bool order = todo.top().xl < todo.top().xr;
-//					x = todo.top().xl;
-//					PointInInterval<real> xnext(
-//					    std::nextafter(x, todo.top().xr);
-//					while ((xnext < todo.top().xr) == order &&
-//					       std::fabs(todo.top().fl - func(xnext)) < 0.5 * df_0)
-//					{
-//						x = xnext;
-//					}
-					identified.push(discontinuity_t(x));
-				} else {
-					const real fx = func(x);
-
-					/* Now check the subintervals for discontinuities: */
-					if (std::fabs(todo.top().fl - fx) > 0.5 * df_0){
-						next_todo.emplace(2 * todo.top().il, todo.top().xl,
-						                  x, todo.top().fl, fx);
-					}
-					if (std::fabs(todo.top().fr - fx) > 0.5 * df_0){
-						next_todo.emplace(ix, x, todo.top().xr,
-						                  fx, todo.top().fr);
-					}
-				}
-				todo.pop();
-			}
-
-			/* New todo: */
-			todo.swap(next_todo);
-
-			if (exit || todo.empty()){
-				break;
-			}
-
-		}
-		/*
-		 * Note: If there are multiple discontinuities in the interval, the
-		 * resolution of the sampling is probably not great enough since
-		 * it implies more than 100% of df_0 allocated in sub-intervals
-		 * (i.e. non-monotony).
-		 */
-		if (identified.size() == 1){
-			return identified.top();
-		}
-		return std::optional<discontinuity_t>();
-	}
-
-
-	template<typename fun_t, size_t n_start=5, size_t max_recursion_depth=9>
+	template<typename fun_t, size_t n_start=9, size_t max_recursion_depth=4>
 	static std::pair<error_t, std::vector<subrange_t>>
-	initial_divide_and_conquer(fun_t func, PointInInterval<real> xmin,
-	                  PointInInterval<real> xmax, real f_xmin, real f_xmax,
-	                  real tol_rel, real tol_abs, real fmin, real fmax,
-	                  size_t recursion_depth = 0)
+	initial_range(fun_t func, PointInInterval<real> xmin,
+	              PointInInterval<real> xmax, real f_xmin, real f_xmax,
+	              real tol_rel, real tol_abs, real fmin, real fmax,
+	              uint8_t max_refinements,
+	              size_t recursion_depth = 0)
 	{
 		static_assert(n_start >= 3);
-		static_assert(chebyshev_point(0, 2) > chebyshev_point(1,2));
+		static_assert(chebyshev_point<double>(0, 2) > chebyshev_point<double>(1,2));
 
 		/* Start with `n_start` samples: */
 		std::vector<zf_t> samples(n_start);
@@ -540,69 +444,12 @@ private:
 		error_t err(max_error(error));
 
 		/*
-		 * Compute the location of the median error:
-		 */
-		real cumul_err_rel = 0.0;
-		for (const error_t& err : error){
-			cumul_err_rel += err.rel;
-		}
-		real cer_i = 0.0;
-		size_t i=0;
-		PointInInterval<real> xmed; // Something invalid.
-		size_t r_med = refined->size();
-		for (const error_t& err_i : error){
-			cer_i += err_i.rel;
-			if (cer_i >= cumul_err_rel / 2){
-				/* Add the center of that interval as split: */
-				r_med = 2*i + 1;
-				xmed = chebyshev_to_support((*refined)[r_med].z, xmin, xmax);
-				break;
-			}
-			++i;
-		}
-
-
-		/*
-		 * Check if the median is centered:
-		 */
-		constexpr double ASYM = 0.2;
-		static_assert((ASYM < 0.5) && (ASYM > 0));
-		bool centered = ((1-ASYM)*xmin + ASYM * xmax) < xmed
-		                 && (ASYM*xmin + (1-ASYM)*xmax) > xmed;
-		
-		/*
 		 * Now compute the subrange(s):
 		 */
 		std::vector<subrange_t> ranges;
-		if (centered || recursion_depth > max_recursion_depth)
-		{
-			/* Accept this interval. */
-			ranges.emplace_back(xmax);
-			ranges.back().samples.swap(samples);
-		} else {
-			/* Divide: */
-			real f_xmin = samples.back().f;
-			real f_xmed = (*refined)[r_med].f;
-			real f_xmax = samples.front().f;
-			std::pair<error_t, std::vector<subrange_t>>
-			    res0(initial_divide_and_conquer(
-			             func, xmin, xmed, f_xmin, f_xmed,
-			             tol_rel, tol_abs, fmin, fmax,
-			             recursion_depth + 1
-			    ));
-			std::pair<error_t, std::vector<subrange_t>>
-			    res1(initial_divide_and_conquer(
-			             func, xmed, xmax, f_xmed,
-			             f_xmax, tol_rel,
-			             tol_abs, fmin, fmax,
-			             recursion_depth + 1
-			    ));
-			ranges.swap(res0.second);
-			ranges.insert(ranges.end(), res1.second.cbegin(), res1.second.cend());
-			err.rel = std::max(res0.first.rel, res1.first.rel);
-			err.abs = std::max(res0.first.abs, res1.first.abs);
-		}
-		
+		ranges.emplace_back(xmax);
+		ranges.back().samples.swap(samples);
+
 		return std::make_pair(err, std::move(ranges));
 	}
 
@@ -614,10 +461,11 @@ private:
 	                 uint8_t max_refinements)
 	{
 		std::pair<error_t, std::vector<subrange_t>>
-		    initial(initial_divide_and_conquer(
+		    initial(initial_range(
 		        func, xmin, xmax,
 		        func(xmin), func(xmax),
-		        tol_rel, tol_abs, fmin, fmax
+		        tol_rel, tol_abs, fmin, fmax,
+		        max_refinements
 		    ));
 
 		std::vector<subrange_t> ranges;
@@ -674,6 +522,7 @@ private:
 		/* Now refine: */
 		PointInInterval<real> xmin_i;
 		PointInInterval<real> xmax_i = xmin;
+		size_t rid = 0;
 		for (subrange_t& range : ranges){
 			xmin_i = xmax_i;
 			xmax_i = range.xmax;
@@ -694,42 +543,6 @@ private:
 			          )
 			       && (iter++ < max_refinements))
 			{
-				/* Test for discontinuities.
-				* The discontinuity check uses the property that a discontinuity
-				* stays constant throughout refinement. In contrast, any smooth
-				* part will eventually continuously reduce its error with
-				* increased sampling.
-				*/
-				if (!old_err.empty()){
-					/*  */
-					std::vector<discontinuity_t> discontinuities;
-					for (size_t i=0; i<new_err.size(); ++i){
-						/* Restrict these checks to those intervals in which the
-						* tolerance criteria is not fulfilled:
-						*/
-						if (!tolerance_fulfilled(new_err[i])){
-							if (new_err[i].abs > 0.9 * old_err[i / 2].abs)
-							{
-								/* Test for the discontinuity. */
-								try {
-									std::optional<discontinuity_t> disco(
-										find_discontinuity(func, i, new_err.size()+1,
-														xmin_i, xmax_i, fmin, fmax)
-									);
-									if (disco && disco->x != xmin_i && disco->x != xmax_i){
-										/* Is a discontinuity! */
-										discontinuities.push_back(*disco);
-									}
-								} catch (RefinementError<real>& re) {
-								}
-							}
-						}
-					}
-					if (!discontinuities.empty()){
-						std::cerr << "Found discontinuity but do not know what to do.\n";
-						//return discontinuities;
-					}
-				}
 
 				/* Refinement: */
 				old_err.swap(new_err);
@@ -764,8 +577,8 @@ private:
 		auto it = samples.cbegin();
 		if (z.val == it->z.val)
 			return it->f;
-		sum_t nom = 0.0;
-		sum_t denom = 0.0;
+		sum_t nom(0.0);
+		sum_t denom(0.0);
 		real wi = 0.5 / (z - it->z);
 		nom += wi * it->f;
 		denom += wi;
@@ -785,7 +598,15 @@ private:
 		wi = sign * 0.5 / (z - it->z);
 		nom += wi * it->f;
 		denom += wi;
-		return std::max<real>(std::min<real>(nom / denom, fmax), fmin);
+
+		real result = std::max<real>(
+			std::min<real>(
+				static_cast<real>(nom) / static_cast<real>(denom),
+				fmax),
+			fmin
+		);
+
+		return result;
 	}
 
 

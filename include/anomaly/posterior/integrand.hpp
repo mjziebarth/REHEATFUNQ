@@ -52,8 +52,8 @@ namespace bmq = boost::math::quadrature;
  */
 
 template<typename real>
-real log_rising_factorial(const typename arg<real>::type a,
-                          const typename arg<real>::type log_a,
+real log_rising_factorial(typename arg<const real>::type a,
+                          typename arg<const real>::type log_a,
                           int n)
 {
 	/*
@@ -88,10 +88,10 @@ real log_rising_factorial(const typename arg<real>::type a,
 
 template<typename real>
 real loggamma_v_a__minus__n_loggamma_a__plus__C_a_explicit(
-        const typename arg<real>::type a,
-        const typename arg<real>::type n,
-        const typename arg<real>::type v,
-        const typename arg<real>::type C
+        typename arg<const real>::type a,
+        typename arg<const real>::type n,
+        typename arg<const real>::type v,
+        typename arg<const real>::type C
 )
 {
 	/* Otherwise compute the difference of the log-gamma functions: */
@@ -100,12 +100,17 @@ real loggamma_v_a__minus__n_loggamma_a__plus__C_a_explicit(
 
 
 template<typename real>
+struct log_2_pi {
+	const static real value;
+};
+
+template<typename real>
 real loggamma_v_a__minus__n_loggamma_a__plus__C_a(
-        const typename arg<real>::type a,
-        const typename arg<real>::type n,
-        const typename arg<real>::type v,
-        const typename arg<real>::type C,
-        const typename arg<real>::type lv
+        typename arg<const real>::type a,
+        typename arg<const real>::type n,
+        typename arg<const real>::type v,
+        typename arg<const real>::type C,
+        typename arg<const real>::type lv
 )
 {
 	constexpr static int m = 30;
@@ -125,12 +130,11 @@ real loggamma_v_a__minus__n_loggamma_a__plus__C_a(
 	 *    loggamma(v*a) - n*loggamma(a)
 	 * using either the lgamma function or a series expansion.
 	 */
-	constexpr real l2pi = rm::log(2 * boost::math::constants::pi<real>());
 	real v2 = v*v;
 	real v4 = v2*v2;
 	real a2 = a*a;
 	real g = a * (((n - v) * (1.0 - la) + v * lv) + C)
-	         + 0.5 * ((n - 1.0) * (la - l2pi) - lv)
+	         + 0.5 * ((n - 1.0) * (la - log_2_pi<real>::value) - lv)
 	         + 1/(12*a) * (1/v - n
 	                       + 1/(30*a2)*(n - 1/(v*v2)
 	                                     + 2/(7*a2)*(1/(v*v4) - n
@@ -150,9 +154,9 @@ real loggamma_v_a__minus__n_loggamma_a__plus__C_a(
 
 template<typename real>
 real v_digamma_v_a__minus__n_digamma_a(
-        const typename arg<real>::type a,
-        const typename arg<real>::type n,
-        const typename arg<real>::type v
+        typename arg<const real>::type a,
+        typename arg<const real>::type n,
+        typename arg<const real>::type v
 )
 {
 	real v3 = v*v*v;
@@ -172,9 +176,9 @@ real v_digamma_v_a__minus__n_digamma_a(
 
 template<typename real>
 real v2_trigamma_v_a__minus__n_trigamma_a(
-        const typename arg<real>::type a,
-        const typename arg<real>::type n,
-        const typename arg<real>::type v
+        typename arg<const real>::type a,
+        typename arg<const real>::type n,
+        typename arg<const real>::type v
 )
 {
 	real g = 1/a*((v-n) + 1/(2*a)*((1-n) + 1/(3*a)*(1/v - n )));
@@ -191,8 +195,8 @@ real v2_trigamma_v_a__minus__n_trigamma_a(
 
 
 template<typename real>
-real log_integrand_amax(const typename arg<real>::type l1pwz,
-                        const typename arg<real>::type lkiz_sum,
+real log_integrand_amax(typename arg<const real>::type l1pwz,
+                        typename arg<const real>::type lkiz_sum,
                         const Locals<real>& L)
 {
 	/* Uses Newton-Raphson to compute the (approximate) maximum of the
@@ -235,12 +239,12 @@ real log_integrand_amax(const typename arg<real>::type l1pwz,
 		f0 = v_digamma_v_a__minus__n_digamma_a<real>(a, L.n, L.v) + C;
 		f1 = v2_trigamma_v_a__minus__n_trigamma_a<real>(a, L.n, L.v);
 		da = -f0 / f1;
-		da = std::max(std::min(da, 1e3 * a), -0.999*a);
+		da = std::max<real>(std::min<real>(da, 1e3 * a), -0.999*a);
 		real anext = std::max<real>(a + da, 1e-8);
 		real da_real = rm::abs(a - anext);
-		success = rm::abs(da) <= 1e-8 * a;
+		success = rm::abs(da_real) <= 1e-8 * a;
 		a = anext;
-		if (success || da_real <= 1e-8 * a)
+		if (success)
 			break;
 	}
 	if (!success){
@@ -258,8 +262,8 @@ struct itgmax_t {
 
 
 template<typename real>
-itgmax_t<real> log_integrand_maximum(const typename arg<real>::type l1pwz,
-                                     const typename arg<real>::type lkiz_sum,
+itgmax_t<real> log_integrand_maximum(typename arg<const real>::type l1pwz,
+                                     typename arg<const real>::type lkiz_sum,
                                      const Locals<real>& L)
 {
 	itgmax_t<real> res;
@@ -283,10 +287,10 @@ itgmax_t<real> log_integrand_maximum(const typename arg<real>::type l1pwz,
  * The innermost integrand of the double integral; the integrand in `a`.
  */
 template<bool log_integrand, typename real>
-real inner_integrand_template(const typename arg<real>::type a,
-                              const typename arg<real>::type l1p_kiz_sum,
-                              const typename arg<real>::type l1p_wz,
-                              const typename arg<real>::type log_integrand_max,
+real inner_integrand_template(typename arg<const real>::type a,
+                              typename arg<const real>::type l1p_kiz_sum,
+                              typename arg<const real>::type l1p_wz,
+                              typename arg<const real>::type log_integrand_max,
                               const Locals<real>& L)
 {
 
@@ -329,9 +333,9 @@ real inner_integrand_template(const typename arg<real>::type a,
 
 
 template<typename real>
-real outer_integrand(const typename arg<real>::type z, const Locals<real>& L,
-                     const typename arg<real>::type log_scale,
-                     const typename arg<real>::type Iref = 0)
+real outer_integrand(typename arg<const real>::type z, const Locals<real>& L,
+                     typename arg<const real>::type log_scale,
+                     typename arg<const real>::type Iref = 0)
 {
 	const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
 
@@ -350,7 +354,7 @@ real outer_integrand(const typename arg<real>::type z, const Locals<real>& L,
 	const itgmax_t<real> lImax = log_integrand_maximum(l1p_wz, l1p_kiz_sum, L);
 
 	// Integrate:
-	auto integrand = [&](const typename arg<real>::type a) -> real {
+	auto integrand = [&](typename arg<const real>::type a) -> real {
 		return inner_integrand_template<false>(a, l1p_kiz_sum, l1p_wz,
 		                                       lImax.logI, L);
 	};
@@ -417,11 +421,11 @@ real outer_integrand(const typename arg<real>::type z, const Locals<real>& L,
 	real res(S * rm::exp(lImax.logI - log_scale));
 	if (rm::isnan(res)){
 		std::string msg("Result is NaN in outer_integrand.\nS = ");
-		msg += std::to_string(S);
+		msg += std::to_string(static_cast<long double>(S));
 		msg += "\nlImax = ";
-		msg += std::to_string(lImax.logI);
+		msg += std::to_string(static_cast<long double>(lImax.logI));
 		msg += "\nlog_scale = ";
-		msg += std::to_string(log_scale);
+		msg += std::to_string(static_cast<long double>(log_scale));
 		throw std::runtime_error(msg);
 	}
 

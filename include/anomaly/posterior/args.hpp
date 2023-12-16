@@ -41,6 +41,16 @@ struct arg<long double> {
 	typedef long double type;
 };
 
+template<>
+struct arg<const double> {
+	typedef const double type;
+};
+
+template<>
+struct arg<const long double> {
+	typedef const long double type;
+};
+
 
 
 }

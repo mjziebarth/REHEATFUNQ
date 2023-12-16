@@ -153,7 +153,8 @@ libhfp = static_library(
 
 libhfp2 = static_library(
     'hfp2', ['src/anomaly/variableprecisionposterior.cpp',
-             'src/anomaly/posterior.cpp'],
+             'src/anomaly/posterior.cpp',
+             'src/anomaly/posterior/integrand.cpp'],
     dependencies : dependencies_hfp,
     cpp_args : hfp_cpp_args,
     link_args : hfp_link_args,
@@ -266,7 +267,9 @@ python.extension_module('zeal2022hfresil',
                         dependencies : [dep_py],
                         include_directories : include_resilience,
                         override_options : ['cython_language=cpp'],
-                        link_with : [libhfp, libresilience, ]
+                        link_with : [libhfp2, libresilience, libhfp],
+                        cpp_args : hfp_cpp_args,
+                        link_args : hfp_link_args
                         )
 
 python.extension_module('distancedistribution',

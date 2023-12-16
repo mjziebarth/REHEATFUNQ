@@ -33,6 +33,9 @@
 namespace reheatfunq {
 namespace math {
 
+using std::sqrt;
+using boost::multiprecision::sqrt;
+
 using std::exp;
 using boost::multiprecision::exp;
 
@@ -57,6 +60,12 @@ using boost::multiprecision::isnan;
 using boost::math::digamma;
 
 using boost::math::trigamma;
+
+using std::sin;
+using boost::multiprecision::sin;
+
+using std::cos;
+using boost::multiprecision::cos;
 
 } // namespace math
 } // namespace reheatfunq

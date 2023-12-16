@@ -37,6 +37,7 @@
 
 #include <numerics/functions.hpp>
 #include <numerics/kahan.hpp>
+#include <numerics/limits.hpp>
 
 namespace reheatfunq {
 namespace numerics {
@@ -55,6 +56,12 @@ public:
          C2(2/(dx*dx) * (f1 - 2*f2 + f3)),
          I(dx/6 * (f1 + 4*f2 + f3))
     {
+        /* Ensure that the integral using the constants C1, C2, and C3
+         * leads to the total integral: */
+        real scale = I / integral(dx);
+        C0 *= scale;
+        C1 *= scale;
+        C2 *= scale;
     }
 
     real integral() const {
@@ -72,6 +79,13 @@ public:
 
     real density(real x) const {
         return C0 + x * (C1 + x * C2);
+    }
+
+    void normalize(real norm) {
+        C0 /= norm;
+        C1 /= norm;
+        C2 /= norm;
+        I /= norm;
     }
 
 private:
@@ -165,7 +179,7 @@ public:
             throw std::runtime_error("EXCEED AFTER CHECK!");
 
         point xl = (it == intervals.cbegin()) ? xmin : (it-1)->xmax;
-        
+
         return it->rule.density(x - xl);
     }
 
@@ -202,7 +216,7 @@ private:
     static std::vector<Leaf>
     adapt(fun_t fun, point xmin, point xmax, uint8_t max_levels)
     {
-        constexpr real tol = boost::math::tools::root_epsilon<real>();
+        constexpr long double tol = std::sqrt(numeric_limits<real>::epsilon());
         std::vector<Leaf> done;
 
         struct todo_t {
@@ -232,7 +246,7 @@ private:
                 Leaf(xmax, 0.0, 0.0,
                      SimpsonQuadRule<real>(
                         xmax-xmin, f1,
-                        f2, f3) 
+                        f2, f3)
                     ),
                 f1, f2, f3, 1
             );
@@ -307,20 +321,35 @@ private:
         I += it->rule.integral();
         while (++it != done.end())
         {
-            it->I0_fw = I;
+            it->I0_fw = static_cast<real>(I);
             I += it->rule.integral();
         }
         --it;
+
+        /* Normalization: */
+        real norm = static_cast<real>(I);
+
         I = it->rule.integral();
         --it;
         while (it != done.begin())
         {
-            it->I0_bw = I;
+            it->I0_bw = static_cast<real>(I);
             I += it->rule.integral();
             --it;
         }
-        it->I0_bw = I;
+        it->I0_bw = static_cast<real>(I);
         I += it->rule.integral();
+
+        /* Ensure unit normalization: */
+        it->I0_fw /= norm;
+        it->I0_bw /= norm;
+        it->rule.normalize(norm);
+        while (++it != done.end())
+        {
+            it->I0_fw /= norm;
+            it->I0_bw /= norm;
+            it->rule.normalize(norm);
+        }
 
         return done;
 

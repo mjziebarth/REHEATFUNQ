@@ -58,25 +58,25 @@ public:
 	real ymax;
 	real ztrans;
 
-	LocalsAndLogScale(const std::vector<qc_t>& qc, const arg<real>::type p,
-	                  const arg<real>::type s, const arg<real>::type n,
-	                  const arg<real>::type v, const arg<real>::type amin,
+	LocalsAndLogScale(const std::vector<qc_t>& qc, arg<const real>::type p,
+	                  arg<const real>::type s, arg<const real>::type n,
+	                  arg<const real>::type v, arg<const real>::type amin,
 	                  double dest_tol)
 	   : Locals<real>(qc, p, s, n, v, amin, dest_tol),
 	     log_scale(log_integrand_max(*this)),
-	     ymax(y_taylor_transition(*this, static_cast<real>(1e-32))),
+	     ymax(y_taylor_transition(*this, log_scale.log_integrand)),
 	     ztrans(1.0 - ymax)
 	{}
 
-	LocalsAndLogScale(const arg<real>::type lp, const arg<real>::type ls,
-	                  const arg<real>::type n, const arg<real>::type v,
-	                  const arg<real>::type amin, const arg<real>::type Qmax,
+	LocalsAndLogScale(arg<const real>::type lp, arg<const real>::type ls,
+	                  arg<const real>::type n, arg<const real>::type v,
+	                  arg<const real>::type amin, arg<const real>::type Qmax,
 	                  std::vector<real>&& ki, const std::array<real,4>& h,
-	                  const arg<real>::type w, const arg<real>::type lh0,
-	                  const arg<real>::type l1p_w, const arg<real>::type log_scale_a,
-	                  const arg<real>::type log_scale_z,
-	                  const arg<real>::type log_scale_log_integrand,
-	                  const arg<real>::type ymax, const arg<real>::type ztrans)
+	                  arg<const real>::type w, arg<const real>::type lh0,
+	                  arg<const real>::type l1p_w, arg<const real>::type log_scale_a,
+	                  arg<const real>::type log_scale_z,
+	                  arg<const real>::type log_scale_log_integrand,
+	                  arg<const real>::type ymax, arg<const real>::type ztrans)
 	   : Locals<real>(lp, ls, n, v, amin, Qmax, std::move(ki), h, w, lh0, l1p_w),
 	     log_scale({.a=log_scale_a, .z=log_scale_z,
 	                .log_integrand=log_scale_log_integrand}),
@@ -135,9 +135,9 @@ public:
 	integrals_t integrals;
 	real norm;
 
-	LocalsAndNorm(const std::vector<qc_t>& qc, const arg<real>::type p,
-	              const arg<real>::type s, const arg<real>::type n,
-	              const arg<real>::type v, const arg<real>::type amin,
+	LocalsAndNorm(const std::vector<qc_t>& qc, arg<const real>::type p,
+	              arg<const real>::type s, arg<const real>::type n,
+	              arg<const real>::type v, arg<const real>::type amin,
 	              double dest_tol)
 	   : LocalsAndLogScale<real>(qc, p, s, n, v, amin, dest_tol),
 	     integrals(compute_integrals(*this)),
@@ -149,9 +149,9 @@ public:
 			throw std::runtime_error("Computed zero norm.");
 	}
 
-	LocalsAndNorm(const std::vector<qc_t>& qc, const arg<real>::type p,
-	              const arg<real>::type s, const arg<real>::type n,
-	              const arg<real>::type v, const arg<real>::type amin,
+	LocalsAndNorm(const std::vector<qc_t>& qc, arg<const real>::type p,
+	              arg<const real>::type s, arg<const real>::type n,
+	              arg<const real>::type v, arg<const real>::type amin,
 	              const double* x, const size_t Nx,
 	              double dest_tol)
 	   : LocalsAndLogScale<real>(qc, p, s, n, v, amin, dest_tol),
@@ -196,20 +196,22 @@ private:
 			return outer_integrand(z, L, L.log_scale.log_integrand);
 		};
 
+
 		// 1.1: Double numerical integration in z range [0,1-ymax]:
 		real S;
 		real error;
 		bmq::tanh_sinh<real> integrator;
+		typedef bmq::gauss_kronrod<real,31> GK;
+
 		try {
 			S = integrator.integrate(integrand, static_cast<real>(0),
-			                         L.ztrans, TOL_TANH_SINH, &error);
+										L.ztrans, TOL_TANH_SINH, &error);
 		} catch (...) {
 			/* Backup Gauss-Kronrod: */
-			typedef bmq::gauss_kronrod<real,31> GK;
 			real L1;
 			S =  GK::integrate(integrand, static_cast<real>(0),
-			                   L.ztrans, 9, TOL_TANH_SINH,
-			                   &error, &L1);
+								L.ztrans, 9, TOL_TANH_SINH,
+								&error, &L1);
 		}
 
 		/*

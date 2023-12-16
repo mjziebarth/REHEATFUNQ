@@ -25,14 +25,19 @@
 
 #include <limits>
 #include <cmath>
+#include <numerics/limits.hpp>
+#include <numerics/functions.hpp>
 
 namespace reheatfunq {
 namespace numerics {
 
+namespace rm = reheatfunq::math;
+
 template<typename real>
 class PointInInterval {
 public:
-    constexpr static real SQRT_EPS = std::sqrt(std::numeric_limits<real>::epsilon());
+    constexpr static long double SQRT_EPS
+    = std::sqrt(numeric_limits<real>::epsilon());
     real val; // Value
     real from_front; // from front
     real from_back; // from back
@@ -97,12 +102,12 @@ public:
             * We do this in a way to retain large precision also at
             * values close to the interval ends: */
         if (in_front() && other.in_front()){
-            return std::abs(from_front - other.from_front);
+            return rm::abs(from_front - other.from_front);
         }
         if (in_back() && other.in_back()){
-            return std::abs(from_back - other.from_back);
+            return rm::abs(from_back - other.from_back);
         }
-        return std::abs(val - other.val);
+        return rm::abs(val - other.val);
     }
 
     static PointInInterval<real>
@@ -113,6 +118,17 @@ public:
             (x0.val+x1.val) / 2,
             (x0.from_front + x1.from_front) / 2,
             (x0.from_back + x1.from_back) / 2
+        );
+    }
+
+    static PointInInterval<real>
+    mean(const PointInInterval<real>& x0, real w0,
+         const PointInInterval<real>& x1, real w1)
+    {
+        return PointInInterval(
+            w0 * x0.val + w1 * x1.val,
+            w0 * x0.from_front + w1 * x1.from_front,
+            w0 * x0.from_back + w1 * x1.from_back
         );
     }
 

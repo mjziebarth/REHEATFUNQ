@@ -106,7 +106,7 @@ public:
 	}
 
 	double get_Qmax() const {
-		return Qmax;
+		return static_cast<double>(Qmax);
 	}
 
 	/*
@@ -133,9 +133,9 @@ public:
 				continue;
 			}
 			try {
-				result[i] = pdf_single(
+				result[i] = static_cast<double>(pdf_single(
 					rn::PointInInterval<real>(PH[i], PH[i], Qmax-PH[i])
-				);
+				));
 			} catch (const std::exception& e) {
 				except = e;
 			}
@@ -172,11 +172,11 @@ public:
 					/*
 						* The actual numerical code:
 						*/
-					PH[i] = saq->integral(
+					PH[i] = static_cast<double>(saq->integral(
 						rn::PointInInterval<real>(
 						    PH[i], PH[i], Qmax - PH[i]
 						)
-					);
+					));
 				} catch (...) {
 					local_error = std::current_exception();
 				}
@@ -225,12 +225,12 @@ public:
 				/*
 				 * The actual numerical code:
 				 */
-				PH[i] = saq->integral(
+				PH[i] = static_cast<double>(saq->integral(
 				    rn::PointInInterval<real>(
 				        PH[i], PH[i], Qmax - PH[i]
 				    ),
 				    true
-				);
+				));
 			} catch (...) {
 				local_error = std::current_exception();
 			}
@@ -275,7 +275,7 @@ public:
 
 			std::exception_ptr local_error;
 			if (quantiles[i] == 0.0)
-				quantiles[i] = Qmax;
+				quantiles[i] = static_cast<double>(Qmax);
 			else if (quantiles[i] == 1.0)
 				quantiles[i] = 0.0;
 			else if (quantiles[i] > 0.0 && quantiles[i] < 1.0){
@@ -299,9 +299,12 @@ public:
 					std::pair<real,real> bracket
 					    = bmt::toms748_solve(quantile_function,
 					                    static_cast<real>(0.0), Qmax,
-					                    -qi, 1.0 - qi, eps_tol,
-					                    max_iter);
-					quantiles[i] = Qmax - 0.5*(bracket.first + bracket.second);
+					                    static_cast<real>(-qi),
+					                    static_cast<real>(1.0 - qi),
+					                    eps_tol, max_iter);
+					quantiles[i] = static_cast<double>(
+					    Qmax - 0.5*(bracket.first + bracket.second)
+					);
 				} catch (...) {
 					local_error = std::current_exception();
 				}
@@ -344,8 +347,9 @@ public:
 
 		/* Parameters for the new samples */
 		std::vector<posterior::LocalsAndNorm<real>>
-		   new_locals(init_locals(weighted_samples, p, s, n, v, locals[0].amin,
-		                         rtol));
+		   new_locals(init_locals(weighted_samples, p, s, n, v,
+		                          static_cast<double>(locals[0].amin),
+		                          rtol));
 		std::vector<real>
 		   new_weights(init_weights(weighted_samples, new_locals));
 
@@ -359,8 +363,9 @@ public:
 		real res_norm(compute_norm(res_locals, res_weights));
 
 		return Posterior(std::move(res_locals), std::move(res_weights), p, s,
-		                 n, v, locals[0].amin, rtol, res_Qmax, res_norm,
-		                 bli_max_splits, bli_max_refinements);
+		                 n, v, static_cast<double>(locals[0].amin), rtol,
+		                 res_Qmax, res_norm, bli_max_splits,
+		                 bli_max_refinements);
 	}
 
 
@@ -379,26 +384,26 @@ public:
 	{
 		if (l >= locals.size())
 			throw std::runtime_error("Index 'l' out of bounds.");
-		lp = locals[l].lp;
-		ls = locals[l].ls;
-		n = locals[l].n;
-		v = locals[l].v;
-		amin = locals[l].amin;
-		Qmax = locals[l].Qmax;
+		lp = static_cast<double>(locals[l].lp);
+		ls = static_cast<double>(locals[l].ls);
+		n = static_cast<double>(locals[l].n);
+		v = static_cast<double>(locals[l].v);
+		amin = static_cast<double>(locals[l].amin);
+		Qmax = static_cast<double>(locals[l].Qmax);
 		ki.resize(locals[l].ki.size());
 		for (size_t i=0; i<locals[l].ki.size(); ++i){
-			ki[i] = locals[l].ki[i];
+			ki[i] = static_cast<double>(locals[l].ki[i]);
 		}
-		h0 = locals[l].h[0];
-		h1 = locals[l].h[1];
-		h2 = locals[l].h[2];
-		h3 = locals[l].h[3];
-		w = locals[l].w;
-		lh0 = locals[l].lh0;
-		l1p_w = locals[l].l1p_w;
-		log_scale = locals[l].log_scale.log_integrand;
-		ymax = locals[l].ymax;
-		norm = locals[l].norm;
+		h0 = static_cast<double>(locals[l].h[0]);
+		h1 = static_cast<double>(locals[l].h[1]);
+		h2 = static_cast<double>(locals[l].h[2]);
+		h3 = static_cast<double>(locals[l].h[3]);
+		w = static_cast<double>(locals[l].w);
+		lh0 = static_cast<double>(locals[l].lh0);
+		l1p_w = static_cast<double>(locals[l].l1p_w);
+		log_scale = static_cast<double>(locals[l].log_scale.log_integrand);
+		ymax = static_cast<double>(locals[l].ymax);
+		norm = static_cast<double>(locals[l].norm);
 	}
 
 	/*
@@ -414,9 +419,9 @@ public:
 		posterior::C3_t c3(a, locals[l]);
 		// Save the values:
 		C0 = 1.0;
-		C1 = c1.deriv0;
-		C2 = c2.deriv0;
-		C3 = c3.deriv0;
+		C1 = static_cast<double>(c1.deriv0);
+		C2 = static_cast<double>(c2.deriv0);
+		C3 = static_cast<double>(c3.deriv0);
 	}
 
 	/*
@@ -579,7 +584,7 @@ private:
 		{
 			/* Get the user-provided weight: */
 			real wi = weighted_samples[i].w;
-			if (std::isnan(wi) || wi <= 0)
+			if (rm::isnan(wi) || wi <= 0)
 				continue;
 
 			/* Now adjust to the global log scale: */
@@ -623,8 +628,8 @@ private:
 	static rn::PiecewiseBarycentricLagrangeInterpolator<real>
 	init_pdf_bli(const std::vector<posterior::LocalsAndNorm<real>>& locals,
 	             const std::vector<real>& weights,
-	             const posterior::arg<real>::type Qmax,
-	             const posterior::arg<real>::type norm,
+	             posterior::arg<const real>::type Qmax,
+	             posterior::arg<const real>::type norm,
 	             size_t max_splits, uint8_t max_refinements,
 	             double rtol
 	             )
@@ -670,8 +675,8 @@ private:
 	static real pdf_single_explicit_j(const rn::PointInInterval<real>& x,
 	                const std::vector<posterior::LocalsAndNorm<real>>& locals,
 	                const std::vector<real>& weights,
-	                const posterior::arg<real>::type Qmax,
-	                const posterior::arg<real>::type norm,
+	                posterior::arg<const real>::type Qmax,
+	                posterior::arg<const real>::type norm,
 	                size_t j)
 	{
 		const real Qmax_j = locals[j].Qmax;
@@ -687,14 +692,15 @@ private:
 					* weights[j] / (Qmax_j * norm);
 			if (rm::isnan(sj)){
 				std::string msg("Found NaN at sub-PDF evaluation (zi=");
-				msg += std::to_string(zi);
+				msg += std::to_string(static_cast<long double>(zi));
 				msg += ")";
 				throw std::runtime_error(msg);
 			}
 		} else {
 			const real yi = (Qmax_j == Qmax)
-				? x.from_back / Qmax
-				: 1.0 - zi;
+				? static_cast<real>(x.from_back / Qmax)
+				: static_cast<real>(1.0 - zi);
+
 			sj = posterior::a_integral_large_z<false,real>(
 						yi,
 						locals[j].norm,
@@ -703,14 +709,14 @@ private:
 					* weights[j] / (Qmax_j * norm);
 			if (rm::isnan(sj)){
 				std::string msg("Found NaN at sub-PDF evaluation (zi=");
-				msg += std::to_string(zi);
+				msg += std::to_string(static_cast<long double>(zi));
 				msg += " - large z)";
 				msg += "\nQmax_j: ";
-				msg += std::to_string(Qmax_j);
+				msg += std::to_string(static_cast<long double>(Qmax_j));
 				msg += "\nnorm:   ";
-				msg += std::to_string(norm);
+				msg += std::to_string(static_cast<long double>(norm));
 				msg += "\nw[j]:   ";
-				msg += std::to_string(weights[j]);
+				msg += std::to_string(static_cast<long double>(weights[j]));
 				throw std::runtime_error(msg);
 			}
 		}
@@ -721,8 +727,8 @@ private:
 	static real pdf_single_explicit(const rn::PointInInterval<real>& x,
 	                const std::vector<posterior::LocalsAndNorm<real>>& locals,
 	                const std::vector<real>& weights,
-	                const posterior::arg<real>::type Qmax,
-	                const posterior::arg<real>::type norm)
+	                posterior::arg<const real>::type Qmax,
+	                posterior::arg<const real>::type norm)
 	{
 		/*
 		 * Evaluate the PDF at a single point.
@@ -760,7 +766,7 @@ private:
 				}
 
 				/* Result computed but might be NaN: */
-				if (std::isnan(resv[j]))
+				if (rm::isnan(resv[j]))
 					isnan = true;
 			}
 			if (isnan)
@@ -781,7 +787,7 @@ private:
 				);
 
 				/* Result computed but might be NaN: */
-				if (std::isnan(resj))
+				if (rm::isnan(resj))
 					return std::nan("");
 
 				res += resj;
@@ -802,20 +808,20 @@ private:
 	real pdf_single(const std::enable_if_t<pa==BARYCENTRIC_LAGRANGE,
 	                                       rn::PointInInterval<real>>& x) const
 	{
-		if (x < 0)
+		if (static_cast<real>(x) < 0)
 			return 0.0;
-		else if (x > Qmax)
+		else if (static_cast<real>(x) > Qmax)
 			return 0.0;
-		return (*pdf_interp)(x);
+		return rm::exp(-(*pdf_interp)(x));
 	}
 
 	template<pdf_algorithm_t pa = pdf_algorithm>
 	real pdf_single(const std::enable_if_t<pa==ADAPTIVE_SIMPSON,
 	                                       rn::PointInInterval<real>>& x) const
 	{
-		if (x < 0)
+		if (static_cast<real>(x) < 0)
 			return 0.0;
-		else if (x > Qmax)
+		else if (static_cast<real>(x) > Qmax)
 			return 0.0;
 		return saq->density(x);
 	}
@@ -824,9 +830,9 @@ private:
 	real pdf_single(const std::enable_if_t<pa==EXPLICIT,
 	                                       rn::PointInInterval<real>>& x) const
 	{
-		if (x < 0)
+		if (static_cast<real>(x) < 0)
 			return 0.0;
-		else if (x > Qmax)
+		else if (static_cast<real>(x) > Qmax)
 			return 0.0;
 		return pdf_single_explicit(x, locals, weights, Qmax, norm);
 	}

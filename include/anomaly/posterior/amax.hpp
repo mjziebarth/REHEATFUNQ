@@ -30,6 +30,7 @@
  * REHEATFUNQ includes:
  */
 #include <numerics/functions.hpp>
+#include <numerics/limits.hpp>
 #include <anomaly/posterior/locals.hpp>
 #include <anomaly/posterior/integrand.hpp>
 
@@ -40,12 +41,15 @@
 #include <algorithm>
 #include <boost/multiprecision/cpp_dec_float.hpp>
 #include <boost/multiprecision/float128.hpp>
+#include <boost/math/tools/minima.hpp>
+
 
 namespace reheatfunq {
 namespace anomaly {
 namespace posterior {
 
 namespace rm = reheatfunq::math;
+namespace rn = reheatfunq::numerics;
 
 /*
  * Find the maximum of the inner integrand across all a & z
@@ -63,11 +67,7 @@ az_t<real> log_integrand_max(const Locals<real>& L)
 {
 	struct state_t {
 		real l1p_kiz_sum;
-		real k_1mkz_sum;
-		real k2_1mkz2_sum;
 		real l1p_wz;
-		real w_1mwz;
-		real w2_1mwz2;
 		real amax;
 		real f0;
 
@@ -80,20 +80,11 @@ az_t<real> log_integrand_max(const Locals<real>& L)
 		void compute(real z, const Locals<real>& L){
 			/* Set the new parameters:: */
 			l1p_kiz_sum = 0.0;
-			k_1mkz_sum = 0.0;
-			k2_1mkz2_sum = 0.0;
 			for (const real& k : L.ki){
 				l1p_kiz_sum += rm::log1p(-k * z);
-				/* First and second derivatives of the above by z: */
-				real x = k / (1.0 - k*z);
-				k_1mkz_sum -= x;
-				k2_1mkz2_sum -= x*x;
 			}
 
 			l1p_wz = rm::log1p(-L.w * z);
-			w_1mwz = -L.w / (1.0 - L.w*z);
-			w2_1mwz2 = - w_1mwz * w_1mwz;
-
 
 			/* New amax: */
 			amax = std::max(log_integrand_amax(l1p_wz, l1p_kiz_sum, L),
@@ -103,65 +94,42 @@ az_t<real> log_integrand_max(const Locals<real>& L)
 	};
 	state_t state;
 
-	/* Find a starting value. Identify a maximum from a regular grid
-	 * in z:
-	 */
-	uint_fast8_t imax=0;
-	real f0max = -std::numeric_limits<real>::infinity();
-	for (uint_fast8_t i=1; i<20; ++i){
-		state.compute(i / 20.0, L);
-		state.compute_f0(L);
-		if (state.f0 > f0max){
-			imax = i;
-			f0max = state.f0;
-		}
-	}
 
-	/* Reduce our maximum search to the interval [i-1, i+1]: */
-	real zl, zr;
-	if (imax == 0){
-		zl = 0;
-		zr = 1/20.0;
-	} else if (imax == 19){
-		zl = 18/20.0;
-		zr = 1.0;
-	} else {
-		zl = (imax - 1) / 20.0;
-		zr = (imax + 1) / 20.0;
-	}
+	auto cost = [&L](real z) -> real {
+		if (z == 1.0)
+			return std::numeric_limits<real>::infinity();
 
-	/* Start from the middle of the interval: */
-	real z = (zl + zr) / 2;
-
-	for (uint_fast8_t i=0; i<200; ++i){
+		/* Compute the state at z: */
+		state_t state;
 		state.compute(z, L);
+		state.compute_f0(L);
+		return -state.f0;
+	};
 
-		/* Derivative of the log of the integrand by z: */
-		const real f1 = - L.v * state.amax * state.w_1mwz + (state.amax - 1.0) * state.k_1mkz_sum;
+	std::uintmax_t max_iter = 200;
+	std::pair<real,real> res
+	   = boost::math::tools::brent_find_minima(
+	          cost,
+	          static_cast<real>(0.0),
+	          static_cast<real>(1.0),
+	          1000000,
+	          max_iter
+	);
 
-		/* Second derivative of the log of the integrand by z: */
-		const real f2 = - L.v * state.amax * state.w2_1mwz2 + (state.amax - 1.0) * state.k2_1mkz2_sum;
+	if (rm::isnan(res.first))
+		throw std::runtime_error("NaN z in log_integrand_max.");
 
-		/* Newton step: */
-		real dz = std::min<real>(
-			std::max<real>(
-				- f1 / f2,
-				0.99 * (zl - z)
-			),
-			0.99 * (zr - z)
-		);
-		real znext = z + dz;
-		bool exit = rm::abs(znext - z) < 1e-8;
-		z = znext;
-		if (exit)
-			break;
-	}
+	/* Evaluate for the z obtained in the Newton-Raphson iteration: */
+	state.compute(res.first, L);
+	real amax_z = state.amax;
 
-	state.compute(z, L);
-	state.compute_f0(L);
+	if (rm::isnan(amax_z))
+		throw std::runtime_error("NaN a in log_integrand_max.");
 
-	return {.a=state.amax, .z=z, .log_integrand=state.f0};
+	return {.a=amax_z, .z=res.first, .log_integrand=-res.second};
 }
+
+
 
 
 
