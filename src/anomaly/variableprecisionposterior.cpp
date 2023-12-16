@@ -443,3 +443,39 @@ void VariablePrecisionPosterior::get_C(double a, size_t l, double& C0,
 	}
 	throw std::runtime_error("This code is not reached.");
 }
+
+
+
+
+void
+VariablePrecisionPosterior::get_log_pdf_bli_samples(
+    std::vector<std::vector<std::pair<double,double>>>& samples
+) const
+{
+	switch (precision){
+		case precision_t::WP_DOUBLE:
+			posterior_double->get_log_pdf_bli_samples(samples);
+			return;
+		case precision_t::WP_LONG_DOUBLE:
+			posterior_long_double->get_log_pdf_bli_samples(samples);
+			return;
+		case precision_t::WP_FLOAT_128:
+			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD
+			posterior_float128->get_log_pdf_bli_samples(samples);
+			return;
+			#endif
+		case precision_t::WP_BOOST_DEC_50:
+			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_50
+			posterior_dec50->get_log_pdf_bli_samples(samples);
+			return;
+			#endif
+		case precision_t::WP_BOOST_DEC_100:
+			#ifdef REHEATFUNQ_ANOMALY_POSTERIOR_TYPE_BOOST_DEC_100
+			posterior_dec100->get_log_pdf_bli_samples(samples);
+			return;
+			#endif
+		default:
+			break;
+	}
+	throw std::runtime_error("This code is not reached.");
+}

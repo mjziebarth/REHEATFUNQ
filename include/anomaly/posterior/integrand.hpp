@@ -331,9 +331,26 @@ real inner_integrand_template(typename arg<const real>::type a,
 	return result;
 }
 
+template<typename real>
+struct outer_integrand_base_t {
+	real S;
+	real local_log_scale;
+	real global_log_scale;
+
+	outer_integrand_base_t(arg<const real>::type S,
+	        arg<const real>::type local_log_scale,
+	        arg<const real>::type global_log_scale
+	)
+	   : S(S), local_log_scale(local_log_scale),
+	     global_log_scale(global_log_scale)
+	{
+	}
+};
+
 
 template<typename real>
-real outer_integrand(typename arg<const real>::type z, const Locals<real>& L,
+outer_integrand_base_t<real>
+outer_integrand_base(typename arg<const real>::type z, const Locals<real>& L,
                      typename arg<const real>::type log_scale,
                      typename arg<const real>::type Iref = 0)
 {
@@ -405,7 +422,7 @@ real outer_integrand(typename arg<const real>::type z, const Locals<real>& L,
 		 * (as the rescale should bring S to a finite value at the maximum).
 		 * Return 0.
 		 */
-		return 0.0;
+		return outer_integrand_base_t<real>(0.0, 0.0, 0.0);
 	}
 
 	/* Error checking: */
@@ -429,9 +446,30 @@ real outer_integrand(typename arg<const real>::type z, const Locals<real>& L,
 		throw std::runtime_error(msg);
 	}
 
-	return S * rm::exp(lImax.logI - log_scale);
+	return outer_integrand_base_t<real>(S, lImax.logI, log_scale);
 }
 
+template<typename real>
+real outer_integrand(typename arg<const real>::type z, const Locals<real>& L,
+                     typename arg<const real>::type log_scale,
+                     typename arg<const real>::type Iref = 0)
+{
+	outer_integrand_base_t<real> base(outer_integrand_base(z, L, log_scale, Iref));
+
+	return base.S * rm::exp(base.local_log_scale - base.global_log_scale);
+}
+
+
+template<typename real>
+real log_outer_integrand(typename arg<const real>::type z,
+                         const Locals<real>& L,
+                         typename arg<const real>::type log_scale,
+                         typename arg<const real>::type Iref = 0)
+{
+	outer_integrand_base_t<real> base(outer_integrand_base(z, L, log_scale, Iref));
+
+	return rm::log(base.S) + base.local_log_scale - base.global_log_scale;
+}
 
 
 } // namespace anomaly

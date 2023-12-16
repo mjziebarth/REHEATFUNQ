@@ -195,6 +195,21 @@ public:
 		);
 	}
 
+	void
+	get_log_pdf_bli_samples(
+	    std::vector<std::vector<std::pair<double,double>>>& samples
+	) const
+	{
+		std::visit(
+			[&samples](auto&& p)
+			{
+				p.get_log_pdf_bli_samples(samples);
+			},
+			*posterior
+		);
+	}
+
+
 private:
 	std::optional<std::variant<
 	        Posterior<real, EXPLICIT>,
@@ -278,6 +293,10 @@ public:
 
 	void get_C(double a, size_t l, double& C0, double& C1, double& C2,
 	           double& C3) const;
+
+	void get_log_pdf_bli_samples(
+	           std::vector<std::vector<std::pair<double,double>>>& samples
+	     ) const;
 
 private:
 	const precision_t precision;

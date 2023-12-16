@@ -31,6 +31,7 @@ from libc.stdint cimport uint8_t
 from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp.memory cimport shared_ptr, make_shared
+from libcpp.pair cimport pair
 from cython.operator cimport dereference as deref
 
 from numpy._typing import NDArray
@@ -116,6 +117,7 @@ cdef extern from "anomaly/variableprecisionposterior.hpp" \
         void get_C(double a, size_t l, double& C0, double& C1, double& C2,
                    double& C3) except+
 
+        void get_log_pdf_bli_samples(vector[vector[pair[double,double]]]&) except+
 
 #
 #
@@ -148,6 +150,17 @@ cdef extern from * namespace "reheatfunq::dirtyhacks" nogil:
     cdef void emplace_back(vector[weighted_sample_t]&, double w)
     cdef void emplace_back(weighted_sample_t& ws, double q, double c)
     cdef void emplace_back(vector[qc_t]& v, double q, double c)
+
+
+
+def _has_float128():
+    return HAS_FLOAT128
+
+def _has_dec50():
+    return HAS_DEC50
+
+def _has_dec100():
+    return HAS_DEC100
 
 
 @cython.boundscheck(False)
@@ -417,3 +430,27 @@ cdef class CppAnomalyPosterior:
             deref(self.post).get_C(a, l, C[0], C[1], C[2], C[3]);
 
         return C.base
+
+
+    def _get_log_pdf_bli_data(self):
+        """
+
+        """
+        if not self.post:
+            raise RuntimeError("Not properly initialized.")
+        cdef vector[vector[pair[double,double]]] vec
+        deref(self.post).get_log_pdf_bli_samples(vec)
+
+        cdef list ranges = []
+        cdef double[:,::1] samples_i
+
+        cdef size_t i,j
+        for i in range(vec.size()):
+            ranges.append(np.empty((vec[i].size(),2)))
+            samples_i = ranges[i]
+            with nogil:
+                for j in range(vec[i].size()):
+                    samples_i[j,0] = vec[i][j].first
+                    samples_i[j,1] = vec[i][j].second
+
+        return ranges

@@ -33,6 +33,24 @@ namespace numerics {
 
 namespace rm = reheatfunq::math;
 
+/*
+ * Specifiy a point in an interval. Consider the following interval:
+ *
+ * |---------------|------x--------------|-------------->
+ * 0             xmin     x             xmax
+ *
+ *
+ * We now define a class with the following intervals:
+ *
+ *                 |--ff--|
+ *
+ * |-------- val ---------|
+ *
+ *                        |----- fb -----|
+ *
+ *
+ * Where 'ff' is 'from_front' and 'fb' is 'from_back'.
+ */
 template<typename real>
 class PointInInterval {
 public:

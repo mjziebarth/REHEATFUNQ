@@ -188,11 +188,8 @@ template<C_t C, bool y_integrated, typename real>
 log_double_t<real>
 a_integral_large_z_log_integrand(typename arg<const real>::type a,
                                  typename arg<const real>::type ly,
-                                 typename arg<const real>::type log_integrand_max,
                                  const Locals<real>& L)
 {
-	const real va = L.v * a;
-
 	/* A function to compute sign and logarithm of absolute of a
 	 * real number:
 	 */
@@ -243,14 +240,14 @@ a_integral_large_z_log_integrand(typename arg<const real>::type a,
 	}
 
 	// Term ( s_tilde * (1-w) ) ^ (-va)
-	lC -= va * (L.ls + L.l1p_w);
+	//lC -= va * (L.ls + L.l1p_w);
 
 	// Remaining summands:
 	lC += loggamma_v_a__minus__n_loggamma_a__plus__C_a<real>(
 	          a, L.n, L.v,
 	          L.lp + L.lh0 - L.v* (L.ls + L.l1p_w) + ly,
 	          L.lv);
-	lC -= L.lp + L.lh0 + log_integrand_max;
+	lC -= L.lp + L.lh0;
 
 	if (rm::isinf(lC)){
 		return {.log_abs=-std::numeric_limits<double>::infinity(),
@@ -260,64 +257,54 @@ a_integral_large_z_log_integrand(typename arg<const real>::type a,
 	return {.log_abs=lC, .sign=sign};
 }
 
-template<C_t C, bool y_integrated, typename real>
-real a_integral_large_z_integrand(typename arg<const real>::type a,
-                                  typename arg<const real>::type ly,
-                                  typename arg<const real>::type log_integrand_max,
-                                  const Locals<real>& L)
-{
-	log_double_t<real> res
-	    = a_integral_large_z_log_integrand<C,y_integrated, real>
-	           (a, ly, log_integrand_max, L);
-	if (rm::isnan(res.log_abs)){
-		std::string msg("NaN result in a_integral_large_z_integrand_");
-		msg += std::to_string((int)C);
-		msg += ".\n   at a=";
-		msg += std::to_string(static_cast<long double>(a));
-		msg += ".\n   at ly = ";
-		msg += std::to_string(static_cast<long double>(ly));
-		msg += ".\n   with log_integrand_max =  ";
-		msg += std::to_string(static_cast<long double>(log_integrand_max));
-		msg += ".\n   and res.log_abs =         ";
-		msg += std::to_string(static_cast<long double>(res.log_abs));
-		msg += ".";
-		throw std::runtime_error(msg);
-	}
+// template<C_t C, bool y_integrated, typename real>
+// real a_integral_large_z_log_integrand(typename arg<const real>::type a,
+//                                       typename arg<const real>::type ly,
+//                                       typename arg<const real>::type log_integrand_max,
+//                                       const Locals<real>& L)
+// {
+// 	log_double_t<real> res
+// 	    = a_integral_large_z_log_integrand<C,y_integrated, real>
+// 	           (a, ly, log_integrand_max, L);
+// 	if (rm::isnan(res.log_abs)){
+// 		std::string msg("NaN result in a_integral_large_z_integrand_");
+// 		msg += std::to_string((int)C);
+// 		msg += ".\n   at a=";
+// 		msg += std::to_string(static_cast<long double>(a));
+// 		msg += ".\n   at ly = ";
+// 		msg += std::to_string(static_cast<long double>(ly));
+// 		msg += ".\n   with log_integrand_max =  ";
+// 		msg += std::to_string(static_cast<long double>(log_integrand_max));
+// 		msg += ".\n   and res.log_abs =         ";
+// 		msg += std::to_string(static_cast<long double>(res.log_abs));
+// 		msg += ".";
+// 		throw std::runtime_error(msg);
+// 	}
 
-	// Compute the result and test for finity:
-	real result = rm::exp(res.log_abs);
-	if (rm::isinf(result)){
-		std::string msg("a_integral_large_z_integrand_");
-		msg += std::to_string((int)C);
-		msg += " inf result.\n   at ly = ";
-		msg += std::to_string(static_cast<long double>(ly));
-		msg += ".\n   at a =  ";
-		msg += std::to_string(static_cast<long double>(a));
-		msg += ".\n   with log_integrand_max =  ";
-		msg += std::to_string(static_cast<long double>(log_integrand_max));
-		msg += ".\n   and res.log_abs =         ";
-		msg += std::to_string(static_cast<long double>(res.log_abs));
-		msg += ".";
-		throw ScaleError<real>(msg, res.log_abs);
-	}
+// 	return res.log_abs;
 
-	return result;
-}
+// //	// Compute the result and test for finity:
+// //	real result = rm::exp(res.log_abs);
+// //
+// //	return result;
+// }
 
 
-template<typename real, unsigned char order>
+template<typename real, bool y_integrated, C_t order>
 real large_z_amax(typename arg<const real>::type ym, const Locals<real>& L)
 {
-	static_assert(order == 0);
-
 	const real ly = rm::log(ym);
 
 	auto cost = [ly,&L](typename arg<const real>::type x) -> real
 	{
-		real a = L.amin / (1.0 - x);
+		real a = L.amin / x;
 		if (rm::isinf(a))
 			return std::numeric_limits<real>::infinity();
-		return -a_integral_large_z_log_integrand<C_t::C0, false, real>(a, ly, 0.0, L).log_abs;
+		return -a_integral_large_z_log_integrand<order, y_integrated, real>(
+		            a,
+		            ly,
+		            L
+		        ).log_abs;
 	};
 
 	std::uintmax_t max_iter = 200;
@@ -328,164 +315,32 @@ real large_z_amax(typename arg<const real>::type ym, const Locals<real>& L)
 	                1000000,
 	                max_iter).first;
 
-	return L.amin / (1.0 - xmax);
+	return L.amin / xmax;
 }
 
 
 template<typename real>
 real y_taylor_transition_root_backend(typename arg<const real>::type y,
-                                      const Locals<real>& L,
-                                      typename arg<const real>::type outer_log_scale)
+                                      const Locals<real>& L)
 {
-	/* Backup Gauss-Kronrod quadrature: */
-	typedef bmq::gauss_kronrod<real,31> GK;
-
-	constexpr double epsilon = 1e-14;
-
-	const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
-
-
-
-
 	/* Get the scale: */
-	const real amax = large_z_amax<real,0>(y, L);
+	const real amax = large_z_amax<real, true, C_t::C0>(y, L);
 	const real ly = rm::log(y);
 
 	const real log_scale
 	    = a_integral_large_z_log_integrand<C_t::C0,true>(amax, ly,
-	                                                     0.0,
 	                                                     L).log_abs;
 
 
-	const real amax_3 = large_z_amax<real,0>(y, L);
+	const real amax_3 = large_z_amax<real, true, C_t::C3>(y, L);
 	const real log_scale_3
 	    = a_integral_large_z_log_integrand<C_t::C3,true>(amax_3, ly,
-	                                                     0.0,
 	                                                     L).log_abs;
 
 	/* Crude approximation of the integral, assuming similar shapes
 	 * of the integrands for C0 and C3: */
 	return log_scale_3 + rm::log(amax_3) - log_scale - rm::log(amax)
 	       - rm::log(std::numeric_limits<real>::epsilon());
-
-
-
-	/* Compute the 'a' integrals for the constant and the cubic term: */
-	real error, L1;
-	size_t levels;
-	bmq::exp_sinh<real> es_integrator;
-	bmq::tanh_sinh<real> ts_integrator;
-
-	auto integrand00 = [&](typename arg<const real>::type a,
-	                       typename arg<const real>::type distance_to_border)
-	                       -> real
-	{
-		return a_integral_large_z_integrand<C_t::C0,true,real>(
-		                a, ly, log_scale, L
-		);
-	};
-
-	auto integrand0 = [&](typename arg<const real>::type a) -> real
-	{
-		return a_integral_large_z_integrand<C_t::C0,true,real>(
-		                a, ly, log_scale, L
-		);
-	};
-
-	real S0;
-	if (amax > L.amin){
-		real error1, L11;
-		/* Try tanh_sinh for the integral [amin, amax] first, but fall back
-		 * to Gauss-Kronrod if an exception is thrown:
-		 */
-		try {
-			S0 = ts_integrator.integrate(integrand00, L.amin, amax,
-			                             TOL_TANH_SINH, &error, &L1, &levels);
-		} catch (...) {
-			S0 = GK::integrate(integrand0, L.amin, amax, 9, TOL_TANH_SINH,
-			                   &error, &L1);
-		}
-		S0 += es_integrator.integrate(integrand0, amax,
-		                              std::numeric_limits<real>::infinity(),
-		                              TOL_TANH_SINH, &error1, &L11, &levels);
-		error += error1;
-		L1 += L11;
-	} else {
-		S0 = es_integrator.integrate(integrand0, L.amin,
-		                             std::numeric_limits<real>::infinity(),
-		                             TOL_TANH_SINH, &error, &L1, &levels);
-	}
-
-	if (rm::isinf(S0)){
-		throw ScaleError<real>("y_taylor_transition_root_backend_S0",
-		                       log_scale);
-	}
-	/* Error checking: */
-	if (error > 1e-2 * L1){
-		throw PrecisionError<real>("y_taylor_transition_root_backend_S0",
-		                           error, L1);
-	}
-
-	auto integrand10 = [&](typename arg<const real>::type a,
-	                       typename arg<const real>::type distance_to_border)
-	                       -> real
-	{
-		return a_integral_large_z_integrand<C_t::C3,true,real>(
-		                a, ly, log_scale, L
-		);
-	};
-
-	auto integrand1 = [&](typename arg<const real>::type a) -> real
-	{
-		return a_integral_large_z_integrand<C_t::C3,true,real>(
-		                a, ly, log_scale, L);
-	};
-
-
-	real S1;
-	if (amax > L.amin){
-		real error1, L11;
-		/* Try tanh_sinh for the integral [amin, amax] first, but fall back
-		 * to Gauss-Kronrod if an exception is thrown:
-		 */
-		try {
-			S1 = ts_integrator.integrate(integrand10, L.amin, amax,
-			                             TOL_TANH_SINH, &error, &L1, &levels);
-		} catch (...) {
-			S1 = GK::integrate(integrand1, L.amin, amax, 9, TOL_TANH_SINH,
-			                   &error, &L1);
-		}
-		S1 += es_integrator.integrate(integrand1, amax,
-		                              std::numeric_limits<real>::infinity(),
-		                              TOL_TANH_SINH, &error1, &L11, &levels);
-		error += error1;
-		L1 += L11;
-	} else {
-		S1 = es_integrator.integrate(integrand1, L.amin,
-		                             std::numeric_limits<real>::infinity(),
-		                             TOL_TANH_SINH, &error, &L1, &levels);
-	}
-
-	if (rm::isinf(S1)){
-		throw ScaleError<real>("y_taylor_transition_root_backend_S1",
-		                       log_scale);
-	}
-	/* Error checking: */
-	if (error > 1e-2 * std::max<real>(L1, rm::abs(S0))){
-		throw PrecisionError<real>("y_taylor_transition_root_backend_S1",
-		                           error, L1);
-	}
-
-	/* Extract the result: */
-	const real result = rm::log(rm::abs(S1)) - rm::log(epsilon)
-	                    - rm::log(rm::abs(S0));
-
-	/* Make sure that result is finite: */
-	if (rm::isinf(result)){
-		throw ScaleError<real>("y_taylor_transition_root_backend", 300.);
-	}
-
-	return result;
 }
 
 
@@ -493,22 +348,21 @@ real y_taylor_transition_root_backend(typename arg<const real>::type y,
 
 template<typename real>
 real y_taylor_transition(const Locals<real>& L,
-                         typename arg<const real>::type outer_log_scale,
                          const real ymin = 1e-32)
 {
 	/* Find a value above the threshold: */
 	real yr = 1e-20;
-	real val = y_taylor_transition_root_backend<real>(yr, L, outer_log_scale);
+	real val = y_taylor_transition_root_backend<real>(yr, L);
 	while (val < 0 || rm::isnan(val)){
 		yr = std::min<real>(2*yr, 1.0);
 		if (yr == 1.0)
 			break;
-		val = y_taylor_transition_root_backend<real>(yr, L, outer_log_scale);
+		val = y_taylor_transition_root_backend<real>(yr, L);
 	}
 
 	/* Root finding: */
 	auto rootfun = [&](typename arg<const real>::type y) -> real {
-		return y_taylor_transition_root_backend<real>(y, L, outer_log_scale);
+		return y_taylor_transition_root_backend<real>(y, L);
 	};
 	constexpr std::uintmax_t MAX_ITER = 100;
 	std::uintmax_t max_iter = MAX_ITER;
@@ -528,10 +382,22 @@ real y_taylor_transition(const Locals<real>& L,
 /*
  * Compute the actual integral:
  */
+template<typename real>
+struct ailz_base_t {
+	real S;
+	real log_scale;
+
+	ailz_base_t(typename arg<const real>::type S,
+	            typename arg<const real>::type log_scale)
+	   : S(S), log_scale(log_scale)
+	{}
+};
+
+
 template<bool y_integrated, typename real>
-real a_integral_large_z(typename arg<const real>::type ym,
+ailz_base_t<real>
+a_integral_large_z_base(typename arg<const real>::type ym,
                         typename arg<const real>::type S_cmp,
-                        typename arg<const real>::type log_scale,
                         const Locals<real>& L)
 {
 	/*
@@ -543,7 +409,7 @@ real a_integral_large_z(typename arg<const real>::type ym,
 	 * involved with y == 0 (and a==1, for instance).
 	 */
 	if (ym == 0)
-		return 0.0;
+		return ailz_base_t<real>(0.0, 0.0);
 
 	const real TOL_TANH_SINH = boost::math::tools::root_epsilon<real>();
 
@@ -551,31 +417,107 @@ real a_integral_large_z(typename arg<const real>::type ym,
 	const real ly = rm::log(ym);
 
 	/* Integration setup for 'a' integrals:: */
-	real error, L1, S;
-	size_t levels;
-	bmq::exp_sinh<real> integrator;
+	real error_0, L1_0, error_1, L1_1, S;
+	size_t levels0, levels1;
+
+	/* Estimate roughly the logarithm of the relevant scale for later integration: */
+	struct a_lscale_t {
+		real amax;
+		real log_scale;
+		a_lscale_t(real amax, real log_scale) : amax(amax), log_scale(log_scale)
+		{}
+	};
+	auto determine_local_log_scale = [=,&L]() -> a_lscale_t
+	{
+		std::array<real,4> amax;
+		amax[0] = large_z_amax<real, y_integrated, C_t::C0>(ym, L);
+		amax[1] = large_z_amax<real, y_integrated, C_t::C1>(ym, L);
+		amax[2] = large_z_amax<real, y_integrated, C_t::C2>(ym, L);
+		amax[3] = large_z_amax<real, y_integrated, C_t::C3>(ym, L);
+		std::array<real,4> ls;
+		ls[0] = a_integral_large_z_log_integrand<C_t::C0,y_integrated,real>(
+		            amax[0],
+		            ly,
+		            L
+		    ).log_abs + rm::log(amax[0]);
+		ls[1] = a_integral_large_z_log_integrand<C_t::C1,y_integrated,real>(
+		            amax[1],
+		            ly,
+		            L
+		    ).log_abs + rm::log(amax[1]);
+		ls[2] = a_integral_large_z_log_integrand<C_t::C2,y_integrated,real>(
+		            amax[2],
+		            ly,
+		            L
+		    ).log_abs + rm::log(amax[2]);
+		ls[3] = a_integral_large_z_log_integrand<C_t::C3,y_integrated,real>(
+		            amax[3],
+		            ly,
+		            L
+		    ).log_abs + rm::log(amax[3]);
+
+		a_lscale_t res(amax[0], ls[0]);
+		for (uint_fast8_t i=1; i<4; ++i){
+			if (ls[i] > res.log_scale){
+				res.amax = amax[i];
+				res.log_scale = ls[i];
+			}
+		}
+		return res;
+	};
+
+	a_lscale_t local_amax_log_scale = determine_local_log_scale();
 
 	auto integrand = [=,&L](real a) -> real
 	{
-		real S0
-		   = a_integral_large_z_integrand<C_t::C0,y_integrated,real>
-		         (a, ly, log_scale, L);
-		real S1
-		   = a_integral_large_z_integrand<C_t::C1,y_integrated,real>
-		         (a, ly, log_scale, L);
-		real S2
-		   = a_integral_large_z_integrand<C_t::C2,y_integrated,real>
-		         (a, ly, log_scale, L);
-		real S3
-		   = a_integral_large_z_integrand<C_t::C3,y_integrated,real>
-		         (a, ly, log_scale, L);
+		real S0 = rm::exp(
+		    a_integral_large_z_log_integrand<C_t::C0,y_integrated,real>(
+		        a,
+		        ly,
+		        L
+		    ).log_abs - local_amax_log_scale.log_scale
+		);
+		real S1 = rm::exp(
+		    a_integral_large_z_log_integrand<C_t::C1,y_integrated,real>(
+		        a,
+		        ly,
+		        L
+		    ).log_abs - local_amax_log_scale.log_scale
+		);
+		real S2 = rm::exp(
+		    a_integral_large_z_log_integrand<C_t::C2,y_integrated,real>(
+		        a,
+		        ly,
+		        L
+			).log_abs - local_amax_log_scale.log_scale
+		);
+		real S3 = rm::exp(
+		    a_integral_large_z_log_integrand<C_t::C3,y_integrated,real>(
+		        a,
+		        ly,
+		        L
+			).log_abs - local_amax_log_scale.log_scale
+		);
 		return S0 + S1 + S2 + S3;
 	};
 
 	try {
-		S = integrator.integrate(integrand, L.amin,
-		                         std::numeric_limits<real>::infinity(),
-		                         TOL_TANH_SINH, &error, &L1, &levels);
+		bmq::tanh_sinh<real> integrator0;
+		bmq::exp_sinh<real> integrator1;
+		if (local_amax_log_scale.amax == L.amin){
+			S = integrator1.integrate(integrand, L.amin,
+			                          std::numeric_limits<real>::infinity(),
+			                          TOL_TANH_SINH, &error_1, &L1_1, &levels1);
+			L1_0 = L1_1;
+			error_0 = 0.0;
+		} else {
+			S = integrator0.integrate(integrand, L.amin,
+			                          local_amax_log_scale.amax,
+			                          TOL_TANH_SINH, &error_0, &L1_0, &levels0)
+			    + integrator1.integrate(integrand, local_amax_log_scale.amax,
+			                            std::numeric_limits<real>::infinity(),
+			                            TOL_TANH_SINH, &error_1, &L1_1, &levels1);
+		}
 	} catch (std::runtime_error& e) {
 		std::string msg("Error in a_integral_large_z exp_sinh routine: '");
 		msg += e.what();
@@ -584,11 +526,46 @@ real a_integral_large_z(typename arg<const real>::type ym,
 	}
 	if (rm::isinf(S) || rm::isnan(S))
 		throw ScaleError<real>("a_integral_large_z", 0.0);
-	if (error > std::max<real>(TOL_TANH_SINH * L1, 1e-14 * S_cmp))
-		throw PrecisionError<real>("a_integral_large_z_S3", error, L1);
+	if (error_0 + error_1 > TOL_TANH_SINH * (L1_0 + L1_1)){
+		throw PrecisionError<real>("a_integral_large_z_S3", error_0 + error_1,
+		                           L1_1 + L1_0);
+	}
 
-	return S;
+	return ailz_base_t<real>(S, local_amax_log_scale.log_scale);
 }
+
+
+template<bool y_integrated, typename real>
+real a_integral_large_z(typename arg<const real>::type ym,
+                        typename arg<const real>::type S_cmp,
+                        typename arg<const real>::type log_scale,
+                        const Locals<real>& L)
+{
+	ailz_base_t<real>
+	res(a_integral_large_z_base<y_integrated,real>(
+	        ym,
+	        S_cmp,
+	        L
+	));
+	return res.S * rm::exp(res.log_scale - log_scale);
+}
+
+
+template<bool y_integrated, typename real>
+real log_a_integral_large_z(typename arg<const real>::type ym,
+                            typename arg<const real>::type S_cmp,
+                            typename arg<const real>::type log_scale,
+                            const Locals<real>& L)
+{
+	ailz_base_t<real>
+	res(a_integral_large_z_base<y_integrated,real>(
+	        ym,
+	        S_cmp,
+	        L
+	));
+	return rm::log(res.S) + res.log_scale - log_scale;
+}
+
 
 } // namespace posterior
 } // namespace anomaly

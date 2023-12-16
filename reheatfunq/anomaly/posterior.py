@@ -19,28 +19,50 @@
 
 import numpy as np
 from math import exp
-from typing import Union, Literal, Iterable
-from numpy.typing import ArrayLike
+from typing import Union, Literal, Iterable, Any
+from numpy.typing import ArrayLike, NDArray
 from .anomaly import Anomaly
 from ..regional import GammaConjugatePrior
 from ..coverings.rdisks import bootstrap_data_selection, \
                                all_restricted_samples, \
                                samples_from_discrete_distribution
-from .bayes import marginal_posterior_pdf_batch, marginal_posterior_cdf_batch, \
-                   marginal_posterior_tail_batch, \
-                   marginal_posterior_tail_quantiles_batch, \
-                   _support_float128, _support_dec50, _support_dec100
-from .postbackend import CppAnomalyPosterior
+from .postbackend import CppAnomalyPosterior, _has_float128, \
+                         _has_dec50, _has_dec100
 
 
 # Define the capabilities of the numerical backend:
-_num_prec = ['auto','double','long double']
-if _support_float128():
+_num_prec = ['double','long double']
+if _has_float128():
     _num_prec.append('float128')
-if _support_dec50():
+if _has_dec50():
     _num_prec.append('dec50')
-if _support_dec100():
+if _has_dec100():
     _num_prec.append('dec100')
+
+
+def support_float128() -> bool:
+    """
+    This function returns whether or not REHEATFUNQ is
+    compiled with support for boost::multiprecision::float128.
+    """
+    return _has_float128()
+
+
+def support_dec50() -> bool:
+    """
+    This function returns whether or not REHEATFUNQ is
+    compiled with support for boost::multiprecision::cpp_dec_float_50.
+    """
+    return _has_dec50()
+
+
+def support_dec100() -> bool:
+    """
+    This function returns whether or not REHEATFUNQ is
+    compiled with support for boost::multiprecision::cpp_dec_float_100.
+    """
+    return _has_dec100()
+
 
 
 
@@ -79,7 +101,32 @@ class HeatFlowAnomalyPosterior:
         effect.
     heat_flow_unit : 'mW/m²' | 'W/m²'
         The unit in which the heat flow data :python:`q` are given.
+    working_precision : 'double' | 'long double', optional
+            The precision of the internal numerical computations.
+            The higher the precision, the more likely it is to
+            obtain a precise result for large data sets. The
+            trade off is a longer run time.
+            If the respective flags have been set at compile
+            time, additional options 'float128' (GCC 128bit
+            floating point), 'dec50' (boost 50-digit multiprecision),
+            and 'dec100' (boost 100-digit multiprecision) are
+            available.
     """
+
+    # Typing:
+    q: NDArray[np.float64]
+    c: NDArray[np.float64]
+    xy: NDArray[np.float64]
+    gcp: GammaConjugatePrior
+    dmin: float
+    anomaly: Anomaly | Iterable[Anomaly] | \
+             Iterable[tuple[float,Anomaly]]
+    heat_flow_unit: Literal['mW/m²','W/m²']
+    PHmax_global: float
+    bootstrap: list[float, Any, Any]
+    posterior: CppAnomalyPosterior
+
+
     def __init__(self,
                  q: ArrayLike,
                  x: ArrayLike,
@@ -90,7 +137,14 @@ class HeatFlowAnomalyPosterior:
                  dmin: float = 20e3,
                  n_bootstrap: int = 1000,
                  heat_flow_unit: Literal['mW/m²','W/m²'] = 'mW/m²',
-                 rng: int | np.random.Generator = 127
+                 rng: int | np.random.Generator = 127,
+                 rtol: float = 1e-8,
+                 pdf_algorithm: Literal["explicit","barycentric_lagrange",
+                                        "adaptive_simpson"]
+                                = "barycentric_lagrange",
+                 bli_max_splits: int = 100,
+                 bli_max_refinements: int = 7,
+                 precision: Literal[_num_prec] = 'long double'
         ):
         # Ensure that heat flow is contiguous:
         q = np.ascontiguousarray(np.array(q,copy=False).reshape(-1))
@@ -247,9 +301,21 @@ class HeatFlowAnomalyPosterior:
                                     if self.c[j,i] > 0.0)
                                 for j in range(self.c.shape[0]))
 
+        p = exp(self.gcp.lp)
+        Qi = [self.q[ids] for w,j,ids in self.bootstrap]
+        Ci = [self.c[j,ids] for w,j,ids in self.bootstrap]
 
-    def pdf(self, P_H: ArrayLike, dest_tol: float = 1e-8,
-            working_precision: Literal[_num_prec] = 'auto') -> np.ndarray:
+        self.posterior = CppAnomalyPosterior(
+            [self.q[ids] for w,j,ids in self.bootstrap], # qij
+            [self.c[j,ids] for w,j,ids in self.bootstrap], # cij
+            np.array(bootstrap_w), p, self.gcp.s, self.gcp.n, self.gcp.v,
+            self.gcp.amin, float(rtol), False, str(pdf_algorithm),
+            int(bli_max_splits), int(bli_max_refinements),
+            str(precision)
+        )
+
+
+    def pdf(self, P_H: ArrayLike) -> NDArray[np.float64]:
         """
         Evaluate the marginal posterior distribution in
         heat-generating power :math:`P_H`.
@@ -259,23 +325,10 @@ class HeatFlowAnomalyPosterior:
         P_H : array_like
               The powers (in W) at which to evaluate the
               marginal posterior density.
-        dest_tol : float, optional
-              The destination tolerance to use for the power
-              :math:`P_H` integration.
-        working_precision : 'auto' | 'double' | 'long double', optional
-              The precision of the internal numerical computations.
-              The higher the precision, the more likely it is to
-              obtain a precise result for large data sets. The
-              trade off is a longer run time.
-              If the respective flags have been set at compile
-              time, additional options 'float128' (GCC 128bit
-              floating point), 'dec50' (boost 50-digit multiprecision),
-              and 'dec100' (boost 100-digit multiprecision) are
-              available.
 
         Returns
         -------
-        pdf : array_like
+        pdf : numpy.typing.NDArray[numpy.float64]
               The marginal posterior probability density of
               heat-generating power :math:`P_H` evaluated at
               the given :python:`P_H`.
@@ -283,19 +336,10 @@ class HeatFlowAnomalyPosterior:
         # Make sure that P_H is C-contiguous:
         P_H = np.ascontiguousarray(P_H)
 
-        # Prepare:
-        p = exp(self.gcp.lp)
-        Qi = [self.q[ids] for w,j,ids in self.bootstrap]
-        Ci = [self.c[j,ids] for w,j,ids in self.bootstrap]
-
-        # Heavy lifting:
-        return marginal_posterior_pdf_batch(P_H, p, self.gcp.s, self.gcp.n,
-                                            self.gcp.v, Qi, Ci,
-                                            self.gcp.amin).mean(axis=0)
+        return self.posterior.pdf(P_H)
 
 
-    def cdf(self, P_H: ArrayLike, dest_tol: float = 1e-8,
-            working_precision: Literal[_num_prec] = 'auto') -> np.ndarray:
+    def cdf(self, P_H: ArrayLike) -> NDArray[np.float64]:
         """
         Evaluate the marginal posterior cumulative distribution
         of heat-generating power :math:`P_H`.
@@ -305,23 +349,10 @@ class HeatFlowAnomalyPosterior:
         P_H : array_like
               The powers (in W) at which to evaluate the
               marginal posterior cumulative distribution.
-        dest_tol : float, optional
-              The destination tolerance to use for the power
-              :math:`P_H` integration.
-        working_precision : 'auto' | 'double' | 'long double', optional
-              The precision of the internal numerical computations.
-              The higher the precision, the more likely it is to
-              obtain a precise result for large data sets. The
-              trade off is a longer run time.
-              If the respective flags have been set at compile
-              time, additional options 'float128' (GCC 128bit
-              floating point), 'dec50' (boost 50-digit multiprecision),
-              and 'dec100' (boost 100-digit multiprecision) are
-              available.
 
         Returns
         -------
-        cdf : array_like
+        cdf : numpy.typing.NDArray[numpy.float64]
               The marginal posterior cumulative distribution
               of heat-generating power :math:`P_H` evaluated
               at the given :python:`P_H`.
@@ -329,20 +360,10 @@ class HeatFlowAnomalyPosterior:
         # Make sure that P_H is C-contiguous:
         P_H = np.ascontiguousarray(P_H)
 
-        # Prepare:
-        p = exp(self.gcp.lp)
-        Qi = [self.q[ids] for w,j,ids in self.bootstrap]
-        Ci = [self.c[j,ids] for w,j,ids in self.bootstrap]
-
-        # Heavy lifting:
-        return marginal_posterior_cdf_batch(P_H, p, self.gcp.s, self.gcp.n,
-                                            self.gcp.v, Qi, Ci,
-                                            self.gcp.amin)\
-                   .mean(axis=0).astype(np.double)
+        return self.posterior.cdf(P_H)
 
 
-    def tail(self, P_H: ArrayLike, dest_tol: float = 1e-8,
-             working_precision: Literal[_num_prec] = 'auto') -> np.ndarray:
+    def tail(self, P_H: ArrayLike) -> NDArray[np.float64]:
         """
         Evaluate the posterior tail distribution (complementary
         cumulative distribution) of heat-generating power
@@ -353,19 +374,6 @@ class HeatFlowAnomalyPosterior:
         P_H : array_like
               The powers (in W) at which to evaluate the
               marginal posterior tail distribution.
-        dest_tol : float, optional
-              The destination tolerance to use for the power
-              :math:`P_H` integration.
-        working_precision : 'auto' | 'double' | 'long double', optional
-              The precision of the internal numerical computations.
-              The higher the precision, the more likely it is to
-              obtain a precise result for large data sets. The
-              trade off is a longer run time.
-              If the respective flags have been set at compile
-              time, additional options 'float128' (GCC 128bit
-              floating point), 'dec50' (boost 50-digit multiprecision),
-              and 'dec100' (boost 100-digit multiprecision) are
-              available.
 
         Returns
         -------
@@ -377,23 +385,11 @@ class HeatFlowAnomalyPosterior:
         # Make sure that P_H is C-contiguous:
         P_H = np.ascontiguousarray(P_H)
 
-        # Prepare:
-        p = exp(self.gcp.lp)
-        Qi = [self.q[ids] for w,j,ids in self.bootstrap]
-        Ci = [self.c[j,ids] for w,j,ids in self.bootstrap]
-
         # Heavy lifting:
-        return marginal_posterior_tail_batch(P_H, p, self.gcp.s, self.gcp.n,
-                                             self.gcp.v, Qi, Ci,
-                                             self.gcp.amin)\
-                   .mean(axis=0).astype(np.double)
+        return self.posterior.tail(P_H)
 
 
-    def tail_quantiles(self, quantiles: ArrayLike,
-                       dest_tol: float = 1e-8,
-                       working_precision: Literal[_num_prec] = 'auto',
-                       method: Literal['bli','1.3.3'] = 'bli',
-                       n_chebyshev: int = 100) -> np.ndarray:
+    def tail_quantiles(self, quantiles: ArrayLike) -> NDArray[np.float64]:
         """
         Compute posterior tail quantiles, that is, heat-generating
         powers :math:`P_H` at which the complementary cumulative
@@ -403,32 +399,6 @@ class HeatFlowAnomalyPosterior:
         ----------
         quantiles : array_like
             The tail quantiles to compute.
-        dest_tol : float, optional
-            The tolerance to which to compute the powers
-            :math:`P_H`.
-        working_precision : 'auto' | 'double' | 'long double', optional
-            The precision of the internal numerical computations.
-            The higher the precision, the more likely it is to
-            obtain a precise result for large data sets. The
-            trade off is a longer run time.
-            If the respective flags have been set at compile
-            time, additional options 'float128' (GCC 128bit
-            floating point), 'dec50' (boost 50-digit multiprecision),
-            and 'dec100' (boost 100-digit multiprecision) are
-            available.
-            Note: currently only used if :code:`method == 'bli'`.
-        method : 'bli' | 'old', optional
-            Defines which method to use for inverting the tail
-            distribution for the tail quantile.
-              * 'bli' : Use barycentric Lagrange interpolation on a
-                number of tail distribution evaluations.
-              * '1.3.3' : An explicit method based on simultaneous PDF
-                integration and bisection. Default method of versions
-                1.3.3 and before.
-        n_chebyshev : int, optional
-            Number of Chebyshev points to evaluate the tail
-            distribution at if the method is barycentric Lagrange
-            interpolation.
 
         Returns
         -------
@@ -437,17 +407,6 @@ class HeatFlowAnomalyPosterior:
               posterior tail distribution evaluates to :code:`x`.
         """
         # Make sure that quantiles is C-contiguous:
-        quantiles = np.array(quantiles, float, copy=True, order='C', ndmin=1)
+        quantiles = np.ascontiguousarray(quantiles)
 
-        # Prepare:
-        p = exp(self.gcp.lp)
-        Qi = [self.q[ids] for w,j,ids in self.bootstrap]
-        Ci = [self.c[j,ids] for w,j,ids in self.bootstrap]
-        return marginal_posterior_tail_quantiles_batch(quantiles, p, self.gcp.s,
-                                                       self.gcp.n, self.gcp.v,
-                                                       Qi, Ci, self.gcp.amin,
-                                                       float(dest_tol), method,
-                                                       working_precision,
-                                                       n_chebyshev,
-                                                       inplace = True)
-
+        return self.posterior.tail_quantiles(quantiles)

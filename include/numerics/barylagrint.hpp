@@ -168,6 +168,28 @@ public:
 		return res;
 	}
 
+	void get_samples(std::vector<std::vector<std::pair<double,double>>>& samples) const
+	{
+		samples.resize(ranges.size());
+		auto it = samples.begin();
+		PointInInterval<real> xmin_local(xmin, 0.0, xmax-xmin);
+		for (const subrange_t& sr : ranges){
+			it->resize(sr.samples.size());
+			for (size_t i=0; i<sr.samples.size(); ++i){
+				(*it)[i].first = static_cast<double>(
+					chebyshev_to_support(
+					    sr.samples[i].z,
+					    xmin_local,
+					    sr.xmax
+					).val
+				);
+				(*it)[i].second = static_cast<double>(sr.samples[i].f);
+			}
+			xmin_local = sr.xmax;
+			++it;
+		}
+	}
+
 
 private:
 	/*
@@ -236,7 +258,7 @@ private:
 		const real Dx = xmax - xmin;
 		return PointInInterval<real>(
 		    std::min<real>(std::max<real>(
-		        static_cast<real>(xmin) + 0.5 * (1.0 + z.val) * Dx,
+		        xmin.val + 0.5 * (1.0 + z.val) * Dx,
 		        xmin),
 		    xmax),
 		    Dx * z.from_front + xmin.from_front,
@@ -250,7 +272,7 @@ private:
 	                     const PointInInterval<real>& xmax){
 		const real Dx = xmax - xmin;
 		z.val = std::min<real>(std::max<real>(
-		        static_cast<real>(xmin) + 0.5 * (1.0 + z.val) * Dx,
+		        xmin.val + 0.5 * (1.0 + z.val) * Dx,
 		        xmin),
 		    xmax);
 		z.from_front *= Dx;
@@ -267,7 +289,7 @@ private:
 		const real Dx = xmax - xmin;
 		return PointInInterval<real>(
 			std::min<real>(std::max<real>(
-				2*(x - xmin) / (xmax - xmin) - 1.0,
+				2*(x - xmin) / Dx - 1.0,
 				-1),
 			1),
 		    std::min<real>((x.from_front - xmin.from_front) / Dx, 1.0),
@@ -318,6 +340,29 @@ private:
 			} else {
 				const PointInInterval<real> zi = chebyshev_point(i, refined.size());
 				const real fi = func(chebyshev_to_support(zi, xmin, xmax));
+				if (rm::isnan(fi)){
+					std::string msg("NaN function evaluation in barycentric Lagrange "
+					                "interpolator (at x = ");
+					msg += std::to_string(static_cast<long double>(
+					            chebyshev_to_support(zi, xmin, xmax).val
+					));
+					msg += ", z = ";
+					msg += std::to_string(static_cast<long double>(zi.val));
+					msg += ", xmin = ";
+					msg += std::to_string(static_cast<long double>(xmin.val));
+					msg += ", xmax = ";
+					msg += std::to_string(static_cast<long double>(xmax.val));
+					msg += ").";
+					throw std::runtime_error(msg);
+				} else if (rm::isinf(fi)) {
+					std::string msg("INF function evaluation in barycentric Lagrange "
+					                "interpolator (at x=");
+					msg += std::to_string(static_cast<long double>(
+					            chebyshev_to_support(zi, xmin, xmax).val
+					));
+					msg += ").";
+					throw std::runtime_error(msg);
+				}
 				refined[i].z = zi;
 				refined[i].f = fi;
 			}
@@ -344,10 +389,130 @@ private:
 	}
 
 
+	static void repair_boundary_infinities(std::vector<zf_t>& samples,
+	                                       std::vector<zf_t>& refined,
+	                                       const real fmin, const real fmax)
+	{
+		using boost::math::tools::brent_find_minima;
+
+		if (samples.size() < 2)
+			throw std::runtime_error("samples empty in repair_boundary_infinities.");
+
+		/*
+		 * Now we try to fix infinities assuming that the function
+		 * to be interpolated is the logarithm of a relevant property.
+		 * Then, we can replace infinity with some small value that
+		 * is small enough to exceed floating point precision when
+		 * exponentiated (e.g. 1e-400 for double precision).
+		 */
+
+
+		/* Collect all infinities: */
+		bool start_inf = rm::isinf(samples.front().f);
+		bool end_inf = rm::isinf(samples.back().f);
+		for (size_t i=1; i<refined.size()-1; ++i){
+			if (rm::isinf(refined[i].f))
+				throw std::runtime_error("Infinity outside boundary. Cannot repair.");
+		}
+		if (start_inf && samples.front().f > fmin)
+				throw std::runtime_error("Unfixable positive infinity.");
+		if (end_inf && samples.back().f > fmin)
+				throw std::runtime_error("Unfixable positive infinity.");
+
+
+		/* Compute the maximum inter-sample delta f: */
+		real df_max = 0.0;
+		for (size_t i=1; i<refined.size()-2; ++i){
+			df_max = std::max<real>(
+				df_max,
+				rm::abs(refined[i].f - refined[i+1].f)
+			);
+		}
+
+		/* Try to fix: */
+		auto cost = [fmin, fmax, start_inf, end_inf,
+		             &samples, &refined]
+		            (real df_start, real df_end)
+		-> real
+		{
+			/* Set the corrected values: */
+			if (start_inf)
+				samples.front().f = refined[1].f - df_start;
+			if (end_inf)
+				samples.back().f = refined[refined.size()-2].f - df_end;
+
+
+			/*
+			 * Each odd data point is new. These data points are controlled.
+			 */
+			real err_abs2 = 0.0;
+			for (size_t i=1; i<refined.size(); i += 2){
+				real fint = interpolate(refined[i].z, samples, fmin, fmax);
+				error_t err_i(error(fint, refined[i].f));
+				err_abs2 += err_i.abs * err_i.abs;
+			}
+
+			return err_abs2;
+		};
+
+		/* Use Powell's method to optimze df_start and df_end: */
+		real df_start = 0.0;
+		real df_end = 0.0;
+		const real tol = boost::math::tools::root_epsilon<real>();
+		for (size_t step=0; step<100; ++step){
+			real delta_df_start = 0.0;
+			real delta_df_end = 0.0;
+			if (start_inf){
+				auto cost_start = [df_end, &cost](real df_start) -> real
+				{
+					return cost(df_start, df_end);
+				};
+				std::uintmax_t max_iter = 40;
+				std::pair<real,real>
+				dfmin = brent_find_minima(
+				            cost_start,
+				            static_cast<real>(0.0),
+				            static_cast<real>(2*df_max),
+				            10,
+				            max_iter
+				);
+				delta_df_start = rm::abs(dfmin.first - df_start);
+				df_start = dfmin.first;
+			}
+			if (end_inf){
+				auto cost_end = [df_start, &cost](real df_end) -> real
+				{
+					return cost(df_start, df_end);
+				};
+				std::uintmax_t max_iter = 40;
+				std::pair<real,real>
+				dfmin = brent_find_minima(
+				            cost_end,
+				            static_cast<real>(0.0),
+				            static_cast<real>(2*df_max),
+				            10,
+				            max_iter
+				);
+				delta_df_end = rm::abs(dfmin.first - df_end);
+				df_end = dfmin.first;
+			}
+			if (!start_inf || !end_inf || std::max(delta_df_start, delta_df_end) < tol)
+				break;
+		}
+
+		/* Apply the fix: */
+		if (start_inf)
+			samples.front().f = refined[1].f - df_start;
+		if (end_inf)
+			samples.back().f = refined[refined.size()-2].f - df_end;
+	}
+
+
 	struct error_t {
 		real abs = 0.0;
 		real rel = 0.0;
 	};
+
 
 	static error_t error(real f, real f_ref)
 	{
@@ -365,12 +530,16 @@ private:
 		} else {
 			err.rel = err.abs / rm::abs(f_ref);
 		}
+		if (rm::isnan(err.abs)){
+			err.abs = std::numeric_limits<real>::infinity();
+			err.rel = std::numeric_limits<real>::infinity();
+		}
 		return err;
 	}
 
 
 	template<typename fun_t, size_t n_start=9, size_t max_recursion_depth=4>
-	static std::pair<error_t, std::vector<subrange_t>>
+	static std::vector<subrange_t>
 	initial_range(fun_t func, PointInInterval<real> xmin,
 	              PointInInterval<real> xmax, real f_xmin, real f_xmax,
 	              real tol_rel, real tol_abs, real fmin, real fmax,
@@ -393,88 +562,27 @@ private:
 		samples.back().z = chebyshev_point(n_start-1, n_start);
 		samples.back().f = f_xmin;
 
-		/* The function that computes the error in interpolation: */
-		auto estimate_errors = [fmin, fmax](const std::vector<zf_t>& samples,
-		                                    const std::vector<zf_t>& refined)
-		   -> std::vector<error_t>
-		{
-			std::vector<error_t> errors((refined.size()-1) / 2);
-			/*
-			 * Each even data point (when first element is index with 1)
-			 * is new. These data points are controlled.
-			 */
-			auto it = errors.begin();
-			for (size_t i=1; i<refined.size(); i += 2){
-				real fint = interpolate(refined[i].z, samples, fmin, fmax);
-				*it = error(fint, refined[i].f);
-				++it;
-			}
-			return errors;
-		};
-
-		auto max_error = [](const std::vector<error_t>& errors) -> error_t
-		{
-			error_t err({.abs=0.0, .rel=0.0});
-			for (const error_t& err_i : errors){
-				if (err_i.abs > err.abs){
-					err.abs = err_i.abs;
-				}
-				if (err_i.rel > err.rel){
-					err.rel = err_i.rel;
-				}
-			}
-			return err;
-		};
-
-
-		/* Compute the refined samples: */
-		std::optional<std::vector<zf_t>> refined(refine_chebyshev(func, xmin, xmax, samples));
-		if (!refined){
-			/* Accept this interval. */
-			std::vector<subrange_t> ranges;
-			ranges.emplace_back(xmax);
-			ranges.back().samples.swap(samples);
-			return std::make_pair(error_t(), std::move(ranges));
-		}
-
-		/*
-		 * Compute the error:
-		 */
-		std::vector<error_t> error(estimate_errors(samples, *refined));
-		error_t err(max_error(error));
-
-		/*
-		 * Now compute the subrange(s):
-		 */
 		std::vector<subrange_t> ranges;
 		ranges.emplace_back(xmax);
 		ranges.back().samples.swap(samples);
 
-		return std::make_pair(err, std::move(ranges));
+		return ranges;
 	}
 
 
-	template<typename fun_t>
+	template<typename fun_t, bool repair_infinity=true>
 	static std::vector<subrange_t>
 	determine_ranges(fun_t func, PointInInterval<real> xmin, PointInInterval<real> xmax,
 	                 real tol_rel, real tol_abs, real fmin, real fmax, size_t max_splits,
 	                 uint8_t max_refinements)
 	{
-		std::pair<error_t, std::vector<subrange_t>>
-		    initial(initial_range(
-		        func, xmin, xmax,
-		        func(xmin), func(xmax),
-		        tol_rel, tol_abs, fmin, fmax,
-		        max_refinements
-		    ));
-
-		std::vector<subrange_t> ranges;
-		ranges.swap(initial.second);
-
-		/*
-		 * Functions for refinement:
-		 */
-
+		std::vector<subrange_t>
+		ranges(initial_range(
+		       func, xmin, xmax,
+		       func(xmin), func(xmax),
+		       tol_rel, tol_abs, fmin, fmax,
+		       max_refinements
+		));
 
 		/* The function that computes the error in interpolation: */
 		auto estimate_errors = [fmin, fmax](const std::vector<zf_t>& samples,
@@ -522,12 +630,11 @@ private:
 		/* Now refine: */
 		PointInInterval<real> xmin_i;
 		PointInInterval<real> xmax_i = xmin;
-		size_t rid = 0;
 		for (subrange_t& range : ranges){
 			xmin_i = xmax_i;
 			xmax_i = range.xmax;
 			/* Compute the refined samples: */
-			std::optional<std::vector<zf_t>> 
+			std::optional<std::vector<zf_t>>
 			    refined(refine_chebyshev(func, xmin_i, xmax_i, range.samples));
 
 			/* If no refinements possible, continue: */

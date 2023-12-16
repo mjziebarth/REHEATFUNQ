@@ -64,7 +64,7 @@ public:
 	                  double dest_tol)
 	   : Locals<real>(qc, p, s, n, v, amin, dest_tol),
 	     log_scale(log_integrand_max(*this)),
-	     ymax(y_taylor_transition(*this, log_scale.log_integrand)),
+	     ymax(y_taylor_transition(*this)),
 	     ztrans(1.0 - ymax)
 	{}
 
@@ -205,7 +205,7 @@ private:
 
 		try {
 			S = integrator.integrate(integrand, static_cast<real>(0),
-										L.ztrans, TOL_TANH_SINH, &error);
+			                         L.ztrans, TOL_TANH_SINH, &error);
 		} catch (...) {
 			/* Backup Gauss-Kronrod: */
 			real L1;

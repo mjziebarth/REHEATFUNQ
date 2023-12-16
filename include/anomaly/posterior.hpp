@@ -47,8 +47,6 @@
 #include <sstream>
 #include <type_traits>
 
-
-
 /*
  * REHEATFUNQ includes
  */
@@ -94,12 +92,14 @@ public:
 	     p(p), s(s), n(n), v(v), Qmax(global_Qmax(locals)),
 	     norm(compute_norm(locals, weights)), rtol(rtol),
 	     bli_max_splits(bli_max_splits),
-	     bli_max_refinements(bli_max_refinements)
+	     bli_max_refinements(bli_max_refinements),
+	     tmin(rm::log(std::numeric_limits<double>::epsilon() * Qmax)),
+	     tmax(rm::log((1.0 - transition) * Qmax))
 	{
 		if (pdf_algorithm == BARYCENTRIC_LAGRANGE){
-			pdf_interp = init_pdf_bli(locals, weights, Qmax, norm,
-			                          bli_max_splits, bli_max_refinements,
-			                          rtol);
+			init_log_pdf_bli(locals, weights, Qmax, norm,
+			                 bli_max_splits, bli_max_refinements,
+			                 rtol);
 		} else if (pdf_algorithm == ADAPTIVE_SIMPSON){
 			init_simpson_quadrature();
 		}
@@ -406,6 +406,19 @@ public:
 		norm = static_cast<double>(locals[l].norm);
 	}
 
+	void get_log_pdf_bli_samples(std::vector<std::vector<std::pair<double,double>>>& samples) const
+	{
+		if (log_pdf_interp_low)
+			log_pdf_interp_low->get_samples(samples);
+		if (log_pdf_interp_high){
+			std::vector<std::vector<std::pair<double,double>>> samples2;
+			log_pdf_interp_high->get_samples(samples2);
+			samples.insert(samples.end(), samples2.cbegin(),
+			               samples2.cend());
+		}
+	}
+
+
 	/*
 	 * Debugging facilities.
 	 */
@@ -470,8 +483,13 @@ private:
 	double rtol;
 	size_t bli_max_splits;
 	uint8_t bli_max_refinements;
+	real tmin;
+	real tmax;
 
-	mutable std::optional<rn::PiecewiseBarycentricLagrangeInterpolator<real>> pdf_interp;
+	constexpr static double transition = 0.9;
+
+	mutable std::optional<rn::PiecewiseBarycentricLagrangeInterpolator<real>> log_pdf_interp_low;
+	mutable std::optional<rn::PiecewiseBarycentricLagrangeInterpolator<real>> log_pdf_interp_high;
 	mutable std::optional<rn::SimpsonAdaptiveQuadrature<real, real>> saq;
 
 	Posterior(std::vector<posterior::LocalsAndNorm<real>>&& locals,
@@ -480,12 +498,14 @@ private:
 	          size_t bli_max_splits, uint8_t bli_max_refinements)
 	   : locals(std::move(locals)), weights(std::move(weights)), p(p), s(s),
 	     n(n), v(v), Qmax(Qmax), norm(norm), rtol(rtol),
-	     bli_max_splits(bli_max_splits), bli_max_refinements(bli_max_refinements)
+	     bli_max_splits(bli_max_splits), bli_max_refinements(bli_max_refinements),
+	     tmin(rm::log(std::numeric_limits<double>::epsilon() * Qmax)),
+	     tmax(rm::log((1.0 - transition)*Qmax))
 	{
 		if (pdf_algorithm == BARYCENTRIC_LAGRANGE){
-			pdf_interp = init_pdf_bli(locals, weights, Qmax, norm,
-			                          bli_max_splits, bli_max_refinements,
-			                          rtol);
+			init_log_pdf_bli(locals, weights, Qmax, norm,
+			                 bli_max_splits, bli_max_refinements,
+			                 rtol);
 		} else if (pdf_algorithm == ADAPTIVE_SIMPSON){
 			init_simpson_quadrature();
 		}
@@ -637,7 +657,7 @@ private:
 		auto pdf =
 		  [&locals, &weights, Qmax, norm](const rn::PointInInterval<real>& x) -> real
 		{
-			return pdf_single_explicit(x, locals, weights, Qmax, norm);
+			return pdf_single_explicit<pdf_t>(x, locals, weights, Qmax, norm);
 		};
 		const real tol_rel = rtol;
 		const real tol_abs = rtol / Qmax;
@@ -649,15 +669,63 @@ private:
 	}
 
 
+	void
+	init_log_pdf_bli(const std::vector<posterior::LocalsAndNorm<real>>& locals,
+	                 const std::vector<real>& weights,
+	                 posterior::arg<const real>::type Qmax,
+	                 posterior::arg<const real>::type norm,
+	                 size_t max_splits, uint8_t max_refinements,
+	                 double rtol
+	)
+	{
+		/* The lower interpolant: */
+		auto log_pdf =
+		  [&locals, &weights, Qmax, norm](const rn::PointInInterval<real>& x) -> real
+		{
+			return pdf_single_explicit<log_pdf_t>(x, locals, weights, Qmax, norm);
+		};
+		const real tol_rel = rtol;
+		const real tol_abs = rtol / Qmax;
+		log_pdf_interp_low = rn::PiecewiseBarycentricLagrangeInterpolator<real>(
+		           log_pdf, 0.0, transition * Qmax, tol_rel, tol_abs,
+		           -std::numeric_limits<real>::infinity(),
+		           std::numeric_limits<real>::infinity(),
+		           max_splits, max_refinements
+		);
+
+		/* The upper interpolant: */
+		auto log_pdf_high =
+		  [&locals, &weights, Qmax, norm](const rn::PointInInterval<real>& t_back) -> real
+		{
+			/* Flip x back: */
+			real x_back = rm::exp(t_back.val);
+			rn::PointInInterval<real> x(
+			    Qmax-x_back,
+			    Qmax-x_back,
+			    x_back
+			);
+			real lpdf = pdf_single_explicit<log_pdf_t>(x, locals, weights, Qmax, norm);
+			return lpdf;
+		};
+		log_pdf_interp_high = rn::PiecewiseBarycentricLagrangeInterpolator<real>(
+		           log_pdf_high,
+		           tmin, tmax, tol_rel, tol_abs,
+		           -std::numeric_limits<real>::infinity(),
+		           std::numeric_limits<real>::infinity(),
+		           max_splits, max_refinements
+		);
+	}
+
+
 	void init_simpson_quadrature() const {
 		if (pdf_algorithm == pdf_algorithm_t::BARYCENTRIC_LAGRANGE){
-			if (!pdf_interp)
+			if (!log_pdf_interp_low || !log_pdf_interp_high)
 				throw std::runtime_error("Unexpectedly, `pdf_interp` is not initialized.");
 			auto pdf =
 			[this](real x) -> real
 			{
 				rn::PointInInterval<real> x_pii(x, x, Qmax-x);
-				return (*pdf_interp)(x_pii);
+				return pdf_single<pdf_algorithm_t::BARYCENTRIC_LAGRANGE>(x_pii);
 			};
 			saq.emplace(pdf, static_cast<real>(0.0), Qmax);
 		} else {
@@ -665,13 +733,74 @@ private:
 			[this](real x) -> real
 			{
 				rn::PointInInterval<real> x_pii(x, x, Qmax-x);
-				return pdf_single_explicit(x_pii, locals, weights, Qmax, norm);
+				return pdf_single_explicit<pdf_t>(x_pii, locals, weights, Qmax, norm);
 			};
 			saq.emplace(pdf, static_cast<real>(0.0), Qmax);
 		}
 	}
 
+	struct pdf_t {
+		static real evaluate(
+		    posterior::arg<const real>::type zi,
+		    const posterior::LocalsAndNorm<real>& l,
+		    posterior::arg<const real>::type wi,
+		    posterior::arg<const real>::type norm
+		)
+		{
+			return posterior::outer_integrand<real>(
+			            zi, l,
+			            l.log_scale.log_integrand
+			) * wi / (l.Qmax * norm);
+		}
 
+		static real evaluate_large_z(
+		    posterior::arg<const real>::type yi,
+		    const posterior::LocalsAndNorm<real>& l,
+		    posterior::arg<const real>::type wi,
+		    posterior::arg<const real>::type norm
+		)
+		{
+			return posterior::a_integral_large_z<false,real>(
+			            yi,
+			            norm,
+			            l.log_scale.log_integrand,
+			            l
+			) * wi / (l.Qmax * norm);
+		}
+	};
+
+	struct log_pdf_t {
+		static real evaluate(
+		    posterior::arg<const real>::type zi,
+		    const posterior::LocalsAndNorm<real>& l,
+		    posterior::arg<const real>::type wi,
+		    posterior::arg<const real>::type norm
+		)
+		{
+			return posterior::log_outer_integrand<real>(
+			            zi, l,
+			            l.log_scale.log_integrand
+			) + rm::log(wi / (l.Qmax * norm));
+		}
+
+		static real evaluate_large_z(
+		    posterior::arg<const real>::type yi,
+		    const posterior::LocalsAndNorm<real>& l,
+		    posterior::arg<const real>::type wi,
+		    posterior::arg<const real>::type norm
+		)
+		{
+			return posterior::log_a_integral_large_z<false,real>(
+			            yi,
+			            norm,
+			            l.log_scale.log_integrand,
+			            l
+			) + rm::log(wi / (l.Qmax * norm));
+		}
+	};
+
+
+	template<typename T>
 	static real pdf_single_explicit_j(const rn::PointInInterval<real>& x,
 	                const std::vector<posterior::LocalsAndNorm<real>>& locals,
 	                const std::vector<real>& weights,
@@ -687,9 +816,7 @@ private:
 			return 0.0;
 		real sj;
 		if (zi <= locals[j].ztrans){
-			sj = posterior::outer_integrand<real>(zi, locals[j],
-							locals[j].log_scale.log_integrand)
-					* weights[j] / (Qmax_j * norm);
+			sj = T::evaluate(zi, locals[j], weights[j], norm);
 			if (rm::isnan(sj)){
 				std::string msg("Found NaN at sub-PDF evaluation (zi=");
 				msg += std::to_string(static_cast<long double>(zi));
@@ -701,12 +828,7 @@ private:
 				? static_cast<real>(x.from_back / Qmax)
 				: static_cast<real>(1.0 - zi);
 
-			sj = posterior::a_integral_large_z<false,real>(
-						yi,
-						locals[j].norm,
-						locals[j].log_scale.log_integrand,
-						locals[j])
-					* weights[j] / (Qmax_j * norm);
+			sj = T::evaluate_large_z(yi, locals[j], weights[j], norm);
 			if (rm::isnan(sj)){
 				std::string msg("Found NaN at sub-PDF evaluation (zi=");
 				msg += std::to_string(static_cast<long double>(zi));
@@ -723,7 +845,7 @@ private:
 		return sj;
 	}
 
-	template<bool serial = false, size_t parallel_min_locals = 2>
+	template<typename T, bool serial = false, size_t parallel_min_locals = 2>
 	static real pdf_single_explicit(const rn::PointInInterval<real>& x,
 	                const std::vector<posterior::LocalsAndNorm<real>>& locals,
 	                const std::vector<real>& weights,
@@ -754,7 +876,7 @@ private:
 				/* Handle exception capture and propagation across the
 				 * OMP border: */
 				try {
-					resv[j] = pdf_single_explicit_j(
+					resv[j] = pdf_single_explicit_j<T>(
 					                x, locals, weights, Qmax,
 					                norm, j
 					);
@@ -781,7 +903,7 @@ private:
 			 * 2. Serial Implementation.
 			 */
 			for (size_t j=0; j<locals.size(); ++j){
-				real resj = pdf_single_explicit_j(
+				real resj = pdf_single_explicit_j<T>(
 				                x, locals, weights, Qmax,
 				                norm, j
 				);
@@ -808,11 +930,45 @@ private:
 	real pdf_single(const std::enable_if_t<pa==BARYCENTRIC_LAGRANGE,
 	                                       rn::PointInInterval<real>>& x) const
 	{
-		if (static_cast<real>(x) < 0)
+		/* First, check whether the point is out of
+		 * the interpolation domain [0, Qmax-epsilon]
+		 * If x == Qmax, we can also safely return 0.
+		 */
+		if (x.val < 0)
 			return 0.0;
-		else if (static_cast<real>(x) > Qmax)
+		else if (x.from_back <= std::numeric_limits<double>::epsilon())
 			return 0.0;
-		return rm::exp(-(*pdf_interp)(x));
+
+		/* Check for xmin in the logarithmic coordinates
+		 * t that will be used in the tail interpolator:
+		 */
+		real t = rm::log(x.from_back);
+		if (t <= tmin)
+			return 0.0;
+
+		/* The point is inside the interpolation domain.
+		 * Now decide which interpolator to use:
+		 */
+		if (t >= tmax)
+			/* The majority of points will use this
+			 * bulk interpolator in [0, 0.9*Qmax] */
+			return rm::exp((*log_pdf_interp_low)(x));
+
+		/* From the back. Use the variable `t`, the
+		 * logarithm of the distance from the back.
+		 * (t € [tmin, tmax])
+		 * This transformation leads to a linear
+		 * shape of the posterior as it converges
+		 * to zero at x==Qmax.
+		 * This shape can be easily handled by the barycentric
+		 * Lagrange interpolator.
+		 */
+		rn::PointInInterval<real> tii(
+			t,
+			t - tmin,
+			rm::log((1.0 - transition) * Qmax) - t
+		);
+		return rm::exp((*log_pdf_interp_high)(tii));
 	}
 
 	template<pdf_algorithm_t pa = pdf_algorithm>
@@ -834,7 +990,7 @@ private:
 			return 0.0;
 		else if (static_cast<real>(x) > Qmax)
 			return 0.0;
-		return pdf_single_explicit(x, locals, weights, Qmax, norm);
+		return pdf_single_explicit<pdf_t>(x, locals, weights, Qmax, norm);
 	}
 
 };
