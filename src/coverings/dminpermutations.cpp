@@ -61,11 +61,11 @@ struct node_t {
  */
 struct fork_t {
 	size_t i;
-	double p;
+	double ln_p;
 
-	fork_t(size_t i, double p) : i(i), p(p) {};
+	fork_t(size_t i, double ln_p) : i(i), ln_p(ln_p) {};
 
-	fork_t() : i(-1), p(-1.0) {}
+	fork_t() : i(-1), ln_p(std::nan("")) {}
 };
 
 struct node_status_t {
@@ -187,8 +187,8 @@ public:
 		return stack.back().i;
 	}
 
-	double top_probability() const {
-		return stack.back().p;
+	double top_log_probability() const {
+		return stack.back().ln_p;
 	}
 
 	size_t size() const {
@@ -221,10 +221,10 @@ public:
 		 * Start with the probability of the previous level (or 1, in case
 		 * this is the first node):
 		 */
-		const double p0 = (stack.empty()) ? 1.0 : stack.back().p;
+		const double ln_p0 = (stack.empty()) ? 0.0 : stack.back().ln_p;
 
 		/* Chance of selecting this node next: */
-		const double p = p0 / (nodes.size() - _blocked);
+		const double ln_p = ln_p0 - std::log(nodes.size() - _blocked);
 
 		/* Block the neighbors: */
 		for (size_t n : nodes[i].neighbors){
@@ -239,7 +239,7 @@ public:
 		++_blocked;
 
 		/* Add to the node stack: */
-		stack.emplace_back(i, p);
+		stack.emplace_back(i, ln_p);
 	}
 
 	void pop() {
@@ -305,9 +305,19 @@ samples_add_sample(const NodeStack& stack,
 	 */
 	auto it = samples.lower_bound(sample);
 	if (it == samples.end() || it->first != sample){
-		samples.emplace_hint(it, std::move(sample), stack.top().p);
+		samples.emplace_hint(it, std::move(sample), stack.top().ln_p);
 	} else {
-		it->second += stack.top().p;
+		/*
+		 * Addition, formulated in logarithms.
+		 *    it->second = ln(a)
+		 *    stack.top().ln_p = ln(b)
+		 * We want:
+		 *    it->second = ln(a+b)
+		 * which is
+		 *    ln(a*(1+b/a)) = ln(a) + log1p(b/a) = ln(a) + log1p(exp(ln(b) - ln(a)))
+		 *                  = it->second  +  log1p(exp( stack.top().ln_p  -  it->second ))
+		 */
+		it->second += std::log1p(std::exp(stack.top().ln_p - it->second));
 	}
 }
 
@@ -411,8 +421,9 @@ dsr_deterministic(std::vector<node_t>& nodes, const size_t max_samples,
 	}
 
 	/* Check if the algorithm was successful: */
-	if (!node_stack.empty())
+	if (!node_stack.empty()){
 		throw sample_exceedance_error();
+	}
 
 	return samples_generate_result(samples);
 }
@@ -597,13 +608,30 @@ reheatfunq::determine_restricted_samples(
 		}
 	}
 
-	/* Norm the sample (important for Monte-Carlo version): */
+	/* Norm the sample (important for Monte-Carlo version).
+	 * First compute the logarithm of the maximum likely element
+	 * as a reference for the probabilities:
+	 */
+	long double max_log = -std::numeric_limits<long double>::infinity();
+	for (const sample_t& s0 : samples){
+		if (s0.first > max_log)
+			max_log = s0.first;
+	}
+	/*
+	 * Compute probabilities relative to this reference level:
+	 */
+	for (sample_t& s0 : samples){
+		s0.first = std::exp(s0.first - max_log);
+	}
+	/* Now compute the norms: */
 	long double norm = 0.0;
 	for (const sample_t& s0 : samples){
 		norm += s0.first;
 	}
-	if (norm <= 0.0)
-		throw std::runtime_error("Somehow, norm is negative or zero.");
+	if (norm == 0.0)
+		throw std::runtime_error("determine_restricted_samples: Norm is zero.");
+	if (norm < 0.0)
+		throw std::runtime_error("determine_restricted_samples: Somehow, norm is negative.");
 	for (sample_t& s0 : samples){
 		s0.first /= norm;
 	}
