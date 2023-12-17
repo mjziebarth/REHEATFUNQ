@@ -767,6 +767,17 @@ private:
 			            l
 			) * wi / (l.Qmax * norm);
 		}
+
+		static real sum(const std::vector<real>& val)
+		{
+			rn::KahanAdder<real> res;
+			for (size_t j=0; j<val.size(); ++j){
+				res += val[j];
+			}
+			return res;
+		}
+
+		static constexpr double zero = 0.0;
 	};
 
 	struct log_pdf_t {
@@ -797,6 +808,28 @@ private:
 			            l
 			) + rm::log(wi / (l.Qmax * norm));
 		}
+
+		static real sum(const std::vector<real>& val)
+		{
+			/* Find the maximum element: */
+			real maxval = *std::max_element(val.cbegin(),
+			                                val.cend());
+
+			/* Early exit if the sum is infinite: */
+			if (rm::isinf(maxval)){
+				return maxval;
+			}
+			rn::KahanAdder<real> res;
+			for (size_t j=0; j<val.size(); ++j){
+				real vj = rm::exp(val[j] - maxval);
+				res += vj;
+			}
+
+			/* Return: */
+			return maxval + rm::log(static_cast<real>(res));
+		}
+
+		static constexpr double zero = -std::numeric_limits<double>::infinity();
 	};
 
 
@@ -813,7 +846,7 @@ private:
 		if (rm::isnan(zi))
 			return std::nan("");
 		if (zi > 1.0 || zi < 0.0)
-			return 0.0;
+			return T::zero;
 		real sj;
 		if (zi <= locals[j].ztrans){
 			sj = T::evaluate(zi, locals[j], weights[j], norm);
@@ -855,7 +888,8 @@ private:
 		/*
 		 * Evaluate the PDF at a single point.
 		 */
-		rn::KahanAdder<real> res;
+		real res;
+		std::vector<real> resv(locals.size());
 
 		const bool parallel = (!serial) && (locals.size() >= parallel_min_locals);
 
@@ -863,7 +897,6 @@ private:
 			/*
 			 * 1. Parallel Implementation.
 			 */
-			std::vector<real> resv(locals.size());
 			bool isnan = false;
 			std::exception_ptr error;
 
@@ -895,25 +928,26 @@ private:
 				return std::nan("");
 
 			/* Sum in single thread: */
-			for (size_t j=0; j<locals.size(); ++j){
-				res += resv[j];
-			}
+			res = T::sum(resv);
+
 		} else {
 			/*
 			 * 2. Serial Implementation.
 			 */
 			for (size_t j=0; j<locals.size(); ++j){
-				real resj = pdf_single_explicit_j<T>(
+				resv[j] = pdf_single_explicit_j<T>(
 				                x, locals, weights, Qmax,
 				                norm, j
 				);
 
 				/* Result computed but might be NaN: */
-				if (rm::isnan(resj))
+				if (rm::isnan(resv[j]))
 					return std::nan("");
 
-				res += resj;
 			}
+
+			/* Sum: */
+			res = T::sum(resv);
 		}
 
 		real resr(res);
