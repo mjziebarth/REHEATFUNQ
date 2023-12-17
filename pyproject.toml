@@ -39,6 +39,9 @@ classifiers = [
 readme = "README.md"
 license = {file="LICENSE"}
 
+[project.optional-dependencies]
+MPM=["mpmath"]
+
 [project.urls]
 "Homepage" = "https://github.com/mjziebarth/REHEATFUNQ"
 "Bug Tracker" = "https://github.com/mjziebarth/REHEATFUNQ/issues"

@@ -69,7 +69,8 @@ RUN set -eux; \
 RUN set -eux; \
     pip install --user --no-cache-dir \
             notebook cmcrameri cmocean shapely \
-            cmasher scikit-learn joblib geopandas scipy requests flottekarte
+            cmasher scikit-learn joblib geopandas scipy requests flottekarte \
+            mpmath gmpy2
 RUN set -eux; \
     PDTOOLBOX_PORTABLE=1 pip install --user  --no-cache-dir \
             'pdtoolbox @ git+https://git.gfz-potsdam.de/ziebarth/pdtoolbox.git';
