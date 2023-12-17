@@ -456,13 +456,36 @@ dsr_monte_carlo(std::vector<node_t>& nodes,
 			break;
 
 		/*
-		 * Start with a random node:
+		 * Start node.
+		 * Here we use a uniform sampling of the nodes. The sampling
+		 * strategy is a mixture of linear iteration and pseudo-randomness:
+		 * First, we start with one pass of iterating all nodes once
+		 * (and selecting follow-up nodes pseudo-randomly). I.e. start
+		 * node of iteration k is nodes[k] for k < nodes.size().
+		 * This will ensure that our generated samples contain each node
+		 * at least once. The reason why this is important is the
+		 * determination of the global Qmax:
+		 *     Qmax = min(q[i] / c[i])
+		 * If we use fully pseudo-random sampling, there is a chance that
+		 * the data pair (q[i],c[i]) with the lowest ratio is not selected
+		 * and Qmax may thereby vary pseudo-randomly by execution. This is
+		 * not really a desireable quality; we instead would like to prescribe
+		 * the behavior that each data point matters.
+		 *
+		 * After the first n=nodes.size() iterations, we select the start
+		 * node pseudo-randomly. For large max_iter, the convergence property
+		 * of this algorithm should hence be pseudo-random. For small max_iter,
+		 * it may be just a bit closer to low discrepancy due to the added
+		 * regular structure (?).
 		 */
 		node_stack.clear();
-		node_stack.push(sample_generator(nodes.size()));
+		if (k < nodes.size())
+			node_stack.push(k);
+		else
+			node_stack.push(sample_generator(nodes.size()));
 
 		/*
-		 * Iteratively add random nodes from the pool of free ndoes:
+		 * Iteratively add random nodes from the pool of free nodes:
 		 */
 		size_t free;
 		while ((free = nodes.size() - node_stack.blocked())){
@@ -554,17 +577,16 @@ reheatfunq::determine_restricted_samples(
 				++dest;
 				/* Keep track of the new index to update all neighbors later: */
 				i2n[i] = j;
+				/* Index map from the packed beginning to the original node
+				 * vector: */
+				n2i.push_back(i);
 				++j;
 			}
 		}
-		nodes.resize(j);
 		/*
-		 * Create the index map from the packed beginning to
-		 * the original node vector:
+		 * Update the neighbors:
 		 */
-		n2i.resize(nodes.size());
 		for (size_t i=0; i<nodes.size(); ++i){
-			n2i[i] = i;
 			for (size_t& k : nodes[i].neighbors){
 				k = i2n[k];
 			}
