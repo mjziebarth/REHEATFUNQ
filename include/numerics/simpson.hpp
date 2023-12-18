@@ -58,10 +58,13 @@ public:
     {
         /* Ensure that the integral using the constants C1, C2, and C3
          * leads to the total integral: */
-        real scale = I / integral(dx);
-        C0 *= scale;
-        C1 *= scale;
-        C2 *= scale;
+        real I2 = integral(dx);
+        if (I2 > 0){
+            real scale = I / I2;
+            C0 *= scale;
+            C1 *= scale;
+            C2 *= scale;
+        }
     }
 
     real integral() const {
