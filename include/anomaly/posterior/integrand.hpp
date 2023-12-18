@@ -113,7 +113,7 @@ real loggamma_v_a__minus__n_loggamma_a__plus__C_a(
         typename arg<const real>::type lv
 )
 {
-	constexpr static int m = 30;
+	constexpr static int m = 47;
 	real la = rm::log(a);
 	if (a < m){
 		real vshift = (v * a + m) / (a + m);
