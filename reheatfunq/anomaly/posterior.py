@@ -25,7 +25,8 @@ from .anomaly import Anomaly
 from ..regional import GammaConjugatePrior
 from ..coverings.rdisks import bootstrap_data_selection, \
                                all_restricted_samples, \
-                               samples_from_discrete_distribution
+                               samples_from_discrete_distribution,\
+                               determine_global_PHmax
 from .postbackend import CppAnomalyPosterior, _has_float128, \
                          _has_dec50, _has_dec100
 
@@ -135,7 +136,7 @@ class HeatFlowAnomalyPosterior:
                           Iterable[tuple[float,Anomaly]],
                  gcp: Union[GammaConjugatePrior,tuple],
                  dmin: float = 20e3,
-                 n_bootstrap: int = 1000,
+                 n_bootstrap: int | Literal['auto'] = 'auto',
                  heat_flow_unit: Literal['mW/m²','W/m²'] = 'mW/m²',
                  rng: int | np.random.Generator = 127,
                  rtol: float = 1e-8,
@@ -215,9 +216,20 @@ class HeatFlowAnomalyPosterior:
             raise TypeError("`heat_flow_unit` must be one of 'mW/m²' or "
                             "'W/m²'.")
 
-        n_boostrap = int(n_bootstrap)
-        if n_bootstrap <= 0:
-            raise ValueError("'n_bootstrap' must be a positive integer.")
+        n_bs: int
+        if n_bootstrap == "auto":
+            n_bs = 10 * q.size
+            if n_bs > 10000:
+                n_bs = q.size
+            elif n_bs < 1000:
+                n_bs = 1000
+        else:
+            n_bs = int(n_bootstrap)
+            if n_bs <= 0:
+                raise ValueError("'n_bootstrap' must be a positive integer.")
+            elif n_bs > 1 and n_bs < q.size:
+                raise ValueError("'n_bootstrap' must be at least as big as the "
+                                "number of heat flow data.")
 
         # Set all pre-defined attributes:
         self.q = q
@@ -237,15 +249,6 @@ class HeatFlowAnomalyPosterior:
         if heat_flow_unit == "mW/m²":
             self.c *= 1e3
 
-        # Compute the maximum power, defined by that heat flow
-        # data point which is the first to be reduced to zero by
-        # subtracting the anomaly signature.
-        # Note: This differs from self.PHmax only if the bootstrap does
-        #       not cover all combinations of q and c - mostly unlikely.
-        Nano = self.c.shape[0]
-        self.PHmax_global = np.min(self.q[np.newaxis,:].repeat(Nano,0)[cmask]
-                                   / self.c[cmask])
-
         # Perform the bootstrap:
         if isinstance(rng, int):
             rng = np.random.default_rng(rng)
@@ -256,33 +259,42 @@ class HeatFlowAnomalyPosterior:
         # The bootstrap is a uniform random sampling within the parameter
         # space:
         bootstrap_samples = \
-           all_restricted_samples(xy, self.dmin, n_bootstrap, n_bootstrap, rng)
+           all_restricted_samples(xy, self.dmin, n_bs, n_bs, rng)
 
         # Now we might have two situations:
         # 1) the number of elements of 'bootstrap_samples' is less than
         #    n_bootstrap. This can happen when the permutation space is
         #    exhausted (at a lower number of conflicting node pairs,
-        #    presumably). We then need to sample 'n_bootstrap' elements
+        #    presumably). We then may need to sample 'n_bootstrap' elements
         #    from this distribution according to the probabilities
-        #    provided. (If we need a bootstrap, that is)
-        # 2) the number of elements in 'bootstrap_samples' is equal to
-        #    n_bootstrap. We can simply use the provided samples.
+        #    provided. (If we need a bootstrap, that is - we do not
+        #    if there is just one set of c_i, i.e. the anomaly is not
+        #    uncertain)
+        # 2) the number of elements in 'bootstrap_samples' is either
+        #    equal to n_bootstrap or we have fully exhausted the option
+        #    space. We can simply use the provided samples.
         w_ars = np.array([bs[0] for bs in bootstrap_samples])
-        if len(bootstrap_samples) < n_bootstrap and self.c.shape[0] > 1:
+        if len(bootstrap_samples) < n_bs and self.c.shape[0] > 1:
             # Case 1)
-            bootstrap_i = samples_from_discrete_distribution(w_ars, n_bootstrap,
-                                                             rng)
+            n_take = len(bootstrap_samples)
+            bootstrap_i =  list(range(n_take))\
+                         + list(samples_from_discrete_distribution(
+                                    w_ars, n_bs - n_take,
+                                    rng))
             w_ars = w_ars[bootstrap_i]
             bootstrap_i = [bootstrap_samples[i][1] for i in bootstrap_i]
         else:
             bootstrap_i = [bs[1] for bs in bootstrap_samples]
 
+            # May have less options than n_bootstrap. Adjust here:
+            n_bs = len(bootstrap_i)
+
         # Same for anomaly:
         if self.c.shape[0] > 1:
             bootstrap_j = [int(j) for j in rng.integers(0, self.c.shape[0],
-                                                        size=n_bootstrap)]
+                                                        size=n_bs)]
         else:
-            bootstrap_j = [0 for j in range(self.c.shape[0])]
+            bootstrap_j = [0 for j in range(n_bs)]
 
         # Weight is the joint probability. Need to normalize these
         # discrete weights.
@@ -296,10 +308,13 @@ class HeatFlowAnomalyPosterior:
                              if self.c[j,i] > 0.0)
                          for w,j,sample in self.bootstrap)
 
-        self.PHmax_global = max(min(self.q[i]/self.c[j,i]
-                                    for i in range(len(self.q))
-                                    if self.c[j,i] > 0.0)
-                                for j in range(self.c.shape[0]))
+        PHmax_i = self.q[np.newaxis, :] / self.c
+        PHmax_i[self.c == 0.0] = np.inf
+        PHmax_i = PHmax_i.max(axis=0)
+        self.PHmax_global = max(
+            determine_global_PHmax(xy, self.q / self.c[j,:], self.dmin)
+            for j in range(self.c.shape[0])
+        )
 
         p = exp(self.gcp.lp)
         Qi = [self.q[ids] for w,j,ids in self.bootstrap]
