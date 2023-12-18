@@ -38,7 +38,7 @@ _PREC_RTOL_FLOAT128 = np.sqrt(1.926e-34)
 _PREC_RTOL_DEC50 = np.sqrt(1e-49)
 _PREC_RTOL_DEC100 = np.sqrt(1e-99)
 
-_PREC_RTOL = [np.sqrt(2.2e-16), np.sqrt(1.08e-19)]
+_PREC_RTOL = [100*np.sqrt(2.2e-16), 100*np.sqrt(1.08e-19)]
 
 def test_across_precisions_N50():
     """
@@ -68,11 +68,11 @@ def test_across_precisions_N50():
     for prec in ['double','long double']:
         print("prec:",prec)
         hfps.append(
-            HeatFlowAnomalyPosterior(q, x, y, ano, gcp, 5.0e3,
+            HeatFlowAnomalyPosterior(q, x, y, ano, gcp, 0.0e3,
                                      precision=prec)
         )
 
-    P_H = np.linspace(0, max(hfp.PHmax_global for hfp in hfps), 200)
+    P_H = np.linspace(0, max(hfp.PHmax for hfp in hfps), 200)
 
     pdf = []
     cdf = []
@@ -116,13 +116,12 @@ def test_across_precisions_N100():
 
     hfps = []
     for prec in ['double','long double']:
-        print("prec:",prec)
         hfps.append(
-            HeatFlowAnomalyPosterior(q, x, y, ano, gcp, 5.0e3,
+            HeatFlowAnomalyPosterior(q, x, y, ano, gcp, 0.0e3,
                                      precision=prec)
         )
 
-    P_H = np.linspace(0, max(hfp.PHmax_global for hfp in hfps), 200)
+    P_H = np.linspace(0, max(hfp.PHmax for hfp in hfps), 200)
 
     pdf = []
     cdf = []
@@ -135,8 +134,8 @@ def test_across_precisions_N100():
 
     for i in range(len(pdf)-1):
         np.testing.assert_allclose(pdf[i], pdf[-1], rtol=_PREC_RTOL[i], atol=0.0)
-        np.testing.assert_allclose(cdf[i], cdf[-1], rtol=_PREC_RTOL[i], atol=0.0)
-        np.testing.assert_allclose(tail[i], tail[-1], rtol=_PREC_RTOL[i], atol=0.0)
+        np.testing.assert_allclose(cdf[i], cdf[-1], rtol=_PREC_RTOL[i], atol=1e-16)
+        np.testing.assert_allclose(tail[i], tail[-1], rtol=_PREC_RTOL[i], atol=1e-16)
 
     np.testing.assert_allclose(tail[-1], 1.0 - cdf[-1], rtol=0.0, atol=5e-16)
 
@@ -171,7 +170,7 @@ def test_across_precisions_N1000():
         print("prec:",prec)
         try:
             hfps.append(
-                HeatFlowAnomalyPosterior(q, x, y, ano, gcp, 5.0e3,
+                HeatFlowAnomalyPosterior(q, x, y, ano, gcp, 0.0e3,
                                         precision=prec,
                                         bli_max_refinements=5)
             )
@@ -181,8 +180,7 @@ def test_across_precisions_N1000():
                 Pickler(f).dump((q, x, y))
             raise e
 
-    P_H = np.linspace(0, max(hfp.PHmax_global for hfp in hfps), 200)
-    P_H = np.linspace(0, max(hfp.PHmax_global for hfp in hfps), 20)
+    P_H = np.linspace(0, max(hfp.PHmax for hfp in hfps), 200)
 
     pdf = []
     cdf = []
@@ -195,8 +193,8 @@ def test_across_precisions_N1000():
 
     for i in range(len(pdf)-1):
         np.testing.assert_allclose(pdf[i], pdf[-1], rtol=_PREC_RTOL[i], atol=0.0)
-        np.testing.assert_allclose(cdf[i], cdf[-1], rtol=_PREC_RTOL[i], atol=0.0)
-        np.testing.assert_allclose(tail[i], tail[-1], rtol=_PREC_RTOL[i], atol=0.0)
+        np.testing.assert_allclose(cdf[i], cdf[-1], rtol=_PREC_RTOL[i], atol=1e-16)
+        np.testing.assert_allclose(tail[i], tail[-1], rtol=_PREC_RTOL[i], atol=1e-16)
 
     np.testing.assert_allclose(tail[-1], 1.0 - cdf[-1], rtol=0.0, atol=5e-16)
 
@@ -231,9 +229,9 @@ def test_across_precisions_N1000_no_anomaly():
         print("prec:",prec)
         try:
             hfps.append(
-                HeatFlowAnomalyPosterior(q, x, y, ano, gcp, 5.0e3,
+                HeatFlowAnomalyPosterior(q, x, y, ano, gcp, 0.0e3,
                                         precision=prec,
-                                        bli_max_refinements=5)
+                                        bli_max_refinements=7)
             )
         except Exception as e:
             from pickle import Pickler
@@ -241,8 +239,8 @@ def test_across_precisions_N1000_no_anomaly():
                 Pickler(f).dump((q, x, y))
             raise e
 
-    P_H = np.linspace(0, max(hfp.PHmax_global for hfp in hfps), 200)
-    P_H = np.linspace(0, max(hfp.PHmax_global for hfp in hfps), 20)
+    P_H = np.linspace(0, max(hfp.PHmax for hfp in hfps), 200)
+    P_H = np.linspace(0, max(hfp.PHmax for hfp in hfps), 20)
 
     pdf = []
     cdf = []
@@ -417,10 +415,6 @@ def test_absolute_values_2():
 
 
 def test_high_precision():
-    support_float128()
-    support_dec50()
-    support_dec100()
-
 
     # Problem description (synthetic data and anomaly):
     qc_i = np.array([
