@@ -673,3 +673,205 @@ reheatfunq::determine_restricted_samples(
 
 	return samples;
 }
+
+
+double
+reheatfunq::global_PHmax(
+    const double* xy,
+    const double* PHmax_i,
+    const size_t N,
+    const double dmin
+)
+{
+	/*
+	 * Step 1: Build the graph of mutual exclusion
+	 * We use two different algorithms of different asymptotic complexity
+	 * based on the sample size. It's not really worth setting up a distance
+	 * query tree if N < ???.
+	 */
+	std::vector<node_t> nodes(compute_neighbors(xy, N, dmin).first);
+
+	/* Create components: */
+	struct component_t {
+		std::vector<size_t> nodes;
+		double PHmin;
+		double PHmax;
+	};
+
+	std::vector<component_t> components;
+	{
+		std::vector<bool> handled(N, false);
+		for (size_t i=0; i<N; ++i){
+			if (handled[i])
+				continue;
+
+			/* Start a new component: */
+			components.emplace_back();
+			component_t& cmp = components.back();
+
+			/* Iteratively add all the neighbors: */
+			std::stack<size_t> nb;
+			nb.push(i);
+			while (!nb.empty()){
+				/* Next node, add to component: */
+				size_t j = nb.top();
+				nb.pop();
+				handled[j] = true;
+				cmp.nodes.push_back(j);
+
+				/* Add all the neighbors: */
+				for (size_t k : nodes[j].neighbors){
+					if (handled[k])
+						continue;
+					nb.push(k);
+					handled[k] = true;
+				}
+			}
+
+			/* Sort the component: */
+			std::sort(cmp.nodes.begin(), cmp.nodes.end());
+
+			/* Compute min and max PH: */
+			cmp.PHmin = std::numeric_limits<double>::infinity();
+			cmp.PHmax = -std::numeric_limits<double>::infinity();
+			for (size_t j : cmp.nodes){
+				cmp.PHmin = std::min(cmp.PHmin, PHmax_i[j]);
+				cmp.PHmax = std::max(cmp.PHmax, PHmax_i[j]);
+			}
+		}
+	}
+
+	/* Sort the components by minimum PHmax: */
+	std::sort(components.begin(), components.end(),
+	    [](const component_t& l, const component_t& r) -> bool
+	    {
+	        return l.PHmin < r.PHmin;
+	    }
+	);
+
+	/* Remove components whose minimum is smaller than the smallest
+	 * component maximum: */
+	{
+		double min_PHmax = std::numeric_limits<double>::infinity();
+		for (auto cmp : components){
+			min_PHmax = std::min(min_PHmax, cmp.PHmax);
+		}
+		auto it = std::lower_bound(components.cbegin(), components.cend(),
+			min_PHmax,
+			[](const component_t& cmp, double PH) -> bool
+			{
+				return cmp.PHmin < PH;
+			}
+		);
+		components.resize(std::max<size_t>(it - components.cbegin(), 1));
+	}
+
+
+	constexpr size_t max_iter = 10000000000;
+	std::vector<size_t> i2n(N, -1);
+	std::vector<size_t> n2i(N, -1);
+
+	auto compute_component_PHmax = [PHmax_i,&n2i,&i2n,&nodes](const component_t& cmp) -> double
+	{
+		double PHmax_local = -std::numeric_limits<double>::infinity();
+
+		if (cmp.nodes.size() == 1)
+			return cmp.PHmin;
+
+		/* Determine local nodes: */
+		std::vector<node_t> local_nodes;
+		for (size_t i : cmp.nodes){
+			i2n[i] = local_nodes.size();
+			n2i[local_nodes.size()] = i;
+			local_nodes.push_back(nodes[i]);
+		}
+		/* Update the network indices to local indices: */
+		for (node_t& n : local_nodes){
+			for (size_t& i : n.neighbors){
+				i = i2n[i];
+			}
+		}
+
+		/* Create the node stack for the local nodes: */
+		NodeStack node_stack(local_nodes);
+		node_stack.push(0);
+
+
+		size_t iter = 0;
+		while (iter++ < max_iter && !node_stack.empty())
+		{
+			/*
+			 * Iteratively handle nodes:
+			 */
+			while (node_stack.blocked() < local_nodes.size()){
+				/*
+				 * Find a free node:
+				 */
+				size_t i = node_stack.free_index();
+				if (i == local_nodes.size())
+					throw std::runtime_error("Could not find free node although "
+					                         "there should be.");
+				node_stack.push(i);
+			}
+
+			/*
+			 * Determine the sample's minimum PH:
+			 */
+			double fork_PHmin = std::numeric_limits<double>::infinity();
+			for (auto it=node_stack.cbegin(); it != node_stack.cend(); ++it){
+				fork_PHmin = std::min(fork_PHmin, PHmax_i[n2i[it->i]]);
+			}
+			PHmax_local = std::max(fork_PHmin, PHmax_local);
+
+
+			/*
+			 * Increment the current level or move up one layer:
+			 */
+			while (!node_stack.empty()){
+				/*
+				 * Remember the previous node and remove it from the stack:
+				 */
+				size_t i = node_stack.top_node();
+				node_stack.pop();
+
+				/*
+				 * Find the next free one:
+				 */
+				bool success = false;
+				for (++i; i<local_nodes.size(); ++i){
+					if (!node_stack.is_blocked(i)){
+						node_stack.push(i);
+						success = true;
+						break;
+					}
+				}
+
+				if (success){
+					break;
+				} else {
+					/* Move up a layer. */
+				}
+			}
+		}
+
+		/* Check if the algorithm was successful: */
+		if (!node_stack.empty()){
+			return std::nan("");
+		}
+
+		return PHmax_local;
+	};
+
+
+	/* Now for each component, compute for each permutation the minimum
+	 * value, and compute the maximum of these values across the permutations.
+	 */
+	double PHmax_global = std::numeric_limits<double>::infinity();
+	for (const component_t& cmp : components){
+		double PHmax_local =  compute_component_PHmax(cmp);
+		PHmax_global = std::min(PHmax_global, PHmax_local);
+
+	}
+
+	return PHmax_global;
+}

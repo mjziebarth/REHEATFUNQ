@@ -38,6 +38,14 @@ determine_restricted_samples(const double* xy, const size_t N,
                                 sample_generator,
                              bool extra_debug_checks);
 
+
+double global_PHmax(
+    const double* xy,
+    const double* PHmax_i,
+    const size_t N,
+    const double dmin
+);
+
 }
 
 #endif
