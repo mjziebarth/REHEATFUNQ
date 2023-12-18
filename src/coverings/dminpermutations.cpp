@@ -76,7 +76,7 @@ struct node_status_t {
 
 	void block(size_t blckr){
 		if (blocked)
-			return;
+			throw std::runtime_error("blocking blocked!");
 		blocked = true;
 		blocker = blckr;
 	}
@@ -583,6 +583,7 @@ reheatfunq::determine_restricted_samples(
 				++j;
 			}
 		}
+		nodes.resize(j);
 		/*
 		 * Update the neighbors:
 		 */
@@ -661,7 +662,7 @@ reheatfunq::determine_restricted_samples(
 	/*
 	 * Add the non-conflicting nodes and translate back to original indices:
 	 */
-	for (sample_t s : samples){
+	for (sample_t& s : samples){
 		for (size_t& i : s.second){
 			i = n2i[i];
 		}
