@@ -167,7 +167,6 @@ def test_across_precisions_N1000():
 
     hfps = []
     for prec in ['double','long double']:
-        print("prec:",prec)
         try:
             hfps.append(
                 HeatFlowAnomalyPosterior(q, x, y, ano, gcp, 0.0e3,
