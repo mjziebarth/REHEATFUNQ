@@ -164,6 +164,11 @@ and this project adheres to
 - Change likelihood in `HeatFlowPredictive` and `HeatFlowAnomalyPosterior`
   classes to include the latent parameter $j$ that iterates the $d_\mathrm{min}$
   permutations.
+- Internal numerics: rewrite `HeatFlowAnomalyPosterior` code with templated
+  precision. Simplify parts of this code and fix a number of numeric bugs.
+- Internal numerics: series approximation of the difference of $\ln \Gamma$
+  functions appearing in various parts of the `HeatFlowAnomalyPosterior` code
+  to eliminate cancellation errors and costly `lgamma` evaluations.
 - Documentation details and fixes
 - Github workflow fix
 - Minor updates to the notebooks requested in review
