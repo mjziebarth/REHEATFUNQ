@@ -160,6 +160,8 @@ and this project adheres to
   to control the maximum number of Monte-Carlo samples that are generated.
 - Added an internally used piecewise barycentric Lagrange interpolator class
 - Added use of `shgofast` Python module for increased performance in SHGO.
+- Add notebook `A13-Gamma-Landscape` that implements the point-of-interest
+  (POI) sampling toy model.
 
 #### Changed
 - Change likelihood in `HeatFlowPredictive` and `HeatFlowAnomalyPosterior`
