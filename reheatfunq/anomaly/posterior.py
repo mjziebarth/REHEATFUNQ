@@ -84,34 +84,71 @@ class HeatFlowAnomalyPosterior:
     y : array_like
         The :math:`y` locations of the heat flow data.
         Also shape :python:`(N,)`.
-    anomaly : reheatfunq.anomaly.Anomaly | list[reheatfunq.anomaly.Anomaly] \
-              | list[tuple[float,reheatfunq.anomaly.Anomaly]]
+    anomaly : reheatfunq.anomaly.anomaly.Anomaly \
+              | list[reheatfunq.anomaly.anomaly.Anomaly] \
+              | list[tuple[float,reheatfunq.anomaly.anomaly.Anomaly]]
         The model of the heat flow anomaly that can be evaluated at
-        the data locations.
+        the data locations. There are three ways to specify this
+        parameter:
+
+        1. A single :python:`Anomaly` instance.
+        2. A list of :python:`Anomaly` instances.
+        3. A list of tuples :python:`(float,Anomaly)`.
+
+        In the second and third case, the :python:`Anomaly` instances are
+        interpreted as a discretization of the heat transport
+        uncertainty, that is, they should span the space of possible
+        heat transport solution given the knowledge of the problem at
+        hand. The third case lists :python:`float` as prior propabilities
+        for each of the anomaly. This way, one can specify a probability
+        distribution of the heat transport solutions.
     gcp : reheatfunq.regional.GammaConjugatePrior | tuple
         The prior for the regional aggregate heat flow distribution.
-    dmin : float
+    dmin : float, optional
         The minimum distance between data points (in m). If data
         points closer than this distance exist in the heat flow
         data, they are not considered independent and are alternated
         in the bootstrap.
-    n_bootstrap : int
+    n_bootstrap : int, optional
         The number of permuted heat flow data sets to generate.
         If no pair of data points is closer than the minimum
         distance :math:`d_\mathrm{min}`, this parameter has no
         effect.
-    heat_flow_unit : 'mW/m²' | 'W/m²'
+    heat_flow_unit : 'mW/m²' | 'W/m²', optional
         The unit in which the heat flow data :python:`q` are given.
-    working_precision : 'double' | 'long double', optional
-            The precision of the internal numerical computations.
-            The higher the precision, the more likely it is to
-            obtain a precise result for large data sets. The
-            trade off is a longer run time.
-            If the respective flags have been set at compile
-            time, additional options 'float128' (GCC 128bit
-            floating point), 'dec50' (boost 50-digit multiprecision),
-            and 'dec100' (boost 100-digit multiprecision) are
-            available.
+    rng: int | numpy.random.Generator, optional
+        The random number generator to use or a reproducible seed.
+    rtol: float, optional
+        The relative tolerance to aim for in various places within the
+        underlying numerics (quadrature and interpolation).
+    pdf_algorithm: "explicit" | "barycentric_lagrange" | "adaptive_simpson", optional
+        The algorithm to use for evaluating the PDF.
+
+        - :python:`"explicit"`: Explicitly calculate all requested
+           points.
+        - :python:`"barycentric_lagrange"`: First create a barycentric
+          Lagrange interpolator of the PDF which is thereafter used
+          to evaluate the PDF
+        - :python:`"adaptive_simpson"`: Create the adaptive Simpson's
+          rule integrator using the explicitly evaluated PDF. Then use
+          the integrator's polynomials to evaluate the PDF thereafter.
+
+    bli_max_refinements: int, optional
+        The maximum number of refinements of the barycentric Lagrange
+        interpolator. The refinement will stop before if the precision
+        goal is reached. The number of Chebyshev sampling points of
+        the explicitly evaluated PDF grows base-2 exponentially with
+        :python:`bli_max_refinements`.
+    precision: 'double' | 'long double', optional
+        The precision of the internal numerical computations.
+        The higher the precision, the more likely it is to
+        obtain a precise result for large data sets. The
+        trade off is a longer run time.
+        If the respective flags have been set at compile
+        time, additional options :python:`'float128'` (GCC 128bit
+        floating point), :python:`'dec50'` (boost 50-digit
+        multiprecision), and :python:`'dec100'` (boost 100-digit
+        multiprecision) are available.
     """
 
     # Typing:
@@ -391,7 +428,7 @@ class HeatFlowAnomalyPosterior:
 
         Returns
         -------
-        tail : array_like
+        tail : numpy.typing.NDArray[numpy.float64]
               The marginal posterior tail distribution
               of heat-generating power :math:`P_H` evaluated
               at the given :code:`P_H`.
@@ -416,7 +453,7 @@ class HeatFlowAnomalyPosterior:
 
         Returns
         -------
-        P_H : array_like
+        P_H : numpy.typing.NDArray[numpy.float64]
               The heat-generating power :math:`P_H` at which the
               posterior tail distribution evaluates to :code:`x`.
         """
