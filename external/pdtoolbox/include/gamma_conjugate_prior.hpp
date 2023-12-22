@@ -25,6 +25,7 @@
 #include <cstddef>
 #include <memory>
 #include <funccache.hpp>
+#include <string>
 
 #ifndef PDTOOLBOX_GAMMA_CONJUGATE_PRIOR_HPP
 #define PDTOOLBOX_GAMMA_CONJUGATE_PRIOR_HPP
@@ -100,6 +101,15 @@ public:
 	                               double amin, double epsabs, double epsrel,
 	                               bool parallel=true);
 
+	static int
+	posterior_predictive_pdf_common_norm(const size_t Nq, const double* q,
+	                               double* out, const size_t Mparam,
+	                               const double* lp, const double* s,
+	                               const double* n, const double* v,
+	                               double amin, double epsabs, double epsrel,
+	                               std::string& err_msg,
+	                               bool parallel=true);
+
 	static void
 	posterior_predictive_cdf(const size_t Nq, const double* q,
 	                         double* out,
@@ -112,6 +122,13 @@ public:
 	                               const double* lp, const double* s,
 	                               const double* n, const double* v,
 	                               double amin, double epsabs, double epsrel);
+
+	static int
+	posterior_predictive_cdf_common_norm(
+	        const size_t Nq, const double* q, double* out,const size_t Mparam,
+	        const double* lp, const double* s, const double* n, const double* v,
+	        double amin, double epsabs, double epsrel,
+	        std::string& err_msg, bool parallel=true);
 
 
 protected:
@@ -128,6 +145,18 @@ private:
 	                         double lp, double s, double n, double v,
 	                         double amin, double epsabs, double epsrel,
 	                         bool parallel, double ln_Phi, double ls);
+
+	struct lnPhi_max_t {
+		double lnPhi_max;
+		double tot_norm;
+	};
+
+	static lnPhi_max_t compute_lnPhi_max(
+	    const size_t Mparam, const double* lp, const double* s,
+	    const double* n, const double* v, double amin,
+	    double epsabs, double epsrel, bool& error_flag,
+	    std::string& err_msg, bool parallel
+	);
 
 
 };

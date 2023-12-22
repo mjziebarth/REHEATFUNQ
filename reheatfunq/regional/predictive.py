@@ -23,8 +23,8 @@ from typing import Union
 from numpy.typing import ArrayLike
 from .prior import GammaConjugatePrior
 from ..coverings.rdisks import bootstrap_data_selection
-from .backend import gamma_conjugate_prior_predictive_batch,\
-                     gamma_conjugate_prior_predictive_cdf_batch
+from .backend import gamma_conjugate_prior_predictive_common_norm,\
+                     gamma_conjugate_prior_predictive_cdf_common_norm
 from warnings import warn
 
 class HeatFlowPredictive:
@@ -110,7 +110,7 @@ class HeatFlowPredictive:
         self.v = np.array([u.v for u in updated])
 
 
-    def cdf(self, q: ArrayLike, batch_size: int = 1000, epsabs: float = 0.0,
+    def cdf(self, q: ArrayLike, epsabs: float = 0.0,
             epsrel: float = 1e-10):
         """
         Computes the cumulative distribution function.
@@ -119,10 +119,6 @@ class HeatFlowPredictive:
         ----------
         q : array_like
             Heat flow :math:`q` at which to evaluate the CDF.
-        batch_size : int, optional
-            Size of the batches in which to perform the
-            :python:`n_bootstrap` randomized subselection
-            evaluations.
         epsabs : float, optional
             Absolute tolerance parameter passed to the
             quadrature engines.
@@ -138,30 +134,15 @@ class HeatFlowPredictive:
         """
         # Make sure that q is C-contiguous:
         q = np.ascontiguousarray(q)
-        res = np.zeros_like(q)
-        out = np.empty((batch_size, q.size))
-        i0 = 0
-        while i0 < self.lp.size:
-            # Local batch size:
-            bsi = min(batch_size, self.lp.size - i0)
-
-            # Call the next batch evaluation:
-            gamma_conjugate_prior_predictive_cdf_batch(q, self.lp[i0:i0+bsi],
-                self.s[i0:i0+bsi], self.n[i0:i0+bsi], self.v[i0:i0+bsi],
-                self.gcp.amin, epsabs, epsrel, out)
-
-            # Transfer the result:
-            res += out[:bsi,:].sum(axis=0)
-
-            i0 += bsi
-
-        # Average of the CDFs:
-        res /= self.lp.size
+        res = np.empty_like(q)
+        gamma_conjugate_prior_predictive_cdf_common_norm(q,
+            self.lp, self.s, self.n, self.v, self.gcp.amin,
+            epsabs, epsrel, res)
 
         return res
 
 
-    def pdf(self, q: ArrayLike, batch_size: int = 100, epsabs: float = 0.0,
+    def pdf(self, q: ArrayLike, epsabs: float = 0.0,
             epsrel: float = 1e-10):
         """
         Computes the probability distribution function.
@@ -170,10 +151,6 @@ class HeatFlowPredictive:
         ----------
         q : array_like
             Heat flow :math:`q` at which to evaluate the CDF.
-        batch_size : int, optional
-            Size of the batches in which to perform the
-            :python:`n_bootstrap` randomized subselection
-            evaluations.
         epsabs : float, optional
             Absolute tolerance parameter passed to the
             quadrature engines.
@@ -189,24 +166,9 @@ class HeatFlowPredictive:
         """
         # Make sure that q is C-contiguous:
         q = np.ascontiguousarray(q)
-        res = np.zeros_like(q)
-        out = np.empty((batch_size, q.size))
-        i0 = 0
-        while i0 < self.lp.size:
-            # Local batch size:
-            bsi = min(batch_size, self.lp.size - i0)
-
-            # Call the next batch evaluation:
-            gamma_conjugate_prior_predictive_batch(q, self.lp[i0:i0+bsi],
-                self.s[i0:i0+bsi], self.n[i0:i0+bsi], self.v[i0:i0+bsi],
-                self.gcp.amin, epsabs, epsrel, out)
-
-            # Transfer the result:
-            res += out[:bsi,:].sum(axis=0)
-
-            i0 += bsi
-
-        # Average the PDFs:
-        res /= self.lp.size
+        res = np.empty_like(q)
+        gamma_conjugate_prior_predictive_common_norm(q,
+            self.lp, self.s, self.n, self.v, self.gcp.amin,
+            epsabs, epsrel, res)
 
         return res

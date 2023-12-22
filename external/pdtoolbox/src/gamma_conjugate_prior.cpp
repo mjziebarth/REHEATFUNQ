@@ -876,6 +876,111 @@ void GammaConjugatePriorBase::posterior_predictive_pdf_batch(
 }
 
 
+GammaConjugatePriorBase::lnPhi_max_t
+GammaConjugatePriorBase::compute_lnPhi_max(
+        const size_t Mparam, const double* lp, const double* s,
+        const double* n, const double* v, double amin,
+        double epsabs, double epsrel, bool& error_flag,
+        std::string& err_msg, bool parallel
+)
+{
+	std::vector<double> lnPhi(Mparam, 0.0);
+
+	#pragma omp parallel for if(parallel)
+	for (size_t i=0; i<Mparam; ++i){
+		if (error_flag)
+			continue;
+		try {
+			const double ls = std::log(s[i]);
+			lnPhi[i] = ln_Phi(lp[i], ls, n[i], v[i], amin, epsabs, epsrel);
+		} catch (const std::exception& e){
+			#pragma omp critical
+			{
+				error_flag = true;
+				err_msg = std::string(e.what());
+			}
+		}
+	}
+
+	if (error_flag){
+		err_msg = std::string("Error in posterior_predictive_pdf_common_norm: '")
+		          + err_msg + std::string("'.");
+		return lnPhi_max_t({0.0, 0.0});
+	}
+
+	const double lnPhi_max = *std::max_element(lnPhi.cbegin(), lnPhi.cend());
+
+	/* Total norm: */
+	double tot_norm = 0.0;
+	for (double lP : lnPhi){
+		tot_norm += std::exp(lP - lnPhi_max);
+	}
+
+	return lnPhi_max_t({lnPhi_max, tot_norm});
+}
+
+
+
+int GammaConjugatePriorBase::posterior_predictive_pdf_common_norm(
+        const size_t Nq, const double* q, double* out,
+        const size_t Mparam, const double* lp, const double* s,
+        const double* n, const double* v, double amin,
+        double epsabs, double epsrel,
+        std::string& err_msg, bool parallel)
+{
+	if (Nq == 0)
+		return 0;
+
+	/* Error catching: */
+	bool error_flag = false;
+
+	/* Now bring each entry to a common norm.
+	 * (Note: this is a temporary solution to update the method
+	 *    posterior_predictive_pdf_batch
+	 * to the resubmission likelihood.
+	 * At a point, one should probably follow the structure of the
+	 * code as it is implemented for the anomaly posterior. */
+	lnPhi_max_t norm = compute_lnPhi_max(
+	        Mparam, lp, s, n, v, amin, epsabs,epsrel, error_flag,
+	        err_msg, parallel
+	);
+
+	if (error_flag){
+		err_msg = std::string("Error in posterior_predictive_pdf_common_norm: '")
+		          + err_msg + std::string("'.");
+		return 1;
+	}
+
+
+	#pragma omp parallel for if(parallel)
+	for (size_t j=0; j<Nq; ++j){
+		double outj = 0.0;
+		const double qj = q[j];
+		for (size_t i=0; i<Mparam; ++i){
+			try {
+				/* The conjugate structure: */
+				outj += exp(ln_Phi(lp[i] + log(qj), log(s[i]+qj),
+				                   n[i]+1, v[i]+1, amin,
+				                   epsabs, epsrel)
+				            - norm.lnPhi_max);
+			} catch (const std::exception& e){
+				error_flag = true;
+				err_msg = std::string(e.what());
+			}
+		}
+		out[j] = outj / norm.tot_norm;
+	}
+
+	if (error_flag){
+		err_msg = std::string("Error in posterior_predictive_pdf_common_norm: '")
+		          + err_msg + std::string("'.");
+		return 1;
+	}
+
+	return 0;
+}
+
+
 
 /*
  * Posterior predictive CDF:
@@ -944,6 +1049,111 @@ void GammaConjugatePriorBase::posterior_predictive_cdf(
 		}
 	}
 }
+
+
+
+int GammaConjugatePriorBase::posterior_predictive_cdf_common_norm(
+        const size_t Nq, const double* q, double* out,const size_t Mparam,
+        const double* lp, const double* s, const double* n, const double* v,
+        double amin, double epsabs, double epsrel,
+        std::string& err_msg, bool parallel
+)
+{
+	if (Nq == 0)
+		return 0;
+
+	/* Sort the heat flow values: */
+	struct orddbl {
+		double val = 0;
+		size_t index = 0;
+		bool operator<(const orddbl& other) const {
+			return val < other.val;
+		};
+	};
+	std::vector<orddbl> qord(Nq);
+	for (size_t i=0; i<Nq; ++i){
+		qord[i] = {q[i], i};
+	}
+	std::sort(qord.begin(), qord.end());
+
+	/* Error catching: */
+	bool error_flag = false;
+
+	lnPhi_max_t norm = compute_lnPhi_max(
+	        Mparam, lp, s, n, v, amin, epsabs,epsrel, error_flag,
+	        err_msg, parallel
+	);
+
+	if (error_flag){
+		err_msg = std::string("Error in posterior_predictive_cdf_common_norm: '")
+		          + err_msg + std::string("'.");
+		return 1;
+	}
+
+	/* The integrand: */
+	auto integrand = [=,&error_flag,&err_msg](double qi) -> double {
+		// PDF:
+		double out = 0.0;
+		#pragma omp parallel for if(parallel) reduction(+:out)
+		for (size_t i=0; i<Mparam; ++i){
+			if (error_flag)
+				continue;
+			try {
+				/* The conjugate structure: */
+				out += exp(ln_Phi(lp[i] + log(qi), log(s[i]+qi),
+								n[i]+1, v[i]+1, amin,
+								epsabs, epsrel)
+							- norm.lnPhi_max);
+			} catch (const std::exception& e){
+				#pragma omp critical
+				{
+					error_flag = true;
+					err_msg = std::string(e.what());
+				}
+			}
+		}
+		out /= norm.tot_norm;
+
+		return out;
+	};
+
+	/* Now the piecewise integration.
+	 * This loop could be parallelized easily: */
+	double err;
+	for (size_t i=0; i<Nq; ++i){
+		/* Numerical integration of this part: */
+		const size_t j = qord[i].index;
+		double ql = (i == 0) ? 0.0 : qord[i-1].val;
+		if (qord[i].val == ql)
+			out[j] = 0.0;
+		else
+			out[j] = gauss_kronrod<double, 15>::integrate(integrand,
+			                                              ql, qord[i].val,
+			                                              5, 1e-9, &err);
+
+		/* Error checking? */
+		if (error_flag)
+			return 1;
+	}
+
+	/* Accumulation: */
+	long double sum = 0;
+	for (size_t i=0; i<Nq; ++i){
+		sum += out[qord[i].index];
+		out[qord[i].index] = sum;
+	}
+
+	/* Ensure normalization: */
+	if (sum > 1.0){
+		for (size_t i=0; i<Nq; ++i){
+			out[i] /= sum;
+		}
+	}
+
+	return 0;
+}
+
+
 
 
 void

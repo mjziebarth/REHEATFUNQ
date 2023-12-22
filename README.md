@@ -161,6 +161,9 @@ and this project adheres to
 - Added an internally used piecewise barycentric Lagrange interpolator class
 
 #### Changed
+- Change likelihood in `HeatFlowPredictive` and `HeatFlowAnomalyPosterior`
+  classes to include the latent parameter $j$ that iterates the $d_\mathrm{min}$
+  permutations.
 - Documentation details and fixes
 - Github workflow fix
 - Minor updates to the notebooks requested in review
