@@ -159,11 +159,15 @@ and this project adheres to
   criterion by Monte-Carlo sampling. The parameter `n_bootstrap` allows
   to control the maximum number of Monte-Carlo samples that are generated.
 - Added an internally used piecewise barycentric Lagrange interpolator class
+- Added use of `shgofast` Python module for increased performance in SHGO.
 
 #### Changed
 - Change likelihood in `HeatFlowPredictive` and `HeatFlowAnomalyPosterior`
   classes to include the latent parameter $j$ that iterates the $d_\mathrm{min}$
   permutations.
+- Incompatible API changes for some (keyword-)arguments of `HeatFlowAnomalyPosterior`
+  and `HeatFlowPredictive`. These changes reflect the model definition changes
+  and the numerical improvements that make some arguments obsolete.
 - Internal numerics: rewrite `HeatFlowAnomalyPosterior` code with templated
   precision. Simplify parts of this code and fix a number of numeric bugs.
 - Internal numerics: series approximation of the difference of $\ln \Gamma$
@@ -180,6 +184,11 @@ and this project adheres to
 - Fixed a problem with the access of NumPy headers in Cython files on some
   systems in isolated build mode.
 - Fix wrong buffer size in `marginal_posterior_tail_quantiles_batch`.
+- Changed the following notebooks in `jupyter/REHEATFUNQ` for the resubmission
+  of the REHEATFUNQ paper (https://doi.org/10.5194/egusphere-2023-222):
+  `06-Heat-Flow-Analysis.ipynb`, `A2-Goodness-of-Fit_R_and-Mixture-Distributions.ipynb`,
+  `A4-Resilience-to-Other-Distributions.ipynb`,
+  `A6-Comparison-With-Other-Distributions.ipynb`,
 
 ### [1.4.0] - 2023-02-01
 #### Added
