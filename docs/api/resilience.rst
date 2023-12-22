@@ -33,8 +33,8 @@ The functions :py:func:`generate_synthetic_heat_flow_coverings_mix2` and
 that can mimic RGRDCs from real data. The two functions proceed as follows:
 
 1. Input the structure of the real-world data RGRDC: Represent each disk by
-   a tuple :math:`(N,k,\\theta)`, where :math:`N` is the sample size and
-   :math:`(k,\\theta)` is the maximum likelihood estimate of the gamma
+   a tuple :math:`(N,k,\theta)`, where :math:`N` is the sample size and
+   :math:`(k,\theta)` is the maximum likelihood estimate of the gamma
    distribution for the regional aggregate heat flow distribution associated to
    the disk.
 2. Define a two-component (:code:`_mix2`) or three-component (:code:`_mix3`)
@@ -44,7 +44,7 @@ that can mimic RGRDCs from real data. The two functions proceed as follows:
 3. For a number of :code:`M` times, repeat the following steps to generate one
    synthetic RGRDC:
 
-   - for each :math:`(N,k,\\theta)`, draw a sample from the :math:`(k,\\theta)`
+   - for each :math:`(N,k,\theta)`, draw a sample from the :math:`(k,\theta)`
      gamma distribution
    - draw a random relative error from the "Gaussian" mixture distribution
      and superpose the relative error randomly in positive or negative
