@@ -143,7 +143,6 @@ class HeatFlowAnomalyPosterior:
                  pdf_algorithm: Literal["explicit","barycentric_lagrange",
                                         "adaptive_simpson"]
                                 = "barycentric_lagrange",
-                 bli_max_splits: int = 100,
                  bli_max_refinements: int = 7,
                  precision: Literal[_num_prec] = 'long double'
         ):
@@ -325,7 +324,7 @@ class HeatFlowAnomalyPosterior:
             [self.c[j,ids] for w,j,ids in self.bootstrap], # cij
             np.array(bootstrap_w), p, self.gcp.s, self.gcp.n, self.gcp.v,
             self.gcp.amin, float(rtol), False, str(pdf_algorithm),
-            int(bli_max_splits), int(bli_max_refinements),
+            100, int(bli_max_refinements),
             str(precision)
         )
 
