@@ -29,7 +29,8 @@
 #include <boost/math/quadrature/exp_sinh.hpp>
 #include <boost/math/quadrature/tanh_sinh.hpp>
 #include <boost/math/constants/constants.hpp>
-
+#include <boost/math/tools/minima.hpp>
+#include <iostream>
 
 /*
  * REHEATFUNQ includes:
@@ -232,8 +233,9 @@ real log_integrand_amax(typename arg<const real>::type l1pwz,
 		);
 	}
 
+	/* Try first with Newton's method: */
 	bool success = false;
-	for (size_t i=0; i<100; ++i){
+	for (size_t i=0; i<30; ++i){
 		// f0 = L.v * rm::digamma(L.v * a) - L.n * rm::digamma(a) + C;
 		// f1 = L.v * L.v * rm::trigamma(L.v * a) - L.n * rm::trigamma(a);
 		f0 = v_digamma_v_a__minus__n_digamma_a<real>(a, L.n, L.v) + C;
@@ -247,8 +249,33 @@ real log_integrand_amax(typename arg<const real>::type l1pwz,
 		if (success)
 			break;
 	}
+
 	if (!success){
-		throw std::runtime_error("Could not determine log_integrand_max.");
+		/* Use Brent's method as a fallback: */
+		auto cost = [l1pwz, lkiz_sum, &L](typename arg<const real>::type x) -> real
+		{
+			real a = L.amin / x;
+			if (rm::isinf(a))
+				return std::numeric_limits<real>::infinity();
+
+			real lS = loggamma_v_a__minus__n_loggamma_a__plus__C_a<real>(
+						a, L.n, L.v,
+						(L.lp - L.v * (L.ls + l1pwz) + lkiz_sum),
+						L.lv
+			) - (L.lp + lkiz_sum);
+
+			return -lS;
+		};
+
+		std::uintmax_t max_iter = 200;
+		real xmax = boost::math::tools::brent_find_minima(
+						cost,
+						static_cast<real>(0.0),
+						static_cast<real>(1.0),
+						1000000,
+						max_iter).first;
+
+		return L.amin / xmax;
 	}
 	return a;
 }
