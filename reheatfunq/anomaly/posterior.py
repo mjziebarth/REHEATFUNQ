@@ -88,7 +88,7 @@ class HeatFlowAnomalyPosterior:
               | list[tuple[float,reheatfunq.anomaly.Anomaly]]
         The model of the heat flow anomaly that can be evaluated at
         the data locations.
-    gcp : reheatfunq.regional.GammaConjugatePrior
+    gcp : reheatfunq.regional.GammaConjugatePrior | tuple
         The prior for the regional aggregate heat flow distribution.
     dmin : float
         The minimum distance between data points (in m). If data
@@ -164,7 +164,7 @@ class HeatFlowAnomalyPosterior:
 
         if not isinstance(gcp, GammaConjugatePrior):
             try:
-                gcp = GammaConjugatePrior(gcp)
+                gcp = GammaConjugatePrior(*gcp)
             except:
                 raise TypeError("`gcp` needs to be a GammaConjugatePrior "
                                 "instance or a tuple (p,s,n,ν).")
