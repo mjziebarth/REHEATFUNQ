@@ -46,8 +46,7 @@ python = import('python').find_installation()
 dep_py = python.dependency()
 
 incpath_np = run_command(
-  python,
-  ['numpy-include.py'],
+  'gravelspoon',
   check : false
 )
 if incpath_np.returncode() != 0
