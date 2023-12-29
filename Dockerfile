@@ -81,8 +81,8 @@ COPY ./include/ ./include/
 COPY ./external/ ./external/
 COPY ./reheatfunq/ ./reheatfunq/
 COPY ./src/ ./src/
-COPY ./meson.build ./setup.py ./pyproject.toml ./numpy-include.py \
-     ./meson_options.txt ./
+COPY ./meson.build ./setup.py ./pyproject.toml \
+     ./meson_options.txt ./README.md ./LICENSE ./
 
 # Compile and install the package:
 RUN set -eux; \
@@ -92,7 +92,7 @@ RUN set -eux; \
     meson configure -Danomaly_posterior_dec50=true -Dportable=true; \
     meson compile; \
     cd ..; \
-    pip install --no-cache-dir --user .; \
+    pip install --no-cache-dir --no-build-isolation --user .; \
     rm -r build; \
     rm -r builddir
 
