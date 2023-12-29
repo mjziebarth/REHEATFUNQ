@@ -55,12 +55,13 @@ USER reheatfunq
 RUN set -eux;\
     mkdir /home/reheatfunq/REHEATFUNQ
 WORKDIR /home/reheatfunq/REHEATFUNQ
+ENV PATH = "$PATH:/home/reheatfunq/.local/bin"
 
 # Python dependencies:
 RUN set -eux; \
     pip install --no-cache-dir --upgrade pip setuptools; \
     pip install --no-cache-dir --user \
-             matplotlib pyproj mebuex;
+             matplotlib pyproj mebuex>=1.2.0;
 RUN set -eux; \
     pip install --no-cache-dir --user \
             'loaducerf3 @ git+https://git.gfz-potsdam.de/ziebarth/loaducerf3';
@@ -70,11 +71,10 @@ RUN set -eux; \
     pip install --user --no-cache-dir \
             notebook cmcrameri cmocean shapely \
             cmasher scikit-learn joblib geopandas scipy requests flottekarte \
-            mpmath gmpy2
+            mpmath gmpy2 shgofast
 RUN set -eux; \
     PDTOOLBOX_PORTABLE=1 pip install --user  --no-cache-dir \
             'pdtoolbox @ git+https://git.gfz-potsdam.de/ziebarth/pdtoolbox.git';
-ENV PATH = "$PATH:/home/reheatfunq/.local/bin"
 
 # Copy necessary directories:
 COPY ./include/ ./include/

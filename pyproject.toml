@@ -22,6 +22,7 @@ dependencies = [
     "joblib",
     "mebuex",
     "scipy",
+    "shgofast",
     "loaducerf3@git+https://git.gfz-potsdam.de/ziebarth/loaducerf3.git",
     "pdtoolbox@git+https://git.gfz-potsdam.de/ziebarth/pdtoolbox"
 ]
