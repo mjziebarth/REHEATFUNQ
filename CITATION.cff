@@ -1,26 +1,24 @@
-cff-version: 1.0.0
+cff-version: 1.2.0
 message: "Please consider citing one or both of the following software and paper reference for REHEATFUNQ."
+authors:
+  - family-names: "Ziebarth"
+    given-names: "Malte Jörn"
+    orcid: https://orcid.org/0000-0002-5190-4478
+title: "REHEATFUNQ: A Python package for the inference of regional aggregate heat flow distributions and heat flow anomalies"
+doi: 10.5880/GFZ.2.6.2023.002
+repository: https://github.com/mjziebarth/REHEATFUNQ
 references:
-  - type: software
-      authors:
-        - family-names: Ziebarth
-          given-names: Malte Jörn
-          orcid: 0000-0002-5190-4478
-      title: "REHEATFUNQ: A Python package for the inference of regional aggregate heat flow distributions and heat flow anomalies"
-      doi: 10.5880/GFZ.2.6.2023.002
-      publisher: GFZ Data Services
-      repository: https://github.com/mjziebarth/REHEATFUNQ
   - type: article
-      authors:
-      - family-names: Ziebarth
-        given-names: Malte Jörn
-        orcid: 0000-0002-5190-4478
-      - family-names: Specht
-        name-particle: von
-        given-names: Sebastian
-        orcid: 0000-0003-3735-9562
-      title: "REHEATFUNQ 1.4.0: A model for regional aggregate heat flow distributions and anomaly quantification"
-      year: 2023
-      journal: Geoscientific Model Development
-      status: preprint
-      doi: 10.5194/egusphere-2023-222
+    authors:
+    - family-names: "Ziebarth"
+      given-names: "Malte Jörn"
+      orcid: https://orcid.org/0000-0002-5190-4478
+    - family-names: "Specht"
+      name-particle: "von"
+      given-names: "Sebastian"
+      orcid: https://orcid.org/0000-0003-3735-9562
+    title: "REHEATFUNQ 1.4.0: A model for regional aggregate heat flow distributions and anomaly quantification"
+    year: 2023
+    journal: "Geoscientific Model Development"
+    status: preprint
+    doi: 10.5194/egusphere-2023-222
