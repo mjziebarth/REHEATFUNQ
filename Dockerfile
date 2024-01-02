@@ -61,7 +61,7 @@ ENV PATH = "$PATH:/home/reheatfunq/.local/bin"
 RUN set -eux; \
     pip install --no-cache-dir --upgrade pip setuptools; \
     pip install --no-cache-dir --user \
-             matplotlib pyproj mebuex>=1.2.0;
+             matplotlib pyproj mebuex>=1.2.0 gmpy2==2.2.0a1;
 RUN set -eux; \
     pip install --no-cache-dir --user \
             'loaducerf3 @ git+https://git.gfz-potsdam.de/ziebarth/loaducerf3';
