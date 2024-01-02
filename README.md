@@ -159,10 +159,23 @@ and this project adheres to
   anomaly dimension is included in the treatment of the minimum distance
   criterion by Monte-Carlo sampling. The parameter `n_bootstrap` allows
   to control the maximum number of Monte-Carlo samples that are generated.
-- Added an internally used piecewise barycentric Lagrange interpolator class
+- Added an internally used piecewise barycentric Lagrange interpolator (BLI) class
 - Added use of `shgofast` Python module for increased performance in SHGO.
 - Add notebook `A13-Gamma-Landscape.ipynb` that implements the point-of-interest
   (POI) sampling toy model.
+- Allow switching of PDF backend (explicit / BLI / Simpson).
+- Added CITATION.cff.
+- Added optional naive MPMath implementation of the posterior for crosschecking
+  purposes.
+- Check whether heat flow anomaly posterior is normalizeable.
+- Added facility to query internal state of `HeatFlowAnomalyPosterior`.
+- Add a function to compute the $P_{H,\mathrm{max}}$ possible throughout all permutations.
+- Added function `determine_restricted_samples` to determine fully (if possible)
+  or approximate stochastically the set of permutations according to the $d_\mathrm{min}$
+  criterion.
+- Sped up evaluations of the `HeatFlowAnomalyPosterior` PDF & CDF(s) by means
+  of interpolation (BLI), parallization, and removal of redundant computations
+  (see 463319c5ff981a22ec80a0b8d8595ca7d8b70f53 for a complete list)
 
 #### Changed
 - Change likelihood in `HeatFlowPredictive` and `HeatFlowAnomalyPosterior`
@@ -173,6 +186,9 @@ and this project adheres to
   and the numerical improvements that make some arguments obsolete.
 - Internal numerics: rewrite `HeatFlowAnomalyPosterior` code with templated
   precision. Simplify parts of this code and fix a number of numeric bugs.
+  Allow precision to be selected from Python.
+- Change `HeatFlowAnomalyPosterior` CDF/cCDF computation to use a divide-and-conquer
+  adaptive Simpson's rule (Lagrange interpolator).
 - Internal numerics: series approximation of the difference of $\ln \Gamma$
   functions appearing in various parts of the `HeatFlowAnomalyPosterior` code
   to eliminate cancellation errors and costly `lgamma` evaluations.
@@ -192,8 +208,12 @@ and this project adheres to
   `03-Gamma-Conjugate-Prior-Parameters.ipynb`,
   `06-Heat-Flow-Analysis.ipynb`, `A2-Goodness-of-Fit_R_and-Mixture-Distributions.ipynb`,
   `A4-Resilience-to-Other-Distributions.ipynb`,
-  `A6-Comparison-With-Other-Distributions.ipynb`,
+  `A6-Comparison-With-Other-Distributions.ipynb`.
+  This includes the convergence analysis of some Monte-Carlo code.
 - Updated the `Dockerfile-stable` image and fix various build issues.
+- Fix multiple errors in the $z\rightarrow 1$ (large $P_H$) series approximation.
+- Fix multiple numerical errors and bugs in many places of the `HeatFlowAnomalyPosterior`
+  code, and add various numerical sanity checks (see 463319c5ff981a22ec80a0b8d8595ca7d8b70f53)
 
 ### [1.4.0] - 2023-02-01
 #### Added
