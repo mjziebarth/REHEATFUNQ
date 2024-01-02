@@ -1,0 +1,17 @@
+--- setup.py	2023-12-31 17:52:07.070355237 +0100
++++ setup.new.py	2023-12-31 17:51:55.602580885 +0100
+@@ -353,13 +353,7 @@
+             "importlib-resources>=3.2.0",
+         ],
+     },
+-    use_scm_version={
+-        "version_scheme": "release-branch-semver",
+-        "local_scheme": "node-and-date",
+-        "write_to": "lib/matplotlib/_version.py",
+-        "parentdir_prefix_version": "matplotlib-",
+-        "fallback_version": "0.0+UNKNOWN",
+-    },
++    version = "3.8.2",
+     cmdclass={
+         "build_ext": BuildExtraLibraries,
+         "build_py": BuildPy,
