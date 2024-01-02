@@ -71,7 +71,9 @@ Napoleon to be installed.
 ## Citation
 If you use REHEATFUNQ, please cite the following paper:
 
-**TODO**
+> Ziebarth, M. J. and von Specht, S.: REHEATFUNQ 1.4.0: A model for regional
+> aggregate heat flow distributions and anomaly quantification,
+> EGUsphere [preprint], https://doi.org/10.5194/egusphere-2023-222, 2023.
 
 This paper explains the REHEATFUNQ model and discusses a couple of performance
 and resilience analyses of the model.
