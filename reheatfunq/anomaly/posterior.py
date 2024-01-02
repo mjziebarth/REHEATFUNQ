@@ -124,15 +124,17 @@ class HeatFlowAnomalyPosterior:
     pdf_algorithm: "explicit" | "barycentric_lagrange" | "adaptive_simpson", optional
         The algorithm to use for evaluating the PDF.
 
-        - :python:`"explicit"`: Explicitly calculate all requested
-           points.
-        - :python:`"barycentric_lagrange"`: First create a barycentric
-          Lagrange interpolator of the PDF which is thereafter used
-          to evaluate the PDF
-        - :python:`"adaptive_simpson"`: Create the adaptive Simpson's
-          rule integrator using the explicitly evaluated PDF. Then use
-          the integrator's polynomials to evaluate the PDF thereafter.
+        1. :python:`"explicit"`: Explicitly calculate all requested \
+            points.
+        2. :python:`"barycentric_lagrange"`: First create a barycentric \
+            Lagrange interpolator of the PDF which is thereafter used \
+            to evaluate the PDF
+        3. :python:`"adaptive_simpson"`: Create the adaptive Simpson's \
+            rule integrator using the explicitly evaluated PDF. Then use \
+            the integrator's polynomials to evaluate the PDF thereafter.
 
+        The chosen PDF evaluation algorithm will also be used when evaluating
+        the cumulative distribution functions.
     bli_max_refinements: int, optional
         The maximum number of refinements of the barycentric Lagrange
         interpolator. The refinement will stop before if the precision

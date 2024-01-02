@@ -134,8 +134,7 @@ and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-
-### [Unreleased]
+### [2.0.0] - 2023-01-02
 #### Added
 - Added a function value cache for the minimum surprise estimate of the gamma
   conjugate prior. The cache can be generated using the
@@ -160,7 +159,7 @@ and this project adheres to
   to control the maximum number of Monte-Carlo samples that are generated.
 - Added an internally used piecewise barycentric Lagrange interpolator class
 - Added use of `shgofast` Python module for increased performance in SHGO.
-- Add notebook `A13-Gamma-Landscape` that implements the point-of-interest
+- Add notebook `A13-Gamma-Landscape.ipynb` that implements the point-of-interest
   (POI) sampling toy model.
 
 #### Changed
@@ -188,9 +187,11 @@ and this project adheres to
 - Fix wrong buffer size in `marginal_posterior_tail_quantiles_batch`.
 - Changed the following notebooks in `jupyter/REHEATFUNQ` for the resubmission
   of the REHEATFUNQ paper (https://doi.org/10.5194/egusphere-2023-222):
+  `03-Gamma-Conjugate-Prior-Parameters.ipynb`,
   `06-Heat-Flow-Analysis.ipynb`, `A2-Goodness-of-Fit_R_and-Mixture-Distributions.ipynb`,
   `A4-Resilience-to-Other-Distributions.ipynb`,
   `A6-Comparison-With-Other-Distributions.ipynb`,
+- Updated the `Dockerfile-stable` image and fix various build issues.
 
 ### [1.4.0] - 2023-02-01
 #### Added
