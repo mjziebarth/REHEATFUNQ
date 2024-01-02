@@ -91,9 +91,12 @@ public:
 	 * It performs three computations before it passes to the private
 	 * constructor. This way, we can keep the class immutable.
 	 */
-	Locals(const std::vector<qc_t>& qc, arg<const real>::type p,
-	       arg<const real>::type s, arg<const real>::type n,
-	       arg<const real>::type v, arg<const real>::type amin,
+	Locals(const std::vector<qc_t>& qc,
+	       typename arg<const real>::type p,
+	       typename arg<const real>::type s,
+	       typename arg<const real>::type n,
+	       typename arg<const real>::type v,
+	       typename arg<const real>::type amin,
 	       double dest_tol)
 	   : Locals(
 	        /* Pass through some of the parameters:  */
@@ -112,12 +115,17 @@ public:
 	/*
 	 * Initialize from previously calculated parameters:
 	 */
-	Locals(arg<const real>::type lp, arg<const real>::type ls,
-	       arg<const real>::type n, arg<const real>::type v,
-	       arg<const real>::type amin, arg<const real>::type Qmax,
+	Locals(typename arg<const real>::type lp,
+	       typename arg<const real>::type ls,
+	       typename arg<const real>::type n,
+	       typename arg<const real>::type v,
+	       typename arg<const real>::type amin,
+	       typename arg<const real>::type Qmax,
 	       std::vector<real>&& ki, const std::array<real,4>& h,
-	       arg<const real>::type w, arg<const real>::type lh0,
-	       arg<const real>::type l1p_w, arg<const real>::type lv)
+	       typename arg<const real>::type w,
+	       typename arg<const real>::type lh0,
+	       typename arg<const real>::type l1p_w,
+	       typename arg<const real>::type lv)
 	   : lp(lp), ls(ls), n(n), v(v), amin(amin), Qmax(Qmax),
 	     ki(std::move(ki)), h(h), w(w), lh0(lh0), l1p_w(l1p_w),
 	     lv(lv)
@@ -180,11 +188,12 @@ private:
 	                                    size_t imax);
 	static real compute_lqsum(const std::vector<qc_t>& qc);
 	static std::vector<real> compute_ki(const std::vector<qc_t>& qc,
-	                                    arg<const real>::type Qmax);
+	                                    typename arg<const real>::type Qmax);
 
-	Locals(const std::vector<qc_t>& qc, arg<const real>::type p,
-	       arg<const real>::type s, arg<const real>::type n,
-	       arg<const real>::type v_, arg<const real>::type amin,
+	Locals(const std::vector<qc_t>& qc, typename arg<const real>::type p,
+	       typename arg<const real>::type s, typename arg<const real>::type n,
+	       typename arg<const real>::type v_,
+	       typename arg<const real>::type amin,
 	       double dest_tol, real A, real B, std::pair<real,size_t> Qimax)
 	 : lp(rm::log(p) + compute_lqsum(qc)),
 	   ls(rm::log(A)),
@@ -249,7 +258,7 @@ Locals<real>::compute_Qmax(const std::vector<qc_t>& qc)
 template<typename real>
 std::vector<real>
 Locals<real>::compute_ki(const std::vector<qc_t>& qc,
-                         arg<const real>::type Qmax)
+                         typename arg<const real>::type Qmax)
 {
 	std::vector<real> ki(qc.size());
 	for (size_t i=0; i<qc.size(); ++i)

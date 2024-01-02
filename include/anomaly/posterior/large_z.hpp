@@ -257,38 +257,6 @@ a_integral_large_z_log_integrand(typename arg<const real>::type a,
 	return {.log_abs=lC, .sign=sign};
 }
 
-// template<C_t C, bool y_integrated, typename real>
-// real a_integral_large_z_log_integrand(typename arg<const real>::type a,
-//                                       typename arg<const real>::type ly,
-//                                       typename arg<const real>::type log_integrand_max,
-//                                       const Locals<real>& L)
-// {
-// 	log_double_t<real> res
-// 	    = a_integral_large_z_log_integrand<C,y_integrated, real>
-// 	           (a, ly, log_integrand_max, L);
-// 	if (rm::isnan(res.log_abs)){
-// 		std::string msg("NaN result in a_integral_large_z_integrand_");
-// 		msg += std::to_string((int)C);
-// 		msg += ".\n   at a=";
-// 		msg += std::to_string(static_cast<long double>(a));
-// 		msg += ".\n   at ly = ";
-// 		msg += std::to_string(static_cast<long double>(ly));
-// 		msg += ".\n   with log_integrand_max =  ";
-// 		msg += std::to_string(static_cast<long double>(log_integrand_max));
-// 		msg += ".\n   and res.log_abs =         ";
-// 		msg += std::to_string(static_cast<long double>(res.log_abs));
-// 		msg += ".";
-// 		throw std::runtime_error(msg);
-// 	}
-
-// 	return res.log_abs;
-
-// //	// Compute the result and test for finity:
-// //	real result = rm::exp(res.log_abs);
-// //
-// //	return result;
-// }
-
 
 template<typename real, bool y_integrated, C_t order>
 real large_z_amax(typename arg<const real>::type ym, const Locals<real>& L)

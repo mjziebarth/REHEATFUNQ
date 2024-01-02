@@ -648,8 +648,8 @@ private:
 	static rn::PiecewiseBarycentricLagrangeInterpolator<real>
 	init_pdf_bli(const std::vector<posterior::LocalsAndNorm<real>>& locals,
 	             const std::vector<real>& weights,
-	             posterior::arg<const real>::type Qmax,
-	             posterior::arg<const real>::type norm,
+	             typename posterior::arg<const real>::type Qmax,
+	             typename posterior::arg<const real>::type norm,
 	             size_t max_splits, uint8_t max_refinements,
 	             double rtol
 	             )
@@ -672,8 +672,8 @@ private:
 	void
 	init_log_pdf_bli(const std::vector<posterior::LocalsAndNorm<real>>& locals,
 	                 const std::vector<real>& weights,
-	                 posterior::arg<const real>::type Qmax,
-	                 posterior::arg<const real>::type norm,
+	                 typename posterior::arg<const real>::type Qmax,
+	                 typename posterior::arg<const real>::type norm,
 	                 size_t max_splits, uint8_t max_refinements,
 	                 double rtol
 	)
@@ -741,10 +741,10 @@ private:
 
 	struct pdf_t {
 		static real evaluate(
-		    posterior::arg<const real>::type zi,
+		    typename posterior::arg<const real>::type zi,
 		    const posterior::LocalsAndNorm<real>& l,
-		    posterior::arg<const real>::type wi,
-		    posterior::arg<const real>::type norm
+		    typename posterior::arg<const real>::type wi,
+		    typename posterior::arg<const real>::type norm
 		)
 		{
 			return posterior::outer_integrand<real>(
@@ -754,10 +754,10 @@ private:
 		}
 
 		static real evaluate_large_z(
-		    posterior::arg<const real>::type yi,
+		    typename posterior::arg<const real>::type yi,
 		    const posterior::LocalsAndNorm<real>& l,
-		    posterior::arg<const real>::type wi,
-		    posterior::arg<const real>::type norm
+		    typename posterior::arg<const real>::type wi,
+		    typename posterior::arg<const real>::type norm
 		)
 		{
 			return posterior::a_integral_large_z<false,real>(
@@ -782,10 +782,10 @@ private:
 
 	struct log_pdf_t {
 		static real evaluate(
-		    posterior::arg<const real>::type zi,
+		    typename posterior::arg<const real>::type zi,
 		    const posterior::LocalsAndNorm<real>& l,
-		    posterior::arg<const real>::type wi,
-		    posterior::arg<const real>::type norm
+		    typename posterior::arg<const real>::type wi,
+		    typename posterior::arg<const real>::type norm
 		)
 		{
 			return posterior::log_outer_integrand<real>(
@@ -795,10 +795,10 @@ private:
 		}
 
 		static real evaluate_large_z(
-		    posterior::arg<const real>::type yi,
+		    typename posterior::arg<const real>::type yi,
 		    const posterior::LocalsAndNorm<real>& l,
-		    posterior::arg<const real>::type wi,
-		    posterior::arg<const real>::type norm
+		    typename posterior::arg<const real>::type wi,
+		    typename posterior::arg<const real>::type norm
 		)
 		{
 			return posterior::log_a_integral_large_z<false,real>(
@@ -837,8 +837,8 @@ private:
 	static real pdf_single_explicit_j(const rn::PointInInterval<real>& x,
 	                const std::vector<posterior::LocalsAndNorm<real>>& locals,
 	                const std::vector<real>& weights,
-	                posterior::arg<const real>::type Qmax,
-	                posterior::arg<const real>::type norm,
+	                typename posterior::arg<const real>::type Qmax,
+	                typename posterior::arg<const real>::type norm,
 	                size_t j)
 	{
 		const real Qmax_j = locals[j].Qmax;
@@ -882,8 +882,8 @@ private:
 	static real pdf_single_explicit(const rn::PointInInterval<real>& x,
 	                const std::vector<posterior::LocalsAndNorm<real>>& locals,
 	                const std::vector<real>& weights,
-	                posterior::arg<const real>::type Qmax,
-	                posterior::arg<const real>::type norm)
+	                typename posterior::arg<const real>::type Qmax,
+	                typename posterior::arg<const real>::type norm)
 	{
 		/*
 		 * Evaluate the PDF at a single point.

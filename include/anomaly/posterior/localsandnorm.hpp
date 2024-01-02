@@ -58,9 +58,12 @@ public:
 	real ymax;
 	real ztrans;
 
-	LocalsAndLogScale(const std::vector<qc_t>& qc, arg<const real>::type p,
-	                  arg<const real>::type s, arg<const real>::type n,
-	                  arg<const real>::type v, arg<const real>::type amin,
+	LocalsAndLogScale(const std::vector<qc_t>& qc,
+	                  typename arg<const real>::type p,
+	                  typename arg<const real>::type s,
+	                  typename arg<const real>::type n,
+	                  typename arg<const real>::type v,
+	                  typename arg<const real>::type amin,
 	                  double dest_tol)
 	   : Locals<real>(qc, p, s, n, v, amin, dest_tol),
 	     log_scale(log_integrand_max(*this)),
@@ -68,15 +71,21 @@ public:
 	     ztrans(1.0 - ymax)
 	{}
 
-	LocalsAndLogScale(arg<const real>::type lp, arg<const real>::type ls,
-	                  arg<const real>::type n, arg<const real>::type v,
-	                  arg<const real>::type amin, arg<const real>::type Qmax,
+	LocalsAndLogScale(typename arg<const real>::type lp,
+	                  typename arg<const real>::type ls,
+	                  typename arg<const real>::type n,
+	                  typename arg<const real>::type v,
+	                  typename arg<const real>::type amin,
+	                  typename arg<const real>::type Qmax,
 	                  std::vector<real>&& ki, const std::array<real,4>& h,
-	                  arg<const real>::type w, arg<const real>::type lh0,
-	                  arg<const real>::type l1p_w, arg<const real>::type log_scale_a,
-	                  arg<const real>::type log_scale_z,
-	                  arg<const real>::type log_scale_log_integrand,
-	                  arg<const real>::type ymax, arg<const real>::type ztrans)
+	                  typename arg<const real>::type w,
+	                  typename arg<const real>::type lh0,
+	                  typename arg<const real>::type l1p_w,
+	                  typename arg<const real>::type log_scale_a,
+	                  typename arg<const real>::type log_scale_z,
+	                  typename arg<const real>::type log_scale_log_integrand,
+	                  typename arg<const real>::type ymax,
+	                  typename arg<const real>::type ztrans)
 	   : Locals<real>(lp, ls, n, v, amin, Qmax, std::move(ki), h, w, lh0, l1p_w),
 	     log_scale({.a=log_scale_a, .z=log_scale_z,
 	                .log_integrand=log_scale_log_integrand}),
@@ -135,9 +144,12 @@ public:
 	integrals_t integrals;
 	real norm;
 
-	LocalsAndNorm(const std::vector<qc_t>& qc, arg<const real>::type p,
-	              arg<const real>::type s, arg<const real>::type n,
-	              arg<const real>::type v, arg<const real>::type amin,
+	LocalsAndNorm(const std::vector<qc_t>& qc,
+	              typename arg<const real>::type p,
+	              typename arg<const real>::type s,
+	              typename arg<const real>::type n,
+	              typename arg<const real>::type v,
+	              typename arg<const real>::type amin,
 	              double dest_tol)
 	   : LocalsAndLogScale<real>(qc, p, s, n, v, amin, dest_tol),
 	     integrals(compute_integrals(*this)),
@@ -149,9 +161,12 @@ public:
 			throw std::runtime_error("Computed zero norm.");
 	}
 
-	LocalsAndNorm(const std::vector<qc_t>& qc, arg<const real>::type p,
-	              arg<const real>::type s, arg<const real>::type n,
-	              arg<const real>::type v, arg<const real>::type amin,
+	LocalsAndNorm(const std::vector<qc_t>& qc,
+	              typename arg<const real>::type p,
+	              typename arg<const real>::type s,
+	              typename arg<const real>::type n,
+	              typename arg<const real>::type v,
+	              typename arg<const real>::type amin,
 	              const double* x, const size_t Nx,
 	              double dest_tol)
 	   : LocalsAndLogScale<real>(qc, p, s, n, v, amin, dest_tol),

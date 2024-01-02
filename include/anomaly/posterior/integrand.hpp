@@ -364,9 +364,9 @@ struct outer_integrand_base_t {
 	real local_log_scale;
 	real global_log_scale;
 
-	outer_integrand_base_t(arg<const real>::type S,
-	        arg<const real>::type local_log_scale,
-	        arg<const real>::type global_log_scale
+	outer_integrand_base_t(typename arg<const real>::type S,
+	        typename arg<const real>::type local_log_scale,
+	        typename arg<const real>::type global_log_scale
 	)
 	   : S(S), local_log_scale(local_log_scale),
 	     global_log_scale(global_log_scale)
