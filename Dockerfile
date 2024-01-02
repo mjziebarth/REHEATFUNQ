@@ -30,7 +30,7 @@ RUN set -eux; \
               libcgal-dev libgeographiclib-dev \
               build-essential python3-sphinx ninja-build git \
               libopenblas-openmp-dev liblapacke-dev libgsl-dev \
-              python3-numpy cmake fonts-roboto wget; \
+              python3-numpy cmake fonts-roboto wget libmpc-dev; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*; \
     # Monkey-patched install of newer boost version:
