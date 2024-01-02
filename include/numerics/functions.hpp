@@ -23,7 +23,9 @@
 #define REHEATFUNQ_NUMERICS_MATH_HPP
 
 #include <cmath>
+#ifndef BOOST_ENABLE_ASSERT_HANDLER
 #define BOOST_ENABLE_ASSERT_HANDLER // Make sure the asserts do not abort
+#endif
 #include <boost/multiprecision/cpp_dec_float.hpp>
 #include <boost/multiprecision/float128.hpp>
 #include <boost/math/special_functions/digamma.hpp>

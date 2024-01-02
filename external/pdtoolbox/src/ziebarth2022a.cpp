@@ -33,7 +33,9 @@
 #include <optional>
 #include <array>
 #include <numbers>
+#ifndef BOOST_ENABLE_ASSERT_HANDLER
 #define BOOST_ENABLE_ASSERT_HANDLER // Make sure the asserts do not abort
+#endif
 #include <boost/math/special_functions/digamma.hpp>
 #include <boost/math/special_functions/trigamma.hpp>
 #include <boost/math/special_functions/gamma.hpp>

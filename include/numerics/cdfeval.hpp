@@ -25,6 +25,9 @@
 
 #include <vector>
 #include <iostream>
+#ifndef BOOST_ENABLE_ASSERT_HANDLER
+#define BOOST_ENABLE_ASSERT_HANDLER // Make sure the asserts do not abort
+#endif
 #include <boost/math/quadrature/gauss_kronrod.hpp>
 #include <boost/multiprecision/cpp_dec_float.hpp>
 #include <boost/multiprecision/float128.hpp>

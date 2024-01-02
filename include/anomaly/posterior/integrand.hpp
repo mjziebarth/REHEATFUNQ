@@ -26,6 +26,9 @@
 /*
  * General includes:
  */
+#ifndef BOOST_ENABLE_ASSERT_HANDLER
+#define BOOST_ENABLE_ASSERT_HANDLER // Make sure the asserts do not abort
+#endif
 #include <boost/math/quadrature/exp_sinh.hpp>
 #include <boost/math/quadrature/tanh_sinh.hpp>
 #include <boost/math/constants/constants.hpp>

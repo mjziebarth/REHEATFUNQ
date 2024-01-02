@@ -28,6 +28,9 @@
 #include <algorithm>
 #include <stdexcept>
 #include <coverings/dminpermutations.hpp>
+#ifndef BOOST_ENABLE_ASSERT_HANDLER
+#define BOOST_ENABLE_ASSERT_HANDLER // Make sure the asserts do not abort
+#endif
 #include <boost/geometry/geometry.hpp>
 #include <boost/geometry/index/rtree.hpp>
 #include <boost/geometry/geometries/point.hpp>

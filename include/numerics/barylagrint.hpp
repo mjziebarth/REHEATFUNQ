@@ -37,6 +37,9 @@
 #include <thread>
 
 
+#ifndef BOOST_ENABLE_ASSERT_HANDLER
+#define BOOST_ENABLE_ASSERT_HANDLER // Make sure the asserts do not abort
+#endif
 #include <boost/math/tools/minima.hpp>
 
 #include <numerics/intervall.hpp>

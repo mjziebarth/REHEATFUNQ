@@ -29,6 +29,9 @@
  */
 #include <map>
 #include <optional>
+#ifndef BOOST_ENABLE_ASSERT_HANDLER
+#define BOOST_ENABLE_ASSERT_HANDLER // Make sure the asserts do not abort
+#endif
 #include <boost/math/quadrature/tanh_sinh.hpp>
 #include <boost/math/quadrature/gauss_kronrod.hpp>
 

@@ -27,6 +27,9 @@
 #include <funccache.hpp>
 #include <cmath>
 #include <algorithm>
+#ifndef BOOST_ENABLE_ASSERT_HANDLER
+#define BOOST_ENABLE_ASSERT_HANDLER // Make sure the asserts do not abort
+#endif
 #include <boost/math/special_functions/digamma.hpp>
 #include <boost/math/tools/roots.hpp>
 #include <boost/math/quadrature/gauss_kronrod.hpp>

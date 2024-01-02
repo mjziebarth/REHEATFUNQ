@@ -1,6 +1,6 @@
 project('REHEATFUNQ','cpp','cython', version : '2.0.0',
         default_options : ['optimization=3'])
-add_project_arguments(['-std=c++20','-msse3'], language : 'cpp')
+add_project_arguments(['-std=c++20','-msse3','-Wall'], language : 'cpp')
 
 # Use natively tuned code by default - turn off by use of the 'portable'
 # option:
@@ -67,51 +67,6 @@ add_project_arguments(['-I' + incpath_np + '/../../../'], language : 'cython')
 #                                                                              #
 ################################################################################
 
-
-#
-# Conjugate prior:
-#
-sources = ['external/pdtoolbox/src/ll_gamma_conjugate_prior.cpp',
-           'external/pdtoolbox/src/optimize.cpp',
-           'external/pdtoolbox/src/gamma.cpp',
-           'external/pdtoolbox/src/gamma_conjugate_prior.cpp']
-
-dependencies = [openmp_dep, eigen_dep]
-
-libgcp = static_library(
-    'gcp', sources,
-    dependencies : dependencies,
-    include_directories : include
-)
-
-
-#
-# R-disks:
-#
-sources_rdisks = ['src/coverings/dminpermutations.cpp']
-dependencies_rdisks = [boost_dep]
-librdisks = static_library(
-    'rdisks',
-    sources_rdisks,
-    dependencies : dependencies_rdisks,
-    include_directories : include
-)
-
-
-#
-# Anomaly:
-#
-sources_anomaly = ['src/anomaly.cpp', 'src/anomaly/ls1980.cpp',
-                   'src/anomaly/nearestneighbor.cpp']
-dependencies_anomaly = [openmp_dep, boost_dep]
-
-libanomaly = static_library(
-    'anomaly', sources_anomaly,
-    dependencies : dependencies_anomaly,
-    include_directories : include
-)
-
-
 #
 # Heat flow posterior:
 #
@@ -119,7 +74,7 @@ sources_hfp = ['external/pdtoolbox/src/ziebarth2022a.cpp',
                'external/pdtoolbox/src/quantileinverter.cpp']
 dependencies_hfp = [openmp_dep, boost_dep]
 
-hfp_cpp_args = ['-DBOOST_ENABLE_ASSERT_HANDLER']
+hfp_cpp_args = []
 hfp_link_args = []
 if get_option('anomaly_posterior_float128')
     hfp_cpp_args += ['--std=gnu++20','-DREHEATFUNQ_ANOMALY_POSTERIOR_TYPE_QUAD']
@@ -136,8 +91,6 @@ endif
 libcommon = static_library(
     'common', ['src/numerics/boostassert.cpp'],
     dependencies : dependencies_hfp,
-    cpp_args : hfp_cpp_args,
-    link_args : hfp_link_args,
     include_directories : include
 )
 
@@ -162,6 +115,54 @@ libhfp2 = static_library(
 )
 
 
+
+#
+# Conjugate prior:
+#
+sources = ['external/pdtoolbox/src/ll_gamma_conjugate_prior.cpp',
+           'external/pdtoolbox/src/optimize.cpp',
+           'external/pdtoolbox/src/gamma.cpp',
+           'external/pdtoolbox/src/gamma_conjugate_prior.cpp']
+
+dependencies = [openmp_dep, eigen_dep]
+
+libgcp = static_library(
+    'gcp', sources,
+    dependencies : dependencies,
+    include_directories : include,
+    link_with : libcommon
+)
+
+
+#
+# R-disks:
+#
+sources_rdisks = ['src/coverings/dminpermutations.cpp']
+dependencies_rdisks = [boost_dep]
+librdisks = static_library(
+    'rdisks',
+    sources_rdisks,
+    dependencies : dependencies_rdisks,
+    include_directories : include,
+    link_with : libcommon
+)
+
+
+#
+# Anomaly:
+#
+sources_anomaly = ['src/anomaly.cpp', 'src/anomaly/ls1980.cpp',
+                   'src/anomaly/nearestneighbor.cpp']
+dependencies_anomaly = [openmp_dep, boost_dep]
+
+libanomaly = static_library(
+    'anomaly', sources_anomaly,
+    dependencies : dependencies_anomaly,
+    include_directories : include,
+    link_with : libcommon
+)
+
+
 #
 # Resilience:
 #
@@ -173,7 +174,8 @@ dependencies_resilience = [openmp_dep, boost_dep]
 libresilience = static_library(
     'resilience', sources_resilience,
     dependencies : dependencies_resilience,
-    include_directories : include_resilience
+    include_directories : include_resilience,
+    link_with : libcommon
 )
 
 
@@ -184,7 +186,8 @@ sources_testing = ['src/testing/barylagrint.cpp']
 libtesting = static_library(
     'testing', sources_testing,
     dependencies : [openmp_dep, boost_dep],
-    include_directories : include
+    include_directories : include,
+    link_with : libcommon
 )
 
 

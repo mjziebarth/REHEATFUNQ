@@ -44,6 +44,9 @@ using pdtoolbox::QuantileTreeLeaf;
  *
  * double:
  */
+#ifndef BOOST_ENABLE_ASSERT_HANDLER
+#define BOOST_ENABLE_ASSERT_HANDLER // Make sure the asserts do not abort
+#endif
 #include <boost/math/quadrature/gauss_kronrod.hpp>
 using boost::math::quadrature::detail::gauss_kronrod_detail;
 using boost::math::quadrature::detail::gauss_detail;
@@ -93,4 +96,3 @@ template<>
 const std::array<long double,17>
 QuantileTreeLeaf<long double>::scaled_k7_lr_abscissa
    = QuantileTreeLeaf<long double>::compute_scaled_k7_lr_abscissa();
-
