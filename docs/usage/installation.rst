@@ -93,7 +93,7 @@ is built. The combined source code archive of this software is large (the
 :code:`Dockerfile-stable` starts by bootstrapping the GNU Compiler Collection
 and successively compiles the Python ecosystem and numeric software) and it is
 split off this git repository. Therefore, you first need to download the
-:code:`vendor-1.3.3.tar.xz` archive from
+:code:`vendor-1.3.3.tar.xz` and :code:`vendor-2.0.0.tar.xz` archives from
 `GFZ Data Services <https://doi.org/10.5880/GFZ.2.6.2023.002>`__. Following
 the instructions presented therein, extract the :code:`compile` and
 :code:`wheels` subfolders into the :code:`vendor` directory of this repository.
@@ -101,21 +101,58 @@ the instructions presented therein, extract the :code:`compile` and
 Then, you can build and run the Docker image as above (you might want to rename
 the container according to the REHEATFUNQ version you are using---unless stated
 otherwise, the following versions are compatible with
-:code:`vendor-1.3.3.tar.xz`):
+:code:`vendor-1.3.3.tar.xz` and :code:`vendor-2.0.0.tar.xz`):
 
 .. code :: bash
 
-   sudo docker build -f Dockerfile-stable -t 'reheatfunq-1.3.3' .
-   sudo docker run -p XXXX:8888 reheatfunq-1.3.3
+   podman build --format docker -f Dockerfile-stable -t reheatfunq-2.0.0-stable
+   podman run -p XXXX:8888 reheatfunq-2.0.0-stable
+
+or
+
+.. code :: bash
+
+   sudo docker build -f Dockerfile-stable -t 'reheatfunq-2.0.0-stable' .
+   sudo docker run -p XXXX:8888 reheatfunq-2.0.0-stable
 
 Nearly all of the dependencies of this container are contained in
-:code:`vendor-1.3.3.tar.xz` so that this image should build reproducibly in the
-long-term. Nevertheless, the Debian snapshot used as a base image might be
-unavailable at some point in the future of this writing. In this case, it
-should be possible to swap the base image to another linux without great impact.
-For the purpose of base image agnosticism, the Docker image rebuilds :code:`gcc`
-and installs libraries to the :code:`/sci` directory.
+:code:`vendor-1.3.3.tar.xz` and :code:`vendor-2.0.0.tar.xz` so that this image
+should build reproducibly in the long-term. Nevertheless, the Debian snapshot
+used as a base image might be unavailable at some point in the future of this
+writing. In this case, it should be possible to swap the base image to another
+linux without great impact. For the purpose of base image agnosticism, the
+container image rebuilds :code:`gcc` and installs libraries to the :code:`/sci`
+directory.
 
 In case that swapping the base image is neccessary but does not work out of the
 box, it is likely that the initial user setup or the installation of build tools
 to bootstrap :code:`gcc` has to be adjusted.
+
+
+Known Issues
+^^^^^^^^^^^^
+
+Cython 3.0.4 compile failure (REHEATFUNQ v1.4.0)
+""""""""""""""""""""""""""""""""""""""""""""""""
+With Cython version 3.0.4 (potentially also other versions), REHEATFUNQ v1.4.0
+may fail to install locally with a (fairly extensive) error message that boils
+down to the following error:
+
+.. code :: bash
+
+   reheatfunq/coverings/rdisks.pyx:235:27: Cannot assign type 'iterator' to 'const_iterator'
+
+On Cython 3.0.4, this issue can be fixed by editing line 213 of the file
+:code:`reheatfunq/coverings/rdisks.pyx` from
+
+.. code :: cython
+
+       cdef unordered_map[vector[cbool],size_t].iterator it
+
+to
+
+.. code :: cython
+
+       cdef unordered_map[vector[cbool],size_t].const_iterator it
+
+Local install should now proceed normally.

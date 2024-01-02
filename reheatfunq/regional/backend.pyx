@@ -32,6 +32,7 @@ from scipy.special import gamma
 from scipy.optimize import shgo
 from libc.math cimport log, sqrt, fabs, exp, pow, ceil, log1p, isnan, lgamma
 from libcpp cimport bool
+from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
 from libcpp.memory cimport unique_ptr, shared_ptr, make_shared
@@ -134,6 +135,13 @@ cdef extern from "gamma_conjugate_prior.hpp" namespace "pdtoolbox" nogil:
                                 double epsrel) except+
 
         @staticmethod
+        int posterior_predictive_pdf_common_norm(size_t Nq, const double* q,
+                                double* out, size_t Mparam, const double* lp,
+                                const double* s, const double* n,
+                                const double* v, double amin, double epsabs,
+                                double epsrel, string& err_msg)
+
+        @staticmethod
         void posterior_predictive_cdf(size_t Nq, const double* q, double* out,
                                       double lp, double s, double n, double v,
                                       double amin, double epsabs,
@@ -145,6 +153,14 @@ cdef extern from "gamma_conjugate_prior.hpp" namespace "pdtoolbox" nogil:
                                 const double* s, const double* n,
                                 const double* v, double amin, double epsabs,
                                 double epsrel) except+
+
+        @staticmethod
+        int posterior_predictive_cdf_common_norm(
+            const size_t Nq, const double* q, double* out,const size_t Mparam,
+            const double* lp, const double* s, const double* n, const double* v,
+            double amin, double epsabs, double epsrel,
+            string& err_msg
+        )
 
     cdef double _gcp_ln_Phi(double lp, double ls, double n, double v,
                             double amin, double epsrel) except+
@@ -341,6 +357,44 @@ def gamma_conjugate_prior_predictive_batch(const double[::1] q,
 
 
 @cython.boundscheck(False)
+def gamma_conjugate_prior_predictive_common_norm(const double[::1] q,
+        const double[::1] lp, const double[::1] s, const double[::1] n,
+        const double[::1] v, double amin, double epsabs = 0.0,
+        double epsrel = 1e-10, out = None):
+    # Sanity:
+    cdef size_t N = q.shape[0]
+    cdef size_t M = lp.shape[0]
+    if s.shape[0] != M:
+        raise RuntimeError("`lp` and `s` need to be of same shape.")
+    if n.shape[0] != M:
+        raise RuntimeError("`lp` and `n` need to be of same shape.")
+    if v.shape[0] != M:
+        raise RuntimeError("`lp` and `v` need to be of same shape.")
+
+    cdef double[::1] out_buffer
+    if out is None:
+        out_buffer = np.empty(N)
+    else:
+        out_buffer = out
+
+    cdef double* out_ptr = &out_buffer[0]
+    cdef string err_msg
+    cdef int code
+
+    with nogil:
+        code = GammaConjugatePriorBase\
+            .posterior_predictive_pdf_common_norm(
+                N, &q[0], out_ptr, M, &lp[0], &s[0],
+                &n[0], &v[0], amin, epsabs, epsrel, err_msg)
+
+    if code != 0:
+        raise RuntimeError(str(err_msg))
+
+    return out.base
+
+
+
+@cython.boundscheck(False)
 def gamma_conjugate_prior_predictive_cdf(double[::1] q, double lp, double s,
                                          double n, double v, double amin,
                                          double epsabs = 0.0,
@@ -396,6 +450,48 @@ def gamma_conjugate_prior_predictive_cdf_batch(const double[::1] q,
                                             &n[0], &v[0], amin, epsabs, epsrel)
 
     return out.base
+
+
+@cython.boundscheck(False)
+def gamma_conjugate_prior_predictive_cdf_common_norm(const double[::1] q,
+        const double[::1] lp, const double[::1] s, const double[::1] n,
+        const double[::1] v, double amin, double epsabs = 0.0,
+        double epsrel = 1e-10, out = None):
+    """
+    Posterior predictive of the gamma conjugate prior.
+    """
+    # Sanity:
+    cdef size_t N = q.shape[0]
+    cdef size_t M = lp.shape[0]
+    if s.shape[0] != M:
+        raise RuntimeError("`lp` and `s` need to be of same shape.")
+    if n.shape[0] != M:
+        raise RuntimeError("`lp` and `n` need to be of same shape.")
+    if v.shape[0] != M:
+        raise RuntimeError("`lp` and `v` need to be of same shape.")
+
+    cdef double[::1] out_buffer
+    if out is None:
+        out_buffer = np.empty(N)
+    else:
+        out_buffer = out
+
+    cdef double* out_ptr = &out_buffer[0]
+
+    cdef string err_msg
+    cdef int code
+
+    with nogil:
+        code = GammaConjugatePriorBase\
+            .posterior_predictive_cdf_common_norm(
+                N, &q[0], out_ptr, M, &lp[0], &s[0],
+                &n[0], &v[0], amin, epsabs, epsrel, err_msg)
+
+    if code != 0:
+        raise RuntimeError(str(err_msg))
+
+    return out.base
+
 
 
 def gamma_conjugate_prior_kullback_leibler(double lp, double s, double n,

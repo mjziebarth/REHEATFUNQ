@@ -28,6 +28,9 @@
 #include <algorithm>
 #include <stdexcept>
 #include <coverings/dminpermutations.hpp>
+#ifndef BOOST_ENABLE_ASSERT_HANDLER
+#define BOOST_ENABLE_ASSERT_HANDLER // Make sure the asserts do not abort
+#endif
 #include <boost/geometry/geometry.hpp>
 #include <boost/geometry/index/rtree.hpp>
 #include <boost/geometry/geometries/point.hpp>
@@ -61,11 +64,11 @@ struct node_t {
  */
 struct fork_t {
 	size_t i;
-	double p;
+	double ln_p;
 
-	fork_t(size_t i, double p) : i(i), p(p) {};
+	fork_t(size_t i, double ln_p) : i(i), ln_p(ln_p) {};
 
-	fork_t() : i(-1), p(-1.0) {}
+	fork_t() : i(-1), ln_p(std::nan("")) {}
 };
 
 struct node_status_t {
@@ -76,7 +79,7 @@ struct node_status_t {
 
 	void block(size_t blckr){
 		if (blocked)
-			return;
+			throw std::runtime_error("blocking blocked!");
 		blocked = true;
 		blocker = blckr;
 	}
@@ -187,8 +190,8 @@ public:
 		return stack.back().i;
 	}
 
-	double top_probability() const {
-		return stack.back().p;
+	double top_log_probability() const {
+		return stack.back().ln_p;
 	}
 
 	size_t size() const {
@@ -221,10 +224,10 @@ public:
 		 * Start with the probability of the previous level (or 1, in case
 		 * this is the first node):
 		 */
-		const double p0 = (stack.empty()) ? 1.0 : stack.back().p;
+		const double ln_p0 = (stack.empty()) ? 0.0 : stack.back().ln_p;
 
 		/* Chance of selecting this node next: */
-		const double p = p0 / (nodes.size() - _blocked);
+		const double ln_p = ln_p0 - std::log(nodes.size() - _blocked);
 
 		/* Block the neighbors: */
 		for (size_t n : nodes[i].neighbors){
@@ -239,7 +242,7 @@ public:
 		++_blocked;
 
 		/* Add to the node stack: */
-		stack.emplace_back(i, p);
+		stack.emplace_back(i, ln_p);
 	}
 
 	void pop() {
@@ -305,9 +308,19 @@ samples_add_sample(const NodeStack& stack,
 	 */
 	auto it = samples.lower_bound(sample);
 	if (it == samples.end() || it->first != sample){
-		samples.emplace_hint(it, std::move(sample), stack.top().p);
+		samples.emplace_hint(it, std::move(sample), stack.top().ln_p);
 	} else {
-		it->second += stack.top().p;
+		/*
+		 * Addition, formulated in logarithms.
+		 *    it->second = ln(a)
+		 *    stack.top().ln_p = ln(b)
+		 * We want:
+		 *    it->second = ln(a+b)
+		 * which is
+		 *    ln(a*(1+b/a)) = ln(a) + log1p(b/a) = ln(a) + log1p(exp(ln(b) - ln(a)))
+		 *                  = it->second  +  log1p(exp( stack.top().ln_p  -  it->second ))
+		 */
+		it->second += std::log1p(std::exp(stack.top().ln_p - it->second));
 	}
 }
 
@@ -411,8 +424,9 @@ dsr_deterministic(std::vector<node_t>& nodes, const size_t max_samples,
 	}
 
 	/* Check if the algorithm was successful: */
-	if (!node_stack.empty())
+	if (!node_stack.empty()){
 		throw sample_exceedance_error();
+	}
 
 	return samples_generate_result(samples);
 }
@@ -445,13 +459,36 @@ dsr_monte_carlo(std::vector<node_t>& nodes,
 			break;
 
 		/*
-		 * Start with a random node:
+		 * Start node.
+		 * Here we use a uniform sampling of the nodes. The sampling
+		 * strategy is a mixture of linear iteration and pseudo-randomness:
+		 * First, we start with one pass of iterating all nodes once
+		 * (and selecting follow-up nodes pseudo-randomly). I.e. start
+		 * node of iteration k is nodes[k] for k < nodes.size().
+		 * This will ensure that our generated samples contain each node
+		 * at least once. The reason why this is important is the
+		 * determination of the global Qmax:
+		 *     Qmax = min(q[i] / c[i])
+		 * If we use fully pseudo-random sampling, there is a chance that
+		 * the data pair (q[i],c[i]) with the lowest ratio is not selected
+		 * and Qmax may thereby vary pseudo-randomly by execution. This is
+		 * not really a desireable quality; we instead would like to prescribe
+		 * the behavior that each data point matters.
+		 *
+		 * After the first n=nodes.size() iterations, we select the start
+		 * node pseudo-randomly. For large max_iter, the convergence property
+		 * of this algorithm should hence be pseudo-random. For small max_iter,
+		 * it may be just a bit closer to low discrepancy due to the added
+		 * regular structure (?).
 		 */
 		node_stack.clear();
-		node_stack.push(sample_generator(nodes.size()));
+		if (k < nodes.size())
+			node_stack.push(k);
+		else
+			node_stack.push(sample_generator(nodes.size()));
 
 		/*
-		 * Iteratively add random nodes from the pool of free ndoes:
+		 * Iteratively add random nodes from the pool of free nodes:
 		 */
 		size_t free;
 		while ((free = nodes.size() - node_stack.blocked())){
@@ -543,17 +580,17 @@ reheatfunq::determine_restricted_samples(
 				++dest;
 				/* Keep track of the new index to update all neighbors later: */
 				i2n[i] = j;
+				/* Index map from the packed beginning to the original node
+				 * vector: */
+				n2i.push_back(i);
 				++j;
 			}
 		}
 		nodes.resize(j);
 		/*
-		 * Create the index map from the packed beginning to
-		 * the original node vector:
+		 * Update the neighbors:
 		 */
-		n2i.resize(nodes.size());
 		for (size_t i=0; i<nodes.size(); ++i){
-			n2i[i] = i;
 			for (size_t& k : nodes[i].neighbors){
 				k = i2n[k];
 			}
@@ -597,13 +634,30 @@ reheatfunq::determine_restricted_samples(
 		}
 	}
 
-	/* Norm the sample (important for Monte-Carlo version): */
+	/* Norm the sample (important for Monte-Carlo version).
+	 * First compute the logarithm of the maximum likely element
+	 * as a reference for the probabilities:
+	 */
+	long double max_log = -std::numeric_limits<long double>::infinity();
+	for (const sample_t& s0 : samples){
+		if (s0.first > max_log)
+			max_log = s0.first;
+	}
+	/*
+	 * Compute probabilities relative to this reference level:
+	 */
+	for (sample_t& s0 : samples){
+		s0.first = std::exp(s0.first - max_log);
+	}
+	/* Now compute the norms: */
 	long double norm = 0.0;
 	for (const sample_t& s0 : samples){
 		norm += s0.first;
 	}
-	if (norm <= 0.0)
-		throw std::runtime_error("Somehow, norm is negative or zero.");
+	if (norm == 0.0)
+		throw std::runtime_error("determine_restricted_samples: Norm is zero.");
+	if (norm < 0.0)
+		throw std::runtime_error("determine_restricted_samples: Somehow, norm is negative.");
 	for (sample_t& s0 : samples){
 		s0.first /= norm;
 	}
@@ -611,7 +665,7 @@ reheatfunq::determine_restricted_samples(
 	/*
 	 * Add the non-conflicting nodes and translate back to original indices:
 	 */
-	for (sample_t s : samples){
+	for (sample_t& s : samples){
 		for (size_t& i : s.second){
 			i = n2i[i];
 		}
@@ -621,4 +675,206 @@ reheatfunq::determine_restricted_samples(
 	}
 
 	return samples;
+}
+
+
+double
+reheatfunq::global_PHmax(
+    const double* xy,
+    const double* PHmax_i,
+    const size_t N,
+    const double dmin
+)
+{
+	/*
+	 * Step 1: Build the graph of mutual exclusion
+	 * We use two different algorithms of different asymptotic complexity
+	 * based on the sample size. It's not really worth setting up a distance
+	 * query tree if N < ???.
+	 */
+	std::vector<node_t> nodes(compute_neighbors(xy, N, dmin).first);
+
+	/* Create components: */
+	struct component_t {
+		std::vector<size_t> nodes;
+		double PHmin;
+		double PHmax;
+	};
+
+	std::vector<component_t> components;
+	{
+		std::vector<bool> handled(N, false);
+		for (size_t i=0; i<N; ++i){
+			if (handled[i])
+				continue;
+
+			/* Start a new component: */
+			components.emplace_back();
+			component_t& cmp = components.back();
+
+			/* Iteratively add all the neighbors: */
+			std::stack<size_t> nb;
+			nb.push(i);
+			while (!nb.empty()){
+				/* Next node, add to component: */
+				size_t j = nb.top();
+				nb.pop();
+				handled[j] = true;
+				cmp.nodes.push_back(j);
+
+				/* Add all the neighbors: */
+				for (size_t k : nodes[j].neighbors){
+					if (handled[k])
+						continue;
+					nb.push(k);
+					handled[k] = true;
+				}
+			}
+
+			/* Sort the component: */
+			std::sort(cmp.nodes.begin(), cmp.nodes.end());
+
+			/* Compute min and max PH: */
+			cmp.PHmin = std::numeric_limits<double>::infinity();
+			cmp.PHmax = -std::numeric_limits<double>::infinity();
+			for (size_t j : cmp.nodes){
+				cmp.PHmin = std::min(cmp.PHmin, PHmax_i[j]);
+				cmp.PHmax = std::max(cmp.PHmax, PHmax_i[j]);
+			}
+		}
+	}
+
+	/* Sort the components by minimum PHmax: */
+	std::sort(components.begin(), components.end(),
+	    [](const component_t& l, const component_t& r) -> bool
+	    {
+	        return l.PHmin < r.PHmin;
+	    }
+	);
+
+	/* Remove components whose minimum is smaller than the smallest
+	 * component maximum: */
+	{
+		double min_PHmax = std::numeric_limits<double>::infinity();
+		for (auto cmp : components){
+			min_PHmax = std::min(min_PHmax, cmp.PHmax);
+		}
+		auto it = std::lower_bound(components.cbegin(), components.cend(),
+			min_PHmax,
+			[](const component_t& cmp, double PH) -> bool
+			{
+				return cmp.PHmin < PH;
+			}
+		);
+		components.resize(std::max<size_t>(it - components.cbegin(), 1));
+	}
+
+
+	constexpr size_t max_iter = 10000000000;
+	std::vector<size_t> i2n(N, -1);
+	std::vector<size_t> n2i(N, -1);
+
+	auto compute_component_PHmax = [PHmax_i,&n2i,&i2n,&nodes](const component_t& cmp) -> double
+	{
+		double PHmax_local = -std::numeric_limits<double>::infinity();
+
+		if (cmp.nodes.size() == 1)
+			return cmp.PHmin;
+
+		/* Determine local nodes: */
+		std::vector<node_t> local_nodes;
+		for (size_t i : cmp.nodes){
+			i2n[i] = local_nodes.size();
+			n2i[local_nodes.size()] = i;
+			local_nodes.push_back(nodes[i]);
+		}
+		/* Update the network indices to local indices: */
+		for (node_t& n : local_nodes){
+			for (size_t& i : n.neighbors){
+				i = i2n[i];
+			}
+		}
+
+		/* Create the node stack for the local nodes: */
+		NodeStack node_stack(local_nodes);
+		node_stack.push(0);
+
+
+		size_t iter = 0;
+		while (iter++ < max_iter && !node_stack.empty())
+		{
+			/*
+			 * Iteratively handle nodes:
+			 */
+			while (node_stack.blocked() < local_nodes.size()){
+				/*
+				 * Find a free node:
+				 */
+				size_t i = node_stack.free_index();
+				if (i == local_nodes.size())
+					throw std::runtime_error("Could not find free node although "
+					                         "there should be.");
+				node_stack.push(i);
+			}
+
+			/*
+			 * Determine the sample's minimum PH:
+			 */
+			double fork_PHmin = std::numeric_limits<double>::infinity();
+			for (auto it=node_stack.cbegin(); it != node_stack.cend(); ++it){
+				fork_PHmin = std::min(fork_PHmin, PHmax_i[n2i[it->i]]);
+			}
+			PHmax_local = std::max(fork_PHmin, PHmax_local);
+
+
+			/*
+			 * Increment the current level or move up one layer:
+			 */
+			while (!node_stack.empty()){
+				/*
+				 * Remember the previous node and remove it from the stack:
+				 */
+				size_t i = node_stack.top_node();
+				node_stack.pop();
+
+				/*
+				 * Find the next free one:
+				 */
+				bool success = false;
+				for (++i; i<local_nodes.size(); ++i){
+					if (!node_stack.is_blocked(i)){
+						node_stack.push(i);
+						success = true;
+						break;
+					}
+				}
+
+				if (success){
+					break;
+				} else {
+					/* Move up a layer. */
+				}
+			}
+		}
+
+		/* Check if the algorithm was successful: */
+		if (!node_stack.empty()){
+			return std::nan("");
+		}
+
+		return PHmax_local;
+	};
+
+
+	/* Now for each component, compute for each permutation the minimum
+	 * value, and compute the maximum of these values across the permutations.
+	 */
+	double PHmax_global = std::numeric_limits<double>::infinity();
+	for (const component_t& cmp : components){
+		double PHmax_local =  compute_component_PHmax(cmp);
+		PHmax_global = std::min(PHmax_global, PHmax_local);
+
+	}
+
+	return PHmax_global;
 }

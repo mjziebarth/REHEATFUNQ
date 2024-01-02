@@ -365,7 +365,7 @@ class GammaConjugatePrior:
         ) -> GCPMSECache:
         """
         Yields a cache for calling the
-        :py:method:`reheatfunq.regional.GammaConjugatePrior.minimum_surprise_estimate`
+        :py:meth:`~reheatfunq.regional.GammaConjugatePrior.minimum_surprise_estimate`
         method multiple times with the same parameters but different optimizer
         settings.
 
@@ -582,21 +582,21 @@ class GammaConjugatePrior:
            The default value is 68.3 from Lucazeau (2019).
         q_plot : Iterable[Tuple[float,float,float,str] | float], optional
            A set of additional average heat flow values to display.
-           For each *q* a line through the :math:`(\\alpha,\\beta)` parameter
+           For each `q` a line through the :math:`(\\alpha,\\beta)` parameter
            space, enumerating parameter combinations whose distributions
-           average to the given *q*. Each entry in `q_plot` needs to be
-           either a float *q* or a tuple (*q*,*amin*,*amax*,*c*), where *amin*
-           and *amax* denote the :math:`\\alpha`-interval within which the
-           line should be plotted, and *c* is the color.
+           average to the given `q`. Each entry in `q_plot` needs to be
+           either a float `q` or a tuple `(q,amin,amax,c)`, where `amin`
+           and `amax` denote the :math:`\\alpha`-interval within which the
+           line should be plotted, and `c` is the color.
         qstd_plot : Iterable[Tuple[float,float,float,str] | float], optional
            A set of additional heat flow standard deviations to display.
-           For each *qstd* a line through the :math:`(\\alpha,\\beta)` parameter
+           For each `qstd` a line through the :math:`(\\alpha,\\beta)` parameter
            space, enumerating parameter combinations whose distributions
-           are quantified by a standard deviation *qstd*. Each entry in
-           `qstd_plot` needs to be either a float *qstd* or a tuple
-           (*q*,*amin*,*amax*,*c*), where *amin* and *amax* denote the
+           are quantified by a standard deviation `qstd`. Each entry in
+           `qstd_plot` needs to be either a float `qstd` or a tuple
+           `(q,amin,amax,c)`, where `amin` and `amax` denote the
            :math:`\\alpha`-interval within which the line should be plotted,
-           and *c* is the color.
+           and `c` is the color.
         n_alpha : int, optional
            The number of grid points in the :math:`\\alpha` grid axis.
         n_beta : int, optional
@@ -719,7 +719,10 @@ def default_prior() -> GammaConjugatePrior:
     The default gamma conjugate prior from the REHEATFUNQ
     model description paper (Ziebarth *et al.*, 2022a).
 
-    Ziebarth, M. J. and ....
+    Ziebarth, M. J. and von Specht, S.: REHEATFUNQ 1.4.0:
+        A model for regional aggregate heat flow distributions
+        and anomaly quantification, EGUsphere [preprint],
+        https://doi.org/10.5194/egusphere-2023-222, 2023.
 
     Notes
     -----

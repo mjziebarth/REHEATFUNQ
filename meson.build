@@ -1,6 +1,6 @@
-project('REHEATFUNQ','cpp','cython', version : '1.4.0',
+project('REHEATFUNQ','cpp','cython', version : '2.0.0',
         default_options : ['optimization=3'])
-add_project_arguments(['-std=c++20','-msse3'], language : 'cpp')
+add_project_arguments(['-std=c++20','-msse3','-Wall'], language : 'cpp')
 
 # Use natively tuned code by default - turn off by use of the 'portable'
 # option:
@@ -46,8 +46,7 @@ python = import('python').find_installation()
 dep_py = python.dependency()
 
 incpath_np = run_command(
-  python,
-  ['numpy-include.py'],
+  'gravelspoon',
   check : false
 )
 if incpath_np.returncode() != 0
@@ -67,51 +66,6 @@ add_project_arguments(['-I' + incpath_np + '/../../../'], language : 'cython')
 #                             BUILD TARGETS                                    #
 #                                                                              #
 ################################################################################
-
-
-#
-# Conjugate prior:
-#
-sources = ['external/pdtoolbox/src/ll_gamma_conjugate_prior.cpp',
-           'external/pdtoolbox/src/optimize.cpp',
-           'external/pdtoolbox/src/gamma.cpp',
-           'external/pdtoolbox/src/gamma_conjugate_prior.cpp']
-
-dependencies = [openmp_dep, eigen_dep]
-
-libgcp = static_library(
-    'gcp', sources,
-    dependencies : dependencies,
-    include_directories : include
-)
-
-
-#
-# R-disks:
-#
-sources_rdisks = ['src/coverings/dminpermutations.cpp']
-dependencies_rdisks = [boost_dep]
-librdisks = static_library(
-    'rdisks',
-    sources_rdisks,
-    dependencies : dependencies_rdisks,
-    include_directories : include
-)
-
-
-#
-# Anomaly:
-#
-sources_anomaly = ['src/anomaly.cpp', 'src/anomaly/ls1980.cpp',
-                   'src/anomaly/nearestneighbor.cpp']
-dependencies_anomaly = [openmp_dep, boost_dep]
-
-libanomaly = static_library(
-    'anomaly', sources_anomaly,
-    dependencies : dependencies_anomaly,
-    include_directories : include
-)
-
 
 #
 # Heat flow posterior:
@@ -134,12 +88,78 @@ if get_option('anomaly_posterior_dec100')
 endif
 
 
+libcommon = static_library(
+    'common', ['src/numerics/boostassert.cpp'],
+    dependencies : dependencies_hfp,
+    include_directories : include
+)
+
 libhfp = static_library(
     'hfp', sources_hfp,
     dependencies : dependencies_hfp,
     cpp_args : hfp_cpp_args,
     link_args : hfp_link_args,
+    link_with : libcommon,
     include_directories : include
+)
+
+libhfp2 = static_library(
+    'hfp2', ['src/anomaly/variableprecisionposterior.cpp',
+             'src/anomaly/posterior.cpp',
+             'src/anomaly/posterior/integrand.cpp'],
+    dependencies : dependencies_hfp,
+    cpp_args : hfp_cpp_args,
+    link_args : hfp_link_args,
+    link_with : libcommon,
+    include_directories : include
+)
+
+
+
+#
+# Conjugate prior:
+#
+sources = ['external/pdtoolbox/src/ll_gamma_conjugate_prior.cpp',
+           'external/pdtoolbox/src/optimize.cpp',
+           'external/pdtoolbox/src/gamma.cpp',
+           'external/pdtoolbox/src/gamma_conjugate_prior.cpp']
+
+dependencies = [openmp_dep, eigen_dep]
+
+libgcp = static_library(
+    'gcp', sources,
+    dependencies : dependencies,
+    include_directories : include,
+    link_with : libcommon
+)
+
+
+#
+# R-disks:
+#
+sources_rdisks = ['src/coverings/dminpermutations.cpp']
+dependencies_rdisks = [boost_dep]
+librdisks = static_library(
+    'rdisks',
+    sources_rdisks,
+    dependencies : dependencies_rdisks,
+    include_directories : include,
+    link_with : libcommon
+)
+
+
+#
+# Anomaly:
+#
+sources_anomaly = ['src/anomaly.cpp', 'src/anomaly/ls1980.cpp',
+                   'src/anomaly/nearestneighbor.cpp']
+dependencies_anomaly = [openmp_dep, boost_dep]
+
+libanomaly = static_library(
+    'anomaly', sources_anomaly,
+    dependencies : dependencies_anomaly,
+    include_directories : include,
+    link_with : libcommon
 )
 
 
@@ -147,14 +167,15 @@ libhfp = static_library(
 # Resilience:
 #
 include_resilience =  [include, 'external/zeal2022hfpc/include']
-sources_resilience = ['external/zeal2022hfpc/src/resilience.cpp',
-                      'external/zeal2022hfpc/src/synthetic_covering.cpp']
+sources_resilience = ['external/zeal2022hfpc/src/synthetic_covering.cpp',
+                      'src/resilience/resilience.cpp']
 dependencies_resilience = [openmp_dep, boost_dep]
 
 libresilience = static_library(
     'resilience', sources_resilience,
     dependencies : dependencies_resilience,
-    include_directories : include_resilience
+    include_directories : include_resilience,
+    link_with : libcommon
 )
 
 
@@ -165,7 +186,8 @@ sources_testing = ['src/testing/barylagrint.cpp']
 libtesting = static_library(
     'testing', sources_testing,
     dependencies : [openmp_dep, boost_dep],
-    include_directories : include
+    include_directories : include,
+    link_with : libcommon
 )
 
 
@@ -210,12 +232,28 @@ python.extension_module('bayes',
                         link_with : libhfp,
                         link_args : hfp_link_args)
 
+python.extension_module('postbackend',
+                        'reheatfunq/anomaly/postbackend.pyx',
+                        dependencies : [dep_py, dependencies_hfp],
+                        include_directories : include,
+                        override_options : ['cython_language=cpp'],
+                        link_with : [libhfp2, libcommon, libhfp],
+                        cpp_args : hfp_cpp_args,
+                        link_args : hfp_link_args)
+
 python.extension_module('rdisks',
                         'reheatfunq/coverings/rdisks.pyx',
                         dependencies : [dep_py, numpy_random, numpy_math],
                         include_directories : [include, incdir_np],
                         override_options : ['cython_language=cpp'],
                         link_with : librdisks
+                        )
+
+python.extension_module('poisampling',
+                        'reheatfunq/coverings/poisampling.pyx',
+                        dependencies : [dep_py, numpy_random, numpy_math],
+                        include_directories : [include, incdir_np],
+                        override_options : ['cython_language=cpp']
                         )
 
 python.extension_module('anomaly',
@@ -231,7 +269,9 @@ python.extension_module('zeal2022hfresil',
                         dependencies : [dep_py],
                         include_directories : include_resilience,
                         override_options : ['cython_language=cpp'],
-                        link_with : [libhfp, libresilience, ]
+                        link_with : [libhfp2, libresilience, libhfp],
+                        cpp_args : hfp_cpp_args,
+                        link_args : hfp_link_args
                         )
 
 python.extension_module('distancedistribution',

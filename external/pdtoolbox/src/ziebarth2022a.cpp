@@ -33,7 +33,9 @@
 #include <optional>
 #include <array>
 #include <numbers>
+#ifndef BOOST_ENABLE_ASSERT_HANDLER
 #define BOOST_ENABLE_ASSERT_HANDLER // Make sure the asserts do not abort
+#endif
 #include <boost/math/special_functions/digamma.hpp>
 #include <boost/math/special_functions/trigamma.hpp>
 #include <boost/math/special_functions/gamma.hpp>
@@ -67,7 +69,7 @@ using pdtoolbox::OR;
 using pdtoolbox::AND;
 using pdtoolbox::cnst_sqrt;
 
-using reheatfunq::CDFEval;
+using reheatfunq::numerics::CDFEval;
 
 /*
  * Use a high precision floating point format.
@@ -87,52 +89,6 @@ using boost::multiprecision::cpp_dec_float_100;
 
 #include <chrono>
 #include <thread>
-
-/* Transforming boost asserts into runtime errors: */
-namespace boost {
-
-void assertion_failed(char const * expr, char const * function,
-                      char const * file, long line)
-{
-	std::string s0(expr);
-	std::string s1(function);
-	std::string s2(file);
-	std::string s3 = std::to_string(line);
-	std::string msg("Error: '");
-	msg += s0;
-	msg += std::string("' in function '");
-	msg += s1;
-	msg += std::string("' in file '");
-	msg += s2;
-	msg += std::string("' in line ");
-	msg += s3;
-	msg += std::string(".");
-	throw std::runtime_error(msg);
-}
-
-void assertion_failed_msg(char const * expr, char const* msgc,
-                          char const * function, char const * file, long line)
-{
-	std::string s0(expr);
-	std::string s1(msgc);
-	std::string s2(function);
-	std::string s3(file);
-	std::string s4 = std::to_string(line);
-	std::string msg("Error: '");
-	msg += s0;
-	msg += std::string("'\n\twith message '");
-	msg += s1;
-	msg += std::string("'\n\tin function '");
-	msg += s2;
-	msg += std::string("'\n\tin file '");
-	msg += s3;
-	msg += std::string("'\n\tin line ");
-	msg += s4;
-	msg += std::string(".");
-	throw std::runtime_error(msg);
-}
-
-}
 
 
 /* A custom exception type indicating that the integral is out of
@@ -2205,6 +2161,52 @@ int tail_quantiles_intcode(const double* quantiles, double* res,
 	// All went well.
 	return 0;
 }
+
+
+
+int check_locals(const double* qi, const double* ci, size_t N, double p0,
+                 double s0, double n0, double v0, double amin, double dest_tol,
+                 double lp, double ls, double n, double v, double Qmax,
+                 double h0, double h1, double h2, double h3, double w,
+                 double lh0, double l1p_w)
+{
+	locals_t<long double> L;
+	size_t imax;
+	init_locals(qi, ci, N, (long double)v0, (long double)n0, (long double)s0,
+	            (long double)p0, (long double)amin,
+	            nullptr, 0, L, imax, dest_tol);
+
+	auto compare = [](double varcmp, double var0, const char* name) -> int
+	{
+		if (std::fabs(varcmp - var0) > 1e-3 * std::fabs(var0)){
+			std::cout << "\e[31mVariable '" << name << "' difference: "
+			          << varcmp << " vs " << var0 << ".\e[0m\n" << std::flush;
+			return 1;
+		} else {
+			std::cout << "Variable '" << name << "' ok.\n" << std::flush;
+			return 0;
+		}
+	};
+
+	int code = 0;
+	code += compare(lp, L.lp, "lp");
+	code += compare(ls, L.ls, "ls");
+	code += compare(n,  L.n, "n");
+	code += compare(v,  L.v, "v");
+	code += compare(Qmax, L.Qmax, "Qmax");
+	code += compare(h0, L.h0, "h0");
+	code += compare(h1, L.h1, "h1");
+	code += compare(h2, L.h2, "h2");
+	code += compare(h3, L.h3, "h3");
+	code += compare(w, L.w, "w");
+	code += compare(lh0, L.lh0, "lh0");
+	code += compare(l1p_w, L.l1p_w, "l1p_w");
+
+	return code;
+}
+
+
+
 
 }
 }

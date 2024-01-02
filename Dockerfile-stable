@@ -3,7 +3,7 @@
 #
 # Author: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
 #
-# Copyright (C) 2022-2023 Malte J. Ziebarth
+# Copyright (C) 2022-2024 Malte J. Ziebarth
 #               Jupyter Development Team (see below)
 #
 # This program is free software: you can redistribute it and/or modify
@@ -82,10 +82,8 @@ COPY ./vendor/compile/xz-5.4.0.tar.bz2 \
      ./vendor/compile/ninja-1.11.1.tar.xz \
      ./vendor/compile/libffi-3.4.4.tar.xz \
      ./vendor/compile/Python-3.11.1.tar.xz \
-     ./vendor/compile/Cython-0.29.33.tar.xz \
+     ./vendor/compile/Cython-3.0.7.tar.xz \
      ./vendor/compile/OpenBLAS-0.3.21.tar.xz \
-     ./vendor/compile/pandas-1.5.2.tar.xz \
-     ./vendor/compile/shapely-2.0.0.tar.xz \
      ./vendor/compile/Fiona-1.8.22.tar.xz \
      ./vendor/compile/cffi-1.15.1.tar.xz  \
      ./vendor/compile/argon2-cffi-bindings-21.2.0.tar.xz \
@@ -93,56 +91,33 @@ COPY ./vendor/compile/xz-5.4.0.tar.bz2 \
      ./vendor/compile/pyzmq-24.0.1.tar.xz \
      ./vendor/compile/tornado-6.2.tar.xz \
      ./vendor/compile/pyrsistent-0.19.3.tar.gz \
-     ./vendor/compile/PyYAML-6.0.tar.gz \
      ./vendor/compile/debugpy-1.6.5.tar.xz \
      ./vendor/compile/psutil-5.9.4.tar.xz \
-     ./vendor/compile/scikit-learn-1.2.0.tar.xz \
-     ./vendor/compile/numpy-1.24.1.tar.xz \
-     ./vendor/compile/scipy-1.10.0.tar.xz \
      ./vendor/compile/Pillow-9.4.0.tar.lzma-lrz \
      ./vendor/compile/contourpy-1.0.6.tar.xz \
      ./vendor/compile/kiwisolver-1.4.4.tar.xz \
-     ./vendor/compile/matplotlib-3.6.2.tar.xz \
-     ./vendor/compile/pyproj-3.4.1.tar.xz \
      ./vendor/compile/gdal-3.6.2.tar.xz \
      ./vendor/compile/yaml-0.2.5.tar.xz \
      ./vendor/compile/CGAL-5.5.1-library.tar.xz \
      ./vendor/compile/gsl-2.7.1.tar.xz \
      ./vendor/compile/geographiclib-2.1.2.tar.xz \
-     ./vendor/compile/Cython-0.29.33.tar.xz \
-     ./vendor/compile/OpenBLAS-0.3.21.tar.xz \
-     ./vendor/compile/numpy-1.24.1.tar.xz \
-     ./vendor/compile/geographiclib-2.1.2.tar.xz \
-     ./vendor/compile/gsl-2.7.1.tar.xz \
-     ./vendor/compile/gdal-3.6.2.tar.xz \
-     ./vendor/compile/yaml-0.2.5.tar.xz \
-     ./vendor/compile/gmp-6.2.1.tar.xz \
-     ./vendor/compile/CGAL-5.5.1-library.tar.xz \
+     ./vendor/compile/numpy-1.26.2.tar.xz \
      ./vendor/compile/patch-2.7.6.tar.xz \
-     ./vendor/compile/Pillow-9.4.0.tar.lzma-lrz \
-     ./vendor/compile/contourpy-1.0.6.tar.xz \
-     ./vendor/compile/kiwisolver-1.4.4.tar.xz \
-     ./vendor/compile/matplotlib-3.6.2.tar.xz \
-     ./vendor/compile/pyproj-3.4.1.tar.xz \
-     ./vendor/compile/scipy-1.10.0.tar.xz \
-     ./vendor/compile/pandas-1.5.2.tar.xz \
-     ./vendor/compile/shapely-2.0.0.tar.xz \
-     ./vendor/compile/Fiona-1.8.22.tar.xz \
-     ./vendor/compile/cffi-1.15.1.tar.xz \
-     ./vendor/compile/argon2-cffi-bindings-21.2.0.tar.xz \
-     ./vendor/compile/MarkupSafe-2.1.1.tar.xz \
-     ./vendor/compile/pyzmq-24.0.1.tar.xz \
-     ./vendor/compile/tornado-6.2.tar.xz \
-     ./vendor/compile/pyrsistent-0.19.3.tar.gz \
-     ./vendor/compile/PyYAML-6.0.tar.gz \
-     ./vendor/compile/debugpy-1.6.5.tar.xz \
-     ./vendor/compile/psutil-5.9.4.tar.xz \
-     ./vendor/compile/scikit-learn-1.2.0.tar.xz \
      ./vendor/compile/loaducerf3-v1.1.3.tar.gz \
      ./vendor/compile/ProjWrapCpp-1.3.0.tar.xz \
      ./vendor/compile/FlotteKarte-0.2.6.tar.xz \
      ./vendor/compile/pdtoolbox-v0.7.0.tar.xz \
      ./vendor/compile/rapidxml-1.13.tar.xz \
+     ./vendor/compile/freetype-2.13.2.tar.xz \
+     ./vendor/compile/qhull-2020-src-8.0.2.tar.xz \
+     ./vendor/compile/pyproj-3.6.1.tar.xz \
+     ./vendor/compile/matplotlib-3.8.2.tar.xz \
+     ./vendor/compile/scipy-1.11.4.tar.xz \
+     ./vendor/compile/pandas-2.1.4.tar.xz \
+     ./vendor/compile/scikit-learn-1.3.2.tar.xz \
+     ./vendor/compile/shapely-2.0.2.tar.xz \
+     ./vendor/compile/PyYAML-6.0.1.tar.xz \
+     ./vendor/compile/gmpy2-2.1.5.tar.xz \
      ./vendor/compile/
 
 COPY ./docker/bootstrap-gcc.sh ./docker/
@@ -396,7 +371,6 @@ RUN set -eux; \
                 CFLAGS="-I/sci/include/" \
                 LDFLAGS="$PYLDFLAGSONE $PYLDFLAGSTWO"; \
     make -j `nproc`; \
-    #make test; \
     make install; \
     cd ..; \
     rm -rf Python-3.11.1; \
@@ -427,23 +401,6 @@ RUN set -eux; \
     cmake --build . --target install; \
     cd ../..; \
     rm -rf geos-3.11.1; \
-    #
-    # wheel:
-    #
-    pip install --no-index --no-build-isolation\
-         vendor/wheels/wheel-0.38.4-py3-none-any.whl; \
-    #         \
-    # Cython: \
-    #         \
-    tar -xf vendor/compile/Cython-0.29.33.tar.xz Cython-0.29.33; \
-    cd Cython-0.29.33; \
-    #python setup.py install -j`nproc`; \
-    python setup.py build_ext -j`nproc` bdist_wheel; \
-    pip install --no-index --no-build-isolation \
-                dist/Cython-0.29.33-*.whl; \
-    cd ..; \
-    rm -rf Cython-0.29.33; \
-    pip install --no-cache-dir vendor/wheels/meson-1.0.0-py3-none-any.whl; \
     #           \
     # OpenBLAS: \
     #           \
@@ -453,15 +410,6 @@ RUN set -eux; \
     make install PREFIX=$PREFIX; \
     cd ..; \
     rm -rf OpenBLAS-0.3.21; \
-    #
-    # Numpy:
-    #
-    tar -xf vendor/compile/numpy-1.24.1.tar.xz numpy-1.24.1; \
-    cp vendor/patch/NumPy/site.cfg numpy-1.24.1/; \
-    cd numpy-1.24.1; \
-    python setup.py build -j `nproc` install --prefix $PREFIX; \
-    cd ..; \
-    rm -rf numpy-1.24.1; \
     #
     # GeographicLib:
     #
@@ -508,9 +456,9 @@ RUN set -eux; \
     make install; \
     cd ..; \
     rm -rf yaml-0.2.5; \
-    #              \
+    #        \
     # CGAL:  \
-    #              \
+    #        \
     tar -xf vendor/compile/CGAL-5.5.1-library.tar.xz CGAL-5.5.1; \
     cd CGAL-5.5.1; \
     cmake . -D CMAKE_INSTALL_PREFIX=$PREFIX -D CMAKE_BUILD_TYPE=Release; \
@@ -522,11 +470,67 @@ RUN set -eux; \
     #
     mkdir -p /usr/share/fonts; \
     tar -xf vendor/fonts/Roboto.tar.xz Roboto/; \
-    mv Roboto/* /usr/share/fonts/;
+    mv Roboto/* /usr/share/fonts/; \
+    #           \
+    # Freetype: \
+    #           \
+    tar -xf vendor/compile/freetype-2.13.2.tar.xz; \
+    cd freetype-2.13.2; \
+    mkdir build; \
+    cd build; \
+    cmake -G Ninja -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+          -DCMAKE_INSTALL_PREFIX=$PREFIX \
+          -DCMAKE_BUILD_TYPE=Release ..; \
+    cmake --build .; \
+    cmake --build . --target install; \
+    cd ../..; \
+    rm -rf freetype-2.13.2; \
+    #        \
+    # Qhull: \
+    #        \
+    tar -xf vendor/compile/qhull-2020-src-8.0.2.tar.xz; \
+    mv qhull-2020-src-8.0.2/qhull-2020.2/* qhull-2020-src-8.0.2/; \
+    cd qhull-2020-src-8.0.2; \
+    cd build; \
+    cmake -G Ninja  -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_BUILD_TYPE=Release ..; \
+    cmake --build .; \
+    cmake --build . --target install; \
+    cd ../..; \
+    rm -rf qhull-2020-src-8.0.2; \
+    #
+    # wheel:
+    #
+    pip install --no-index --no-build-isolation\
+         vendor/wheels/wheel-0.38.4-py3-none-any.whl; \
+    #         \
+    # Cython: \
+    #         \
+    tar -xf vendor/compile/Cython-3.0.7.tar.xz Cython-3.0.7; \
+    cd Cython-3.0.7; \
+    python setup.py build_ext -j`nproc` bdist_wheel; \
+    pip install --no-index --no-build-isolation \
+                dist/Cython-3.0.7-*.whl; \
+    cd ..; \
+    rm -rf Cython-3.0.7; \
+    #        \
+    # Meson: \
+    #        \
+    pip install --no-cache-dir vendor/wheels/meson-1.3.1-py3-none-any.whl; \
+    #         \
+    # Numpy:  \
+    #         \
+    tar -xf vendor/compile/numpy-1.26.2.tar.xz numpy-1.26.2; \
+    cp vendor/patch/NumPy/site.cfg numpy-1.26.2/; \
+    cd numpy-1.26.2; \
+    python setup.py build -j `nproc` install --prefix $PREFIX; \
+    cd ..; \
+    rm -rf numpy-1.26.2;
 
+
+#
+# Need to make some of the previous libraries available for linking:
+#
 ENV LD_LIBRARY_PATH="/sci/lib:/sci/lib64:$LD_LIBRARY_PATH"
-
-# Pythran:
 
 RUN set -eux; \
     #          \
@@ -534,7 +538,7 @@ RUN set -eux; \
     #          \
     pip install --no-index --no-build-isolation\
                 vendor/wheels/pythran-0.12.0-py3-none-any.whl \
-                vendor/wheels/pybind11-2.10.3-py3-none-any.whl \
+                vendor/wheels/pybind11-2.11.1-py3-none-any.whl \
                 vendor/wheels/gast-0.5.3-py3-none-any.whl \
                 vendor/wheels/beniget-0.4.1-py3-none-any.whl \
                 vendor/wheels/cycler-0.11.0-py3-none-any.whl \
@@ -543,9 +547,34 @@ RUN set -eux; \
                 vendor/wheels/six-1.16.0-py2.py3-none-any.whl \
                 vendor/wheels/setuptools-65.6.3-py3-none-any.whl \
                 vendor/wheels/cppy-1.2.1-py3-none-any.whl \
-                vendor/wheels/ply-3.11-py2.py3-none-any.whl
+                vendor/wheels/pyproject_metadata-0.7.1-py3-none-any.whl \
+                vendor/wheels/pytz-2022.7-py2.py3-none-any.whl \
+                vendor/wheels/ply-3.11-py2.py3-none-any.whl \
+                vendor/wheels/attrs-22.2.0-py3-none-any.whl \
+                vendor/wheels/click-8.1.3-py3-none-any.whl \
+                vendor/wheels/cligj-0.7.2-py3-none-any.whl \
+                vendor/wheels/click_plugins-1.1.1-py2.py3-none-any.whl \
+                vendor/wheels/munch-2.5.0-py2.py3-none-any.whl \
+                vendor/wheels/typing_extensions-4.4.0-py3-none-any.whl \
+                vendor/wheels/pycparser-2.21-py2.py3-none-any.whl \
+                vendor/wheels/setuptools_scm-7.1.0-py3-none-any.whl \
+                vendor/wheels/fonttools-4.38.0-py3-none-any.whl \
+                vendor/wheels/pyparsing-3.0.9-py3-none-any.whl \
+                vendor/wheels/meson_python-0.15.0-py3-none-any.whl \
+                vendor/wheels/versioneer-0.29-py3-none-any.whl \
+                vendor/wheels/tzdata-2023.4-py2.py3-none-any.whl \
+                vendor/wheels/threadpoolctl-3.1.0-py3-none-any.whl \
+                vendor/wheels/joblib-1.2.0-py3-none-any.whl \
+                vendor/wheels/python_dateutil-2.8.2-py2.py3-none-any.whl;
 
 USER reheatfunq
+
+
+#
+# Need some Python scripts in the PATH (e.g. from Mebuex)
+#
+ENV PATH = "/sci/bin:$PATH:/home/reheatfunq/.local/bin"
+
 
 RUN set -eux; \
     #         \
@@ -555,8 +584,8 @@ RUN set -eux; \
     tar xvf Pillow-9.4.0.tar; \
     rm -vf Pillow-9.4.0.tar; \
     cd Pillow-9.4.0; \
-    CFLAGS="-flto=`nproc`" python setup.py build_ext -j`nproc` \
-        --disable-jpeg bdist_wheel; \
+    MAX_CONCURRENCY="`nproc`" CFLAGS="-I/sci/include/ --verbose -fPIC" \
+        python setup.py build_ext -j`nproc` --disable-jpeg bdist_wheel; \
     pip install --user --no-index --no-build-isolation \
                 dist/Pillow-9.4.0-*.whl; \
     cd ..; \
@@ -583,79 +612,59 @@ RUN set -eux; \
                 dist/kiwisolver-1.4.4-*.whl; \
     cd ..; \
     rm -rf kiwisolver-1.4.4; \
-    #                                        \
-    # Fonttools, pyparsing, python_dateutil: \
-    #                                        \
-    pip install --user --no-index --no-build-isolation \
-       vendor/wheels/fonttools-4.38.0-py3-none-any.whl \
-       vendor/wheels/pyparsing-3.0.9-py3-none-any.whl \
-       vendor/wheels/python_dateutil-2.8.2-py2.py3-none-any.whl; \
     #              \
     # Matplotlib:  \
     #              \
-    tar -xf vendor/compile/matplotlib-3.6.2.tar.xz; \
-    cd matplotlib-3.6.2; \
-    CFLAGS="-flto=`nproc`" python setup.py build_ext -j`nproc` bdist_wheel; \
+    tar -xf vendor/compile/matplotlib-3.8.2.tar.xz; \
+    cp vendor/patch/matplotlib/mplsetup.cfg matplotlib-3.8.2/; \
+    cd matplotlib-3.8.2; \
+    # Add the version number manually: \
+    patch setup.py ../vendor/patch/matplotlib/setup.py.patch; \
+    SETUPTOOLS_SCM_PRETEND_VERSION=3.8.2 \
+        CFLAGS="-flto=`nproc` -I/sci/include/freetype2/" \
+        python -m pip wheel --no-deps \
+        --no-index --no-build-isolation --verbose -w dist/ .; \
     pip install --user --no-index --no-build-isolation \
-                dist/matplotlib-3.6.2-*.whl; \
+                dist/matplotlib-3.8.2-*.whl; \
     cd ..; \
-    rm -rf matplotlib-3.6.2; \
+    rm -rf matplotlib-3.8.2; \
     #           \
     # pyproj:   \
     #           \
-    tar -xf vendor/compile/pyproj-3.4.1.tar.xz pyproj-3.4.1; \
-    cd pyproj-3.4.1; \
+    tar -xf vendor/compile/pyproj-3.6.1.tar.xz pyproj-3.6.1; \
+    cd pyproj-3.6.1; \
     CFLAGS="-flto=`nproc`" python setup.py build_ext -j`nproc` bdist_wheel; \
     pip install --user --no-index --no-build-isolation \
-                dist/pyproj-3.4.1-*.whl; \
+                dist/pyproj-3.6.1-*.whl; \
     cd ..; \
-    rm -rf pyproj-3.4.1; \
+    rm -rf pyproj-3.6.1; \
     #        \
     # SciPy: \
     #        \
     alias make='make -j`nproc`'; \
-    pip install --user --no-index --no-build-isolation \
-          vendor/wheels/pyproject_metadata-0.6.1-py3-none-any.whl \
-          vendor/wheels/meson_python-0.12.0-py3-none-any.whl; \
-    tar -xf vendor/compile/scipy-1.10.0.tar.xz; \
-    cd scipy-1.10.0; \
+    tar -xf vendor/compile/scipy-1.11.4.tar.xz; \
+    cd scipy-1.11.4; \
     pip install --user --no-index --no-build-isolation . -vvv; \
     cd ..; \
-    rm -rf scipy-1.10.0; \
+    rm -rf scipy-1.11.4; \
     #           \
     # pandas:   \
     #           \
-    pip install --user --no-index --no-build-isolation \
-                vendor/wheels/pytz-2022.7-py2.py3-none-any.whl; \
-    tar -xf vendor/compile/pandas-1.5.2.tar.xz pandas-1.5.2; \
-    cd pandas-1.5.2; \
-    python setup.py build_ext -j `nproc` bdist_wheel; \
-    pip install --user --no-index --no-build-isolation \
-                dist/pandas-1.5.2-*.whl; \
+    tar -xf vendor/compile/pandas-2.1.4.tar.xz pandas-2.1.4; \
+    cd pandas-2.1.4; \
+    pip install --user --no-index --no-build-isolation .; \
     cd ..; \
-    rm -rf pandas-1.5.2; \
+    rm -rf pandas-2.1.4; \
     #           \
     # shapely:  \
     #           \
-    tar -xf vendor/compile/shapely-2.0.0.tar.xz shapely-2.0.0; \
-    cd shapely-2.0.0; \
+    tar -xf vendor/compile/shapely-2.0.2.tar.xz shapely-2.0.2; \
+    cd shapely-2.0.2; \
     python setup.py build_ext -j`nproc` bdist_wheel; \
     pip install --user --no-index --no-build-isolation \
-                dist/shapely-2.0.0-*.whl; \
+                dist/shapely-2.0.2-*.whl; \
     cd ..; \
-    rm -rf shapely-2.0.0; \
-    #                                            \
-    # attrs, click, cligj, click-plugins, munch: \
-    #                                            \
-    pip install --user --no-index --no-build-isolation \
-           vendor/wheels/attrs-22.2.0-py3-none-any.whl \
-           vendor/wheels/click-8.1.3-py3-none-any.whl \
-           vendor/wheels/cligj-0.7.2-py3-none-any.whl \
-           vendor/wheels/click_plugins-1.1.1-py2.py3-none-any.whl \
-           vendor/wheels/munch-2.5.0-py2.py3-none-any.whl \
-           vendor/wheels/typing_extensions-4.4.0-py3-none-any.whl \
-           vendor/wheels/pycparser-2.21-py2.py3-none-any.whl \
-           vendor/wheels/setuptools_scm-7.1.0-py3-none-any.whl; \
+    rm -rf shapely-2.0.2; \
     #           \
     # Fiona:  \
     #           \
@@ -731,16 +740,27 @@ RUN set -eux; \
                 dist/pyrsistent-0.19.3-*.whl; \
     cd ..; \
     rm -rf pyrsistent-0.19.3; \
+    #         \
+    # gmpy2:  \
+    #         \
+    tar -xf vendor/compile/gmpy2-2.1.5.tar.xz gmpy2-2.1.5; \
+    cd gmpy2-2.1.5; \
+    python setup.py build_ext --verbose -j`nproc` bdist_wheel; \
+    pip install --user --no-index --no-build-isolation \
+                dist/gmpy2-2.1.5-*.whl; \
+    cd ..; \
+    rm -rf gmpy2-2.1.5; \
     #              \
     # PyYAML:  \
     #              \
-    tar -xf vendor/compile/PyYAML-6.0.tar.gz PyYAML-6.0; \
-    cd PyYAML-6.0; \
+    tar -xf vendor/compile/PyYAML-6.0.1.tar.xz PyYAML-6.0.1; \
+    cd PyYAML-6.0.1; \
+    patch setup.py ../vendor/patch/PyYAML/setup.py.patch; \
     python setup.py build_ext --verbose -j`nproc` bdist_wheel; \
     pip install --user --no-index --no-build-isolation \
-                dist/PyYAML-6.0-*.whl; \
+                dist/PyYAML-6.0.1-*.whl; \
     cd ..; \
-    rm -rf PyYAML-6.0; \
+    rm -rf PyYAML-6.0.1; \
     #              \
     # debugpy:  \
     #              \
@@ -764,17 +784,14 @@ RUN set -eux; \
     #               \
     # scikit-learn: \
     #               \
-    pip install --user --no-index --no-build-isolation \
-           vendor/wheels/threadpoolctl-3.1.0-py3-none-any.whl \
-           vendor/wheels/joblib-1.2.0-py3-none-any.whl; \
-    tar -xf vendor/compile/scikit-learn-1.2.0.tar.xz scikit-learn-1.2.0; \
-    cd scikit-learn-1.2.0; \
+    tar -xf vendor/compile/scikit-learn-1.3.2.tar.xz scikit-learn-1.3.2; \
+    cd scikit-learn-1.3.2; \
     export SKLEARN_BUILD_PARALLEL=`nproc`; \
     python setup.py build_ext --verbose -j`nproc` bdist_wheel; \
     pip install --user --no-index --no-build-isolation \
-                dist/scikit_learn-1.2.0-*.whl; \
+                dist/scikit_learn-1.3.2-*.whl; \
     cd ..; \
-    rm -rf scikit-learn-1.2.0;
+    rm -rf scikit-learn-1.3.2;
 
 COPY ./external/ ./external/
 
@@ -790,7 +807,7 @@ RUN set -eux; \
            argon2_cffi-21.3.0-py3-none-any.whl \
            Jinja2-3.1.2-py3-none-any.whl \
            entrypoints-0.4-py3-none-any.whl \
-           mebuex-1.1.1-py3-none-any.whl \
+           mebuex-1.2.0-py3-none-any.whl \
            cmcrameri-1.4-py3-none-any.whl \
            cmocean-2.0-py3-none-any.whl \
            geopandas-0.12.2-py3-none-any.whl \
@@ -856,6 +873,7 @@ RUN set -eux; \
            jupyter_core-5.1.3-py3-none-any.whl \
            jupyter_client-7.4.8-py3-none-any.whl \
            jupyter_server-2.0.6-py3-none-any.whl \
+           mpmath-1.3.0-py3-none-any.whl \
            notebook-6.5.2-py3-none-any.whl; \
     cd ../..; \
     #
@@ -925,7 +943,7 @@ ENV PATH = "/sci/bin:$PATH:/home/reheatfunq/.local/bin"
 # Copy necessary directories:
 COPY ./reheatfunq/ ./reheatfunq/
 COPY ./src/ ./src/
-COPY ./compile.sh ./meson.build ./setup.py ./meson_options.txt ./
+COPY ./meson.build ./setup.py ./pyproject.toml ./meson_options.txt ./
 
 
 # Compile and install the package:
@@ -937,7 +955,7 @@ RUN \
     meson configure -Danomaly_posterior_dec50=true -Dportable=true; \
     meson compile; \
     cd ..; \
-    pip install --no-cache-dir --user .; \
+    pip install --no-cache-dir --no-index --no-deps --no-build-isolation --user .; \
     rm -r build; \
     rm -r builddir; \
     #
@@ -956,8 +974,6 @@ USER root
 RUN set -eux; \
     chown -R reheatfunq /home/reheatfunq/
 USER reheatfunq
-
-#COPY ./dev-test/docker-test-dying-kernel.py ./
 
 # Define the command that the image will execute:
 CMD jupyter notebook --no-browser --ip 0.0.0.0 --port=8888 --debug -y

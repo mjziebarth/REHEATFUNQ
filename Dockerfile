@@ -30,7 +30,7 @@ RUN set -eux; \
               libcgal-dev libgeographiclib-dev \
               build-essential python3-sphinx ninja-build git \
               libopenblas-openmp-dev liblapacke-dev libgsl-dev \
-              python3-numpy cmake fonts-roboto wget; \
+              python3-numpy cmake fonts-roboto wget libmpc-dev; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*; \
     # Monkey-patched install of newer boost version:
@@ -55,12 +55,13 @@ USER reheatfunq
 RUN set -eux;\
     mkdir /home/reheatfunq/REHEATFUNQ
 WORKDIR /home/reheatfunq/REHEATFUNQ
+ENV PATH = "$PATH:/home/reheatfunq/.local/bin"
 
 # Python dependencies:
 RUN set -eux; \
     pip install --no-cache-dir --upgrade pip setuptools; \
     pip install --no-cache-dir --user \
-             matplotlib pyproj mebuex;
+             matplotlib pyproj mebuex>=1.2.0 gmpy2==2.2.0a1;
 RUN set -eux; \
     pip install --no-cache-dir --user \
             'loaducerf3 @ git+https://git.gfz-potsdam.de/ziebarth/loaducerf3';
@@ -69,19 +70,19 @@ RUN set -eux; \
 RUN set -eux; \
     pip install --user --no-cache-dir \
             notebook cmcrameri cmocean shapely \
-            cmasher scikit-learn joblib geopandas scipy requests flottekarte
+            cmasher scikit-learn joblib geopandas scipy requests flottekarte \
+            mpmath gmpy2 shgofast
 RUN set -eux; \
     PDTOOLBOX_PORTABLE=1 pip install --user  --no-cache-dir \
             'pdtoolbox @ git+https://git.gfz-potsdam.de/ziebarth/pdtoolbox.git';
-ENV PATH = "$PATH:/home/reheatfunq/.local/bin"
 
 # Copy necessary directories:
 COPY ./include/ ./include/
 COPY ./external/ ./external/
 COPY ./reheatfunq/ ./reheatfunq/
 COPY ./src/ ./src/
-COPY ./meson.build ./setup.py ./pyproject.toml ./numpy-include.py \
-     ./meson_options.txt ./
+COPY ./meson.build ./setup.py ./pyproject.toml \
+     ./meson_options.txt ./README.md ./LICENSE ./
 
 # Compile and install the package:
 RUN set -eux; \
@@ -91,7 +92,7 @@ RUN set -eux; \
     meson configure -Danomaly_posterior_dec50=true -Dportable=true; \
     meson compile; \
     cd ..; \
-    pip install --no-cache-dir --user .; \
+    pip install --no-cache-dir --no-build-isolation --user .; \
     rm -r build; \
     rm -r builddir
 

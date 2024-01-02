@@ -70,6 +70,11 @@ cdef extern from "coverings/dminpermutations.hpp" namespace "reheatfunq" nogil:
                                      shared_ptr[int_generator_fun_t],
                                      cbool extra_debug_checks) except+
 
+    double global_PHmax(const double* xy,
+                        const double* PHmax_i,
+                        const size_t N,
+                        const double dmin) except+
+
 
 cdef get_generator_stage_1(bitgen):
     if isinstance(bitgen, np.random.Generator):
@@ -347,6 +352,23 @@ def all_restricted_samples(const double[:,::1] xy, double dmin,
     bitgen = NULL
 
     return res
+
+
+@cython.boundscheck(False)
+@cython.embedsignature(True)
+def determine_global_PHmax(
+        const double[:,::1] xy,
+        const double[::1] PHmax_i,
+        double dmin
+    ):
+    cdef size_t Nxy = xy.shape[0]
+    if Nxy == 0:
+        raise RuntimeError("Empty coordinates.")
+    if PHmax_i.shape[0] != Nxy:
+        raise RuntimeError("Shapes of xy and PHmax_i not compatible.")
+
+    return global_PHmax(&xy[0,0], &PHmax_i[0], Nxy, dmin)
+
 
 
 @cython.boundscheck(False)

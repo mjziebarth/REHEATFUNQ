@@ -1,0 +1,10 @@
+--- pyproject.toml	2023-12-31 16:42:12.551913993 +0100
++++ pyproject.toml.new	2023-12-31 17:43:06.854849951 +0100
+@@ -1,3 +1,7 @@
++[project]
++name="matplotlib"
++version="3.8.2"
++
+ [build-system]
+ build-backend = "setuptools.build_meta"
+ requires = [
