@@ -175,7 +175,8 @@ and this project adheres to
   criterion.
 - Sped up evaluations of the `HeatFlowAnomalyPosterior` PDF & CDF(s) by means
   of interpolation (BLI), parallization, and removal of redundant computations
-  (see 463319c5ff981a22ec80a0b8d8595ca7d8b70f53 for a complete list)
+  (see [463319c](https://github.com/mjziebarth/REHEATFUNQ/commit/463319c5ff981a22ec80a0b8d8595ca7d8b70f53)
+  for a complete list)
 
 #### Changed
 - Change likelihood in `HeatFlowPredictive` and `HeatFlowAnomalyPosterior`
@@ -213,7 +214,8 @@ and this project adheres to
 - Updated the `Dockerfile-stable` image and fix various build issues.
 - Fix multiple errors in the $z\rightarrow 1$ (large $P_H$) series approximation.
 - Fix multiple numerical errors and bugs in many places of the `HeatFlowAnomalyPosterior`
-  code, and add various numerical sanity checks (see 463319c5ff981a22ec80a0b8d8595ca7d8b70f53)
+  code, and add various numerical sanity checks (see
+  [463319c](https://github.com/mjziebarth/REHEATFUNQ/commit/463319c5ff981a22ec80a0b8d8595ca7d8b70f53))
 
 ### [1.4.0] - 2023-02-01
 #### Added
