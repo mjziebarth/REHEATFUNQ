@@ -37,7 +37,7 @@ jobs:
                                   libcgal-dev libgeographic-dev build-essential\
                                   git openssh-client ssh cython3 \
                                   python3-sphinx ninja-build cmake-data \
-                                  cmake-extras extra-cmake-modules
+                                  cmake-extras extra-cmake-modules liblapacke-dev
           python3 -m pip install --user numpy
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
