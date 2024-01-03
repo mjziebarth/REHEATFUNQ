@@ -58,7 +58,7 @@ jobs:
         name: html-docs
         path: docs/_build/html/
     - name: Upload Website
-      uses: actions/upload-pages-artifact@v2
+      uses: actions/upload-pages-artifact@v3
       with:
         # Upload website:
         path: 'docs/_build/html'
