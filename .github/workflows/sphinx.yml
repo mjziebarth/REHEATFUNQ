@@ -16,7 +16,7 @@ concurrency:
 
 
 jobs:
-  build-and-deploy:
+  build:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -37,7 +37,7 @@ jobs:
                                   libcgal-dev libgeographic-dev build-essential\
                                   git openssh-client ssh cython3 \
                                   python3-sphinx ninja-build cmake-data \
-                                  cmake-extras extra-cmake-modules
+                                  cmake-extras extra-cmake-modules liblapacke-dev
           python3 -m pip install --user numpy
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
@@ -53,15 +53,30 @@ jobs:
           make html
           cd ..
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: html-docs
         path: docs/_build/html/
     - name: Upload Website
-      uses: actions/upload-pages-artifact@v1
+      uses: actions/upload-pages-artifact@v3
       with:
         # Upload website:
         path: 'docs/_build/html'
+
+  deploy:
+    needs: build
+
+    permissions:
+      actions: read
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+    steps:
     - name: Deploy to GitHub Pages
       id: deployment
-      uses: actions/deploy-pages@main
+      uses: actions/deploy-pages@v4.0.1
