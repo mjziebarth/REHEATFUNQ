@@ -118,6 +118,7 @@ COPY ./vendor/compile/xz-5.4.0.tar.bz2 \
      ./vendor/compile/shapely-2.0.2.tar.xz \
      ./vendor/compile/PyYAML-6.0.1.tar.xz \
      ./vendor/compile/gmpy2-2.1.5.tar.xz \
+     ./vendor/compile/shgofast-0.1.2.tar.xz \
      ./vendor/compile/
 
 COPY ./docker/bootstrap-gcc.sh ./docker/
@@ -621,9 +622,10 @@ RUN set -eux; \
     # Add the version number manually: \
     patch setup.py ../vendor/patch/matplotlib/setup.py.patch; \
     SETUPTOOLS_SCM_PRETEND_VERSION=3.8.2 \
-        CFLAGS="-flto=`nproc` -I/sci/include/freetype2/" \
+        CFLAGS="-flto=`nproc` -I/sci/include/freetype2/ " \
+        LDFLAGS=" -l:libbz2.so.1.0.8 -lz -lfreetype" \
         python -m pip wheel --no-deps \
-        --no-index --no-build-isolation --verbose -w dist/ .; \
+        --no-index --no-build-isolation -vvv -w dist/ .; \
     pip install --user --no-index --no-build-isolation \
                 dist/matplotlib-3.8.2-*.whl; \
     cd ..; \
@@ -936,7 +938,19 @@ RUN set -eux; \
     pip install --user --no-index --no-build-isolation \
                 dist/pdtoolbox-*.whl; \
     cd ..; \
-    rm -rf pdtoolbox-v0.7.0
+    rm -rf pdtoolbox-v0.7.0; \
+    #
+    # shgofast:
+    #
+    tar -xf vendor/compile/shgofast-0.1.2.tar.xz shgofast-0.1.2; \
+    cd shgofast-0.1.2; \
+    python -m pip wheel --no-deps \
+        --no-index --no-build-isolation -w dist/ .; \
+    pip install --user --no-index --no-build-isolation \
+                dist/shgofast-0.1.2-*.whl; \
+    cd ..; \
+    rm -rf shgofast-0.1.2;
+
 
 ENV PATH = "/sci/bin:$PATH:/home/reheatfunq/.local/bin"
 

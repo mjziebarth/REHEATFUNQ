@@ -33,7 +33,7 @@ if [ -z ${VENDORDIR+true} ]; then
     VENDORDIR=vendor
 fi
 
-CFLAGS="-fPIC -fsanitize=undefined"
+CFLAGS="-fPIC"
 
 # Make sure that the newly compiled libraries will
 # be linked to:
@@ -77,7 +77,6 @@ tar -xf $VENDORDIR/$BZ2_ID.tar.gz $BZ2_ID
 cd $BZ2_ID
 make -j `nproc`
 make clean
-make CFAGS="$CFLAGS" -f Makefile-libbz2_so
 make install PREFIX=$PREFIX
 cd ..
 rm -rf $BZ2_ID
@@ -87,7 +86,7 @@ echo Install xz...
 tar -xf $VENDORDIR/$XZ_ID.tar.bz2 $XZ_ID; \
 cd $XZ_ID
 ./configure --prefix=$PREFIX
-make CFAGS="$CFLAGS" -j `nproc`
+make CFLAGS="$CFLAGS" -j `nproc`
 make install
 cd ..
 rm -rf $XZ_ID
@@ -96,7 +95,7 @@ rm -rf $XZ_ID
 tar -xf $VENDORDIR/$M4_ID.tar.xz $M4_ID; \
 cd $M4_ID
 ./configure --prefix=$PREFIX
-make CFAGS="$CFLAGS" -j `nproc`
+make CFLAGS="$CFLAGS" -j `nproc`
 make install
 cd ..
 rm -rf $M4_ID
@@ -156,8 +155,8 @@ tar -xf $VENDORDIR/$MPC_ID.tar.xz $MPC_ID
 # Install GMP:
 echo Install gmp...
 cd $GMP_ID
-./configure --prefix=$PREFIX --enable-cxx
-make CFAGS="$CFLAGS" -j `nproc`
+./configure CFLAGS="$CFLAGS" --prefix=$PREFIX --enable-cxx
+make CFLAGS="$CFLAGS" -j `nproc`
 make check -j `nproc`
 make install
 cd ..
@@ -165,9 +164,9 @@ cd ..
 # Install MPFR:
 echo Install mpfr...
 cd $MPFR_ID
-./configure --prefix=$PREFIX --with-gmp-build=../$GMP_ID \
+./configure CFLAGS="$CFLAGS" --prefix=$PREFIX --with-gmp-build=../$GMP_ID \
             --enable-gmp-internals --enable-assert
-make CFAGS="$CFLAGS" -j `nproc`
+make CFLAGS="$CFLAGS" -j `nproc`
 make check -j `nproc`
 make install
 cd ..
@@ -176,8 +175,8 @@ rm -rf $MPFR_ID $GMP_ID
 # MPC:
 echo Install mpc...
 cd $MPC_ID
-./configure --prefix=$PREFIX
-make CFAGS="$CFLAGS" -j `nproc`
+./configure CFLAGS="$CFLAGS" --prefix=$PREFIX
+make CFLAGS="$CFLAGS" -j `nproc`
 make check -j `nproc`
 make install
 cd ..
@@ -187,10 +186,12 @@ rm -rf $MPC_ID
 echo Install bz2...
 tar -xf $VENDORDIR/$BZ2_ID.tar.gz $BZ2_ID
 cd $BZ2_ID
-make -j `nproc`
+make CFLAGS="$CFLAGS" -j `nproc`
 make clean
-make CFAGS="$CFLAGS" -f Makefile-libbz2_so
-make install PREFIX=$PREFIX
+make CFLAGS="$CFLAGS" -f Makefile-libbz2_so
+cp libbz2.so.1.0.8 $PREFIX/lib/
+ln -s $PREFIX/lib/libbz2.so.1.0.8 $PREFIX/lib/libbz2.so.1.0
+make CFLAGS="$CFLAGS" install PREFIX=$PREFIX
 cd ..
 rm -rf $BZ2_ID
 
@@ -198,8 +199,8 @@ rm -rf $BZ2_ID
 echo Install xz...
 tar -xf $VENDORDIR/$XZ_ID.tar.bz2 $XZ_ID; \
 cd $XZ_ID
-./configure
-make CFAGS="$CFLAGS" -j `nproc`
+./configure CFLAGS="$CFLAGS"
+make CFLAGS="$CFLAGS" -j `nproc`
 make install PREFIX=$PREFIX
 cd ..
 rm -rf $XZ_ID
@@ -207,8 +208,8 @@ rm -rf $XZ_ID
 # Install m4:
 tar -xf $VENDORDIR/$M4_ID.tar.xz $M4_ID; \
 cd $M4_ID
-./configure --prefix=$PREFIX
-make CFAGS="$CFLAGS" -j `nproc`
+./configure CFLAGS="$CFLAGS" --prefix=$PREFIX
+make CFLAGS="$CFLAGS" -j `nproc`
 make install
 cd ..
 rm -rf $M4_ID
