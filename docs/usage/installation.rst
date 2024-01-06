@@ -92,13 +92,25 @@ This container image requires the sources of the software upon which REHEATFUNQ
 is built. The combined source code archive of this software is large (the
 :code:`Dockerfile-stable` starts by bootstrapping the GNU Compiler Collection
 and successively compiles the Python ecosystem and numeric software) and it is
-split off this git repository. Therefore, you first need to download the
-:code:`vendor-1.3.3.tar.xz` and :code:`vendor-2.0.1.tar.xz` archives from
-`GFZ Data Services <https://doi.org/10.5880/GFZ.2.6.2023.002>`__. Following
-the instructions presented therein, extract the :code:`compile` and
-:code:`wheels` subfolders into the :code:`vendor` directory of this repository.
+split off this git repository. The archives :code:`vendor-1.3.3.tar.xz` and
+:code:`vendor-2.0.1.tar.xz` from
+`GFZ Data Services <https://doi.org/10.5880/GFZ.2.6.2023.002>`__ contains the
+required software.
 
-Then, you can build and run the Docker image as above (you might want to rename
+There are two ways to build the :code:`Dockerfile-stable` image. Since version
+2.0.1, the shell script `build-Dockerfile-stable.sh` is available to facilitate
+the build process. Using this script, the build process should be as simple as
+
+.. code :: bash
+
+   bash build-Dockerfile-stable.sh
+
+A second way is to build the image manually. This first requires downloading
+:code:`vendor-1.3.3.tar.xz` and :code:`vendor-2.0.1.tar.xz`. Following the
+instructions presented therein, extract the :code:`compile` and :code:`wheels`
+subfolders into the :code:`vendor` directory of this repository.
+
+Then, you can build and run the Docker image as below (you might want to rename
 the container according to the REHEATFUNQ version you are using---unless stated
 otherwise, the following versions are compatible with
 :code:`vendor-1.3.3.tar.xz` and :code:`vendor-2.0.1.tar.xz`):

@@ -37,7 +37,12 @@ includes updated dependencies and has a short compilation time.
 Alternatively, you can build the reproducible `Dockerfile-stable` with fixed
 dependencies at the state of the REHEATFUNQ description paper. See the
 [REHEATFUNQ documentation](https://mjziebarth.github.io/REHEATFUNQ/) for more
-information about how to build the `Dockerfile-stable` image.
+information about how to build the `Dockerfile-stable` image. Typically, building
+this image should be as simple as
+```bash
+bash build-Dockerfile-stable.sh
+```
+if `podman` is installed.
 
 ## Usage
 REHEATFUNQ can be used by importing the various module components from the
