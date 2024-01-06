@@ -1,4 +1,4 @@
-project('REHEATFUNQ','cpp','cython', version : '2.0.0',
+project('REHEATFUNQ','cpp','cython', version : '2.0.1',
         default_options : ['optimization=3'])
 add_project_arguments(['-std=c++20','-msse3','-Wall'], language : 'cpp')
 

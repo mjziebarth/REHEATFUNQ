@@ -136,6 +136,16 @@ and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+### [2.0.1] - ???
+#### Added
+- Added the `build-Dockerfile-stable.sh` script that automates the
+  `Dockerfile-stable` build process from a fresh repository.
+- Added an import test to the build process of the `Dockerfile-stable`
+  container.
+
+#### Changed
+- Fixed the container build script for the `Dockerfile-stable` container.
+
 ### [2.0.0] - 2023-01-02
 #### Added
 - Added a function value cache for the minimum surprise estimate of the gamma
