@@ -983,6 +983,12 @@ WORKDIR /home/reheatfunq
 COPY ./jupyter/ jupyter/
 WORKDIR /home/reheatfunq/jupyter
 
+# Test all jupyter imports:
+COPY ./docker/test-jupyter-imports.py ./
+RUN set -eux; \
+    python test-jupyter-imports.py
+
+
 # Set permissions to reheatfunq user:
 USER root
 RUN set -eux; \
