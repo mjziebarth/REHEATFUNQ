@@ -93,7 +93,7 @@ is built. The combined source code archive of this software is large (the
 :code:`Dockerfile-stable` starts by bootstrapping the GNU Compiler Collection
 and successively compiles the Python ecosystem and numeric software) and it is
 split off this git repository. Therefore, you first need to download the
-:code:`vendor-1.3.3.tar.xz` and :code:`vendor-2.0.0.tar.xz` archives from
+:code:`vendor-1.3.3.tar.xz` and :code:`vendor-2.0.1.tar.xz` archives from
 `GFZ Data Services <https://doi.org/10.5880/GFZ.2.6.2023.002>`__. Following
 the instructions presented therein, extract the :code:`compile` and
 :code:`wheels` subfolders into the :code:`vendor` directory of this repository.
@@ -101,22 +101,22 @@ the instructions presented therein, extract the :code:`compile` and
 Then, you can build and run the Docker image as above (you might want to rename
 the container according to the REHEATFUNQ version you are using---unless stated
 otherwise, the following versions are compatible with
-:code:`vendor-1.3.3.tar.xz` and :code:`vendor-2.0.0.tar.xz`):
+:code:`vendor-1.3.3.tar.xz` and :code:`vendor-2.0.1.tar.xz`):
 
 .. code :: bash
 
-   podman build --format docker -f Dockerfile-stable -t reheatfunq-2.0.0-stable
-   podman run -p XXXX:8888 reheatfunq-2.0.0-stable
+   podman build --format docker -f Dockerfile-stable -t reheatfunq-2.0.1-stable
+   podman run -p XXXX:8888 reheatfunq-2.0.1-stable
 
 or
 
 .. code :: bash
 
-   sudo docker build -f Dockerfile-stable -t 'reheatfunq-2.0.0-stable' .
-   sudo docker run -p XXXX:8888 reheatfunq-2.0.0-stable
+   sudo docker build -f Dockerfile-stable -t 'reheatfunq-2.0.1-stable' .
+   sudo docker run -p XXXX:8888 reheatfunq-2.0.1-stable
 
 Nearly all of the dependencies of this container are contained in
-:code:`vendor-1.3.3.tar.xz` and :code:`vendor-2.0.0.tar.xz` so that this image
+:code:`vendor-1.3.3.tar.xz` and :code:`vendor-2.0.1.tar.xz` so that this image
 should build reproducibly in the long-term. Nevertheless, the Debian snapshot
 used as a base image might be unavailable at some point in the future of this
 writing. In this case, it should be possible to swap the base image to another
