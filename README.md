@@ -144,6 +144,7 @@ and this project adheres to
 ### [2.0.2] - 2024-09-22
 #### Changed
 - Adjust `quantileinverter.cpp` to refactored code in Boost 1.84.
+- Update Boost version in `Dockerfile`.
 
 
 ### [2.0.1] - 2023-01-06

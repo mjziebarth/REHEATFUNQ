@@ -43,11 +43,11 @@ jobs:
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 10
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
           # Monkey-patched install of newer boost version:
-          wget -q https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.bz2
+          wget -q https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.bz2
           mkdir boost-dl
-          tar --bzip2 -xf boost_1_80_0.tar.bz2 -C boost-dl
+          tar --bzip2 -xf boost_1_86_0.tar.bz2 -C boost-dl
           sudo rm -r /usr/include/boost
-          sudo cp -r boost-dl/boost_1_80_0/boost /usr/include
+          sudo cp -r boost-dl/boost_1_86_0/boost /usr/include
           # Python installs:
           python3 -m pip install --upgrade pip
           sudo apt purge python3-setuptools

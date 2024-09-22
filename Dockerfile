@@ -34,15 +34,22 @@ RUN set -eux; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*; \
     # Monkey-patched install of newer boost version:
-    wget -q https://boostorg.jfrog.io/artifactory/main/release/1.83.0/source/boost_1_83_0.tar.bz2; \
-    echo "6478edfe2f3305127cffe8caf73ea0176c53769f4bf1585be237eb30798c3b8e boost_1_83_0.tar.bz2" \
+    wget -q https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.bz2; \
+    echo "1bed88e40401b2cb7a1f76d4bab499e352fa4d0c5f31c0dbae64e24d34d7513b boost_1_86_0.tar.bz2" \
         | sha256sum --check; \
     mkdir boost-dl; \
-    tar --bzip2 -xf boost_1_83_0.tar.bz2 -C boost-dl; \
-    rm boost_1_83_0.tar.bz2; \
+    tar --bzip2 -xf boost_1_86_0.tar.bz2 -C boost-dl; \
+    rm boost_1_86_0.tar.bz2; \
     rm -r /usr/include/boost; \
-    cp -r boost-dl/boost_1_83_0/boost /usr/include; \
-    rm -r boost-dl
+    cp -r boost-dl/boost_1_86_0/boost /usr/include; \
+    rm -r boost-dl; \
+    wget -q https://github.com/CGAL/cgal/releases/download/v5.6.1/CGAL-5.6.1-library.tar.xz; \
+    mkdir cgal-dl; \
+    tar -xf CGAL-5.6.1-library.tar.xz -C cgal-dl; \
+    rm CGAL-5.6.1-library.tar.xz; \
+    rm -r /usr/include/CGAL; \
+    cp -r cgal-dl/CGAL-5.6.1/include/CGAL /usr/include; \
+    rm -r cgal-dl
 
 # Install Cython:
 RUN set -eux; \
