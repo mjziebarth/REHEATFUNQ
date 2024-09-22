@@ -141,6 +141,11 @@ and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+### [2.0.2] - 2024-09-22
+#### Changed
+- Adjust `quantileinverter.cpp` to refactored code in Boost 1.84.
+
+
 ### [2.0.1] - 2023-01-06
 #### Added
 - Added the `build-Dockerfile-stable.sh` script that automates the
