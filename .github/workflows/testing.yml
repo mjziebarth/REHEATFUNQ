@@ -48,6 +48,14 @@ jobs:
           tar --bzip2 -xf boost_1_86_0.tar.bz2 -C boost-dl
           sudo rm -r /usr/include/boost
           sudo cp -r boost-dl/boost_1_86_0/boost /usr/include
+          # Monkey-patched install of newer CGAL verison:
+          wget -q https://github.com/CGAL/cgal/releases/download/v5.6.1/CGAL-5.6.1-library.tar.xz
+          mkdir cgal-dl
+          tar -xf CGAL-5.6.1-library.tar.xz -C cgal-dl
+          rm CGAL-5.6.1-library.tar.xz
+          rm -r /usr/include/CGAL
+          cp -r cgal-dl/CGAL-5.6.1/include/CGAL /usr/include
+          rm -r cgal-dl
           # Python installs:
           python3 -m pip install --upgrade pip
           sudo apt purge python3-setuptools
