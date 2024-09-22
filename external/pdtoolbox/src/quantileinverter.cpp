@@ -17,7 +17,8 @@
  *
  * Author: Malte J. Ziebarth (ziebarth@gfz-potsdam.de)
  *
- * Copyright (C) 2022 Deutsches GeoForschungsZentrum GFZ
+ * Copyright (C) 2022 Deutsches GeoForschungsZentrum GFZ,
+ *               2024 Malte J. Ziebarth
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -53,15 +54,15 @@ using boost::math::quadrature::detail::gauss_detail;
 
 template<>
 const std::array<double,8> QuantileTreeLeaf<double>::gk75_abscissa
-    = gauss_kronrod_detail<double,15,1>::abscissa();
+    = gauss_kronrod_detail<double,15,0>::abscissa();
 
 template<>
 const std::array<double,8> QuantileTreeLeaf<double>::k7_weights
-    = gauss_kronrod_detail<double,15,1>::weights();
+    = gauss_kronrod_detail<double,15,0>::weights();
 
 template<>
 const std::array<double,4> QuantileTreeLeaf<double>::g5_weights
-    = gauss_detail<double,7,1>::weights();
+    = gauss_detail<double,7,0>::weights();
 
 template<>
 const std::array<double,16> QuantileTreeLeaf<double>::k7_trapezoid_mass
@@ -77,15 +78,15 @@ const std::array<double,17> QuantileTreeLeaf<double>::scaled_k7_lr_abscissa
  */
 template<>
 const std::array<long double,8> QuantileTreeLeaf<long double>::gk75_abscissa
-    = gauss_kronrod_detail<long double,15,1>::abscissa();
+    = gauss_kronrod_detail<long double,15,0>::abscissa();
 
 template<>
 const std::array<long double,8> QuantileTreeLeaf<long double>::k7_weights
-    = gauss_kronrod_detail<long double,15,1>::weights();
+    = gauss_kronrod_detail<long double,15,0>::weights();
 
 template<>
 const std::array<long double,4> QuantileTreeLeaf<long double>::g5_weights
-    = gauss_detail<long double,7,1>::weights();
+    = gauss_detail<long double,7,0>::weights();
 
 template<>
 const std::array<long double,16>
